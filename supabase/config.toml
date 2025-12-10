@@ -1,0 +1,49 @@
+project_id = "ahtiicqunajyyasuxebj"
+
+[functions.admin-reset-password]
+verify_jwt = true
+
+[functions.create-auth-account]
+verify_jwt = true
+
+[functions.create-company]
+verify_jwt = true
+
+[functions.stripe]
+verify_jwt = true
+
+[functions.create-user]
+verify_jwt = true
+
+[functions.authenticate-pin]
+verify_jwt = false
+
+[functions.generate-badge]
+verify_jwt = false
+
+[functions.verify-badge]
+verify_jwt = false
+
+[functions.verify-task]
+verify_jwt = false
+
+[functions.check-clock-status]
+verify_jwt = false
+
+[functions.record-task-activity]
+verify_jwt = false
+
+[functions.auto-close-tasks-on-shift-end]
+verify_jwt = true
+
+[functions.admin-retroactive-clockout]
+verify_jwt = true
+
+[functions.send-test-report]
+verify_jwt = true
+
+[functions.send-recipient-welcome-email]
+verify_jwt = true
+
+[functions.migrate-timeclock-photos]
+verify_jwt = true
