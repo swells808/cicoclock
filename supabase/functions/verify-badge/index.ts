@@ -58,7 +58,7 @@ serve(async (req) => {
         employee: {
           name: profile.display_name || `${profile.first_name} ${profile.last_name}`,
           employee_id: profile.employee_id,
-          department: profile.departments?.name,
+          department: (profile.departments as { name?: string } | null)?.name,
           status: profile.status
         },
         company: company?.company_name
@@ -67,8 +67,9 @@ serve(async (req) => {
     );
   } catch (error) {
     console.error('Error in verify-badge:', error);
+    const message = error instanceof Error ? error.message : 'Unknown error';
     return new Response(
-      JSON.stringify({ error: error.message }),
+      JSON.stringify({ error: message }),
       { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
     );
   }

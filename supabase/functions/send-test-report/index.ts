@@ -68,13 +68,14 @@ serve(async (req) => {
     console.log('Test email sent:', emailResponse);
 
     return new Response(
-      JSON.stringify({ success: true, email_id: emailResponse.id }),
+      JSON.stringify({ success: true, email_response: emailResponse }),
       { status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
     );
   } catch (error) {
     console.error('Error in send-test-report:', error);
+    const message = error instanceof Error ? error.message : 'Unknown error';
     return new Response(
-      JSON.stringify({ error: error.message }),
+      JSON.stringify({ error: message }),
       { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
     );
   }
