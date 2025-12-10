@@ -5,7 +5,7 @@ import { Button } from "@/components/ui/button";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Pagination, PaginationContent, PaginationItem, PaginationLink, PaginationNext, PaginationPrevious } from "@/components/ui/pagination";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
-import { UsersRound, Clock, UserPlus, Search, MoreHorizontal, Edit, Trash2, Eye, Shield } from "lucide-react";
+import { UsersRound, Clock, UserPlus, Search, MoreHorizontal, Edit, Trash2, Eye, Shield, Download, UserCog, X } from "lucide-react";
 import { useAuth } from "@/contexts/AuthContext";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { Checkbox } from "@/components/ui/checkbox";
@@ -15,6 +15,7 @@ import { UserDialog } from "@/components/users/UserDialog";
 import { useUserRole } from "@/hooks/useUserRole";
 import { Badge } from "@/components/ui/badge";
 import { toast } from "sonner";
+import { supabase } from "@/integrations/supabase/client";
 
 const Users = () => {
   const { signOut } = useAuth();
@@ -25,6 +26,7 @@ const Users = () => {
   const [selectedRole, setSelectedRole] = useState<string>("all-roles");
   const [selectedStatus, setSelectedStatus] = useState<string>("all-status");
   const [selectedUsers, setSelectedUsers] = useState<string[]>([]);
+  const [bulkActionLoading, setBulkActionLoading] = useState(false);
   const [currentPage, setCurrentPage] = useState(1);
   const [itemsPerPage] = useState(20);
   
@@ -98,6 +100,108 @@ const Users = () => {
     }
   };
 
+  // Bulk action handlers
+  const handleBulkStatusChange = async (status: 'active' | 'inactive' | 'deactivated') => {
+    if (selectedUsers.length === 0) return;
+    setBulkActionLoading(true);
+    try {
+      const { error } = await supabase
+        .from('profiles')
+        .update({ status })
+        .in('id', selectedUsers);
+      
+      if (error) throw error;
+      
+      toast.success(`${selectedUsers.length} user(s) updated to ${status}`);
+      setSelectedUsers([]);
+      refetch();
+    } catch (err) {
+      toast.error('Failed to update users');
+    } finally {
+      setBulkActionLoading(false);
+    }
+  };
+
+  const handleBulkRoleChange = async (role: 'admin' | 'supervisor' | 'employee') => {
+    if (selectedUsers.length === 0) return;
+    setBulkActionLoading(true);
+    try {
+      // Get the user_ids for selected profiles
+      const selectedUserData = users.filter(u => selectedUsers.includes(u.id));
+      
+      for (const user of selectedUserData) {
+        const roleKey = user.user_id || user.id;
+        
+        // Check if role exists
+        const { data: existingRole } = await supabase
+          .from('user_roles')
+          .select('id')
+          .or(`user_id.eq.${roleKey},profile_id.eq.${user.id}`)
+          .maybeSingle();
+        
+        if (existingRole) {
+          await supabase
+            .from('user_roles')
+            .update({ role })
+            .eq('id', existingRole.id);
+        } else {
+          await supabase
+            .from('user_roles')
+            .insert({
+              user_id: roleKey,
+              profile_id: user.id,
+              role,
+            });
+        }
+      }
+      
+      toast.success(`${selectedUsers.length} user(s) role updated to ${role}`);
+      setSelectedUsers([]);
+      refetch();
+    } catch (err) {
+      toast.error('Failed to update roles');
+    } finally {
+      setBulkActionLoading(false);
+    }
+  };
+
+  const handleExportCSV = () => {
+    const usersToExport = selectedUsers.length > 0 
+      ? users.filter(u => selectedUsers.includes(u.id))
+      : filteredUsers;
+    
+    if (usersToExport.length === 0) {
+      toast.error('No users to export');
+      return;
+    }
+
+    const headers = ['Name', 'Email', 'Phone', 'Department', 'Role', 'Status', 'Employee ID'];
+    const csvContent = [
+      headers.join(','),
+      ...usersToExport.map(user => [
+        `"${user.name}"`,
+        `"${user.email}"`,
+        `"${user.phone || ''}"`,
+        `"${user.department || ''}"`,
+        `"${user.role}"`,
+        `"${user.status}"`,
+        `"${user.employeeId || ''}"`,
+      ].join(','))
+    ].join('\n');
+
+    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+    const link = document.createElement('a');
+    link.href = URL.createObjectURL(blob);
+    link.download = `users_export_${new Date().toISOString().split('T')[0]}.csv`;
+    link.click();
+    
+    toast.success(`Exported ${usersToExport.length} user(s) to CSV`);
+  };
+
+  const handleClearSelection = () => {
+    setSelectedUsers([]);
+  };
+
   const getRoleBadgeVariant = (role: string) => {
     switch (role) {
       case 'Admin': return 'destructive';
@@ -139,13 +243,94 @@ const Users = () => {
               <h1 className="text-2xl font-bold text-foreground">User Management</h1>
               <p className="text-muted-foreground">Manage employees, roles, and permissions</p>
             </div>
-            {isAdmin && (
-              <Button onClick={handleAddUser} className="gap-2">
-                <UserPlus className="h-4 w-4" />
-                Add Employee
+            <div className="flex gap-2">
+              <Button variant="outline" onClick={handleExportCSV} className="gap-2">
+                <Download className="h-4 w-4" />
+                Export CSV
               </Button>
-            )}
+              {isAdmin && (
+                <Button onClick={handleAddUser} className="gap-2">
+                  <UserPlus className="h-4 w-4" />
+                  Add Employee
+                </Button>
+              )}
+            </div>
           </div>
+
+          {/* Bulk Actions Bar */}
+          {selectedUsers.length > 0 && (
+            <Card className="p-4 mb-6 bg-primary/5 border-primary/20">
+              <div className="flex flex-col md:flex-row items-start md:items-center justify-between gap-4">
+                <div className="flex items-center gap-2">
+                  <Badge variant="secondary" className="text-sm">
+                    {selectedUsers.length} selected
+                  </Badge>
+                  <Button variant="ghost" size="sm" onClick={handleClearSelection}>
+                    <X className="h-4 w-4 mr-1" />
+                    Clear
+                  </Button>
+                </div>
+                
+                <div className="flex flex-wrap items-center gap-2">
+                  {isAdmin && (
+                    <>
+                      {/* Bulk Status Change */}
+                      <DropdownMenu>
+                        <DropdownMenuTrigger asChild>
+                          <Button variant="outline" size="sm" disabled={bulkActionLoading} className="gap-2">
+                            <UserCog className="h-4 w-4" />
+                            Change Status
+                          </Button>
+                        </DropdownMenuTrigger>
+                        <DropdownMenuContent>
+                          <DropdownMenuItem onClick={() => handleBulkStatusChange('active')}>
+                            Set Active
+                          </DropdownMenuItem>
+                          <DropdownMenuItem onClick={() => handleBulkStatusChange('inactive')}>
+                            Set Inactive
+                          </DropdownMenuItem>
+                          <DropdownMenuSeparator />
+                          <DropdownMenuItem 
+                            onClick={() => handleBulkStatusChange('deactivated')}
+                            className="text-destructive"
+                          >
+                            Deactivate
+                          </DropdownMenuItem>
+                        </DropdownMenuContent>
+                      </DropdownMenu>
+
+                      {/* Bulk Role Change */}
+                      <DropdownMenu>
+                        <DropdownMenuTrigger asChild>
+                          <Button variant="outline" size="sm" disabled={bulkActionLoading} className="gap-2">
+                            <Shield className="h-4 w-4" />
+                            Change Role
+                          </Button>
+                        </DropdownMenuTrigger>
+                        <DropdownMenuContent>
+                          <DropdownMenuItem onClick={() => handleBulkRoleChange('employee')}>
+                            Set as Employee
+                          </DropdownMenuItem>
+                          <DropdownMenuItem onClick={() => handleBulkRoleChange('supervisor')}>
+                            Set as Manager
+                          </DropdownMenuItem>
+                          <DropdownMenuItem onClick={() => handleBulkRoleChange('admin')}>
+                            Set as Admin
+                          </DropdownMenuItem>
+                        </DropdownMenuContent>
+                      </DropdownMenu>
+                    </>
+                  )}
+
+                  {/* Export Selected */}
+                  <Button variant="outline" size="sm" onClick={handleExportCSV} className="gap-2">
+                    <Download className="h-4 w-4" />
+                    Export Selected
+                  </Button>
+                </div>
+              </div>
+            </Card>
+          )}
 
           {/* User Stats */}
           <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-6">
