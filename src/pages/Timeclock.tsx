@@ -1,164 +1,174 @@
-import { useState } from "react";
-import { DashboardLayout } from "@/components/layout/DashboardLayout";
-import { useActiveTimeEntry, useClockIn, useClockOut } from "@/hooks/useTimeEntries";
-import { useActiveProjects } from "@/hooks/useProjects";
+import React, { useState, useEffect } from "react";
+import { useNavigate } from "react-router-dom";
 import { useLanguage } from "@/contexts/LanguageContext";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { PasswordDialog } from "@/components/PasswordDialog";
+import { supabase } from "@/integrations/supabase/client";
+import { TimeclockHeader } from "@/components/timeclock/TimeclockHeader";
+import { TimeclockMainCard } from "@/components/timeclock/TimeclockMainCard";
+import { TimeclockFooter } from "@/components/timeclock/TimeclockFooter";
+import { PinInput } from "@/components/timeclock/PinInput";
+import { QRScanner } from "@/components/task-checkin/QRScanner";
 import { Button } from "@/components/ui/button";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Clock, Play, Square, Loader2 } from "lucide-react";
-import { format } from "date-fns";
+import { useEmployees } from "@/hooks/useEmployees";
+import { useCompany } from "@/contexts/CompanyContext";
+import { useToast } from "@/hooks/use-toast";
+import { PhotoCapture } from "@/components/timeclock/PhotoCapture";
 
 const Timeclock = () => {
-  const { t } = useLanguage();
-  const { data: activeEntry, isLoading: loadingEntry } = useActiveTimeEntry();
-  const { data: projects, isLoading: loadingProjects } = useActiveProjects();
-  const clockIn = useClockIn();
-  const clockOut = useClockOut();
-  const [selectedProject, setSelectedProject] = useState<string>("");
+  const navigate = useNavigate();
+  const { language, setLanguage, t } = useLanguage();
+  const { company, companyFeatures } = useCompany();
+  const { employees, loading: employeesLoading, authenticatePin } = useEmployees();
+  const { toast } = useToast();
 
-  const handleClockIn = async () => {
-    await clockIn.mutateAsync({
-      projectId: selectedProject || undefined,
-    });
+  const [currentTime, setCurrentTime] = useState(new Date());
+  const [selectedEmployee, setSelectedEmployee] = useState("");
+  const [authenticatedEmployee, setAuthenticatedEmployee] = useState<any>(null);
+  const [showPasswordDialog, setShowPasswordDialog] = useState(false);
+  const [showPinInput, setShowPinInput] = useState(false);
+  const [showBadgeScanner, setShowBadgeScanner] = useState(false);
+  const [checkingPassword, setCheckingPassword] = useState(false);
+  const [checkingPin, setCheckingPin] = useState(false);
+  const [scanningBadge, setScanningBadge] = useState(false);
+  const [passwordError, setPasswordError] = useState<string | null>(null);
+  const [pinError, setPinError] = useState<string | null>(null);
+  const [activeTimeEntry, setActiveTimeEntry] = useState<any>(null);
+  const [clockStatus, setClockStatus] = useState<'out' | 'in'>('out');
+  const [showPhotoCapture, setShowPhotoCapture] = useState(false);
+  const [photoAction, setPhotoAction] = useState<'clock_in' | 'clock_out' | null>(null);
+
+  useEffect(() => {
+    const timer = setInterval(() => setCurrentTime(new Date()), 1000);
+    return () => clearInterval(timer);
+  }, []);
+
+  useEffect(() => {
+    const checkActiveTimeEntry = async () => {
+      if (!authenticatedEmployee) return;
+      const { data, error } = await supabase.from('time_entries').select('*').eq('user_id', authenticatedEmployee.user_id).is('end_time', null).order('start_time', { ascending: false }).limit(1).single();
+      if (data && !error) { setActiveTimeEntry(data); setClockStatus('in'); } else { setActiveTimeEntry(null); setClockStatus('out'); }
+    };
+    checkActiveTimeEntry();
+  }, [authenticatedEmployee]);
+
+  const isActionEnabled = authenticatedEmployee !== null;
+  const isPinRequired = companyFeatures?.employee_pin;
+
+  const handleEmployeeSelect = (employeeId: string) => {
+    setSelectedEmployee(employeeId);
+    setAuthenticatedEmployee(null);
+    setPinError(null);
+    const employee = employees.find(emp => emp.id === employeeId);
+    if (employee && employee.pin && isPinRequired) { setShowPinInput(true); } else { setAuthenticatedEmployee(employee); }
   };
 
-  const handleClockOut = async () => {
-    if (!activeEntry?.id) return;
-    await clockOut.mutateAsync({
-      entryId: activeEntry.id,
-    });
+  const handlePinEntered = async (pin: string): Promise<boolean> => {
+    if (!selectedEmployee) return false;
+    setCheckingPin(true);
+    setPinError(null);
+    try {
+      const success = await authenticatePin(selectedEmployee, pin);
+      if (success) { const employee = employees.find(emp => emp.id === selectedEmployee); setAuthenticatedEmployee(employee); setShowPinInput(false); return true; }
+      else { setPinError("Invalid PIN. Please try again."); return false; }
+    } catch (error) { setPinError("Authentication failed. Please try again."); return false; }
+    finally { setCheckingPin(false); }
   };
 
-  const getElapsedTime = () => {
-    if (!activeEntry?.start_time) return "00:00:00";
-    const start = new Date(activeEntry.start_time);
-    const now = new Date();
-    const diff = now.getTime() - start.getTime();
-    const hours = Math.floor(diff / 3600000);
-    const minutes = Math.floor((diff % 3600000) / 60000);
-    const seconds = Math.floor((diff % 60000) / 1000);
-    return `${hours.toString().padStart(2, "0")}:${minutes.toString().padStart(2, "0")}:${seconds.toString().padStart(2, "0")}`;
+  const handlePinCancel = () => { setShowPinInput(false); setSelectedEmployee(""); setPinError(null); };
+
+  const handleBadgeScan = async (badgeId: string) => {
+    setScanningBadge(true);
+    try {
+      const { data, error } = await supabase.functions.invoke('verify-badge', { body: { badgeId } });
+      if (error || !data.success) { toast({ title: "Invalid Badge", description: "Badge not found or inactive", variant: "destructive" }); return; }
+      const employee = employees.find(emp => emp.id === data.user.profileId);
+      if (!employee) { toast({ title: "Employee Not Found", description: "This badge is not associated with an active employee", variant: "destructive" }); return; }
+      setSelectedEmployee(employee.id); setShowBadgeScanner(false);
+      toast({ title: "Badge Verified", description: `Welcome, ${employee.display_name}!` });
+      if (employee.pin && isPinRequired) { setShowPinInput(true); } else { setAuthenticatedEmployee(employee); }
+    } catch (error) { toast({ title: "Scan Error", description: "Failed to verify badge. Please try again.", variant: "destructive" }); }
+    finally { setScanningBadge(false); }
   };
 
-  const [elapsed, setElapsed] = useState(getElapsedTime());
+  const uploadPhoto = async (photoBlob: Blob, action: 'clock_in' | 'clock_out'): Promise<string> => {
+    if (!company || !authenticatedEmployee) throw new Error('Company or employee not found');
+    const timestamp = new Date().toISOString().replace(/:/g, '-').replace(/\./g, '-');
+    const userId = authenticatedEmployee.user_id.toUpperCase();
+    const actionPath = action === 'clock_in' ? 'clock-in' : 'clock-out';
+    const filePath = `${company.id}/${actionPath}/${timestamp}_${userId}.jpg`;
+    const { error } = await supabase.storage.from('timeclock-photos').upload(filePath, photoBlob, { contentType: 'image/jpeg', upsert: false });
+    if (error) throw error;
+    return filePath;
+  };
 
-  // Update elapsed time every second when clocked in
-  useState(() => {
-    if (activeEntry) {
-      const interval = setInterval(() => {
-        setElapsed(getElapsedTime());
-      }, 1000);
-      return () => clearInterval(interval);
+  const handlePhotoCapture = async (photoBlob: Blob) => {
+    try {
+      const photoUrl = await uploadPhoto(photoBlob, photoAction!);
+      setShowPhotoCapture(false);
+      if (photoAction === 'clock_in') await performClockIn(photoUrl); else if (photoAction === 'clock_out') await performClockOut(photoUrl);
+    } catch (error) {
+      toast({ title: "Photo Upload Failed", description: "Continuing without photo.", variant: "destructive" });
+      if (photoAction === 'clock_in') await performClockIn(); else if (photoAction === 'clock_out') await performClockOut();
     }
-  });
+    setPhotoAction(null);
+  };
 
-  if (loadingEntry) {
-    return (
-      <DashboardLayout>
-        <div className="flex items-center justify-center h-64">
-          <Loader2 className="h-8 w-8 animate-spin text-primary" />
-        </div>
-      </DashboardLayout>
-    );
+  const performClockIn = async (photoUrl?: string) => {
+    if (!authenticatedEmployee || !company) return;
+    const { data, error } = await supabase.from('time_entries').insert({ user_id: authenticatedEmployee.user_id, company_id: company.id, start_time: new Date().toISOString(), clock_in_photo_url: photoUrl }).select().single();
+    if (error) { toast({ title: "Clock In Failed", description: "Please try again.", variant: "destructive" }); return; }
+    setActiveTimeEntry(data); setClockStatus('in'); toast({ title: "Clocked In", description: "You have successfully clocked in." });
+  };
+
+  const handleClockIn = async () => { if (companyFeatures?.photo_capture) { setPhotoAction('clock_in'); setShowPhotoCapture(true); } else { await performClockIn(); } };
+
+  const performClockOut = async (photoUrl?: string) => {
+    if (!activeTimeEntry) return;
+    const endTime = new Date(); const startTime = new Date(activeTimeEntry.start_time); const durationMinutes = Math.floor((endTime.getTime() - startTime.getTime()) / 60000);
+    const { error } = await supabase.from('time_entries').update({ end_time: endTime.toISOString(), duration_minutes: durationMinutes, clock_out_photo_url: photoUrl }).eq('id', activeTimeEntry.id);
+    if (error) { toast({ title: "Clock Out Failed", description: "Please try again.", variant: "destructive" }); return; }
+    setActiveTimeEntry(null); setClockStatus('out'); toast({ title: "Clocked Out", description: "You have successfully clocked out." });
+  };
+
+  const handleClockOut = async () => { if (companyFeatures?.photo_capture) { setPhotoAction('clock_out'); setShowPhotoCapture(true); } else { await performClockOut(); } };
+
+  const handleBreak = async () => {
+    if (!authenticatedEmployee || !company) return;
+    const now = new Date().toISOString();
+    await supabase.from('time_entries').insert({ user_id: authenticatedEmployee.user_id, company_id: company.id, start_time: now, end_time: now, duration_minutes: 0, is_break: true });
+  };
+
+  const handleClosePage = () => { setShowPasswordDialog(true); setPasswordError(null); };
+
+  async function handlePasswordSubmit(password: string) {
+    setCheckingPassword(true); setPasswordError(null);
+    const { data } = await supabase.auth.getUser();
+    if (!data?.user) { setCheckingPassword(false); setPasswordError("No user session."); return; }
+    const { error: signInError } = await supabase.auth.signInWithPassword({ email: data.user.email ?? "", password });
+    setCheckingPassword(false);
+    if (signInError) { setPasswordError("Incorrect password. Please try again."); return; }
+    setShowPasswordDialog(false); setTimeout(() => navigate("/dashboard"), 200);
   }
 
   return (
-    <DashboardLayout>
-      <div className="max-w-2xl mx-auto space-y-8">
-        <div className="text-center">
-          <h1 className="text-3xl font-bold">{t("timeclock")}</h1>
-          <p className="text-muted-foreground mt-1">{t("timeclockDescription")}</p>
-        </div>
-
-        <Card className="overflow-hidden">
-          <CardHeader className="text-center pb-2">
-            <CardTitle className="text-lg">{t("currentStatus")}</CardTitle>
-          </CardHeader>
-          <CardContent className="flex flex-col items-center py-8 space-y-6">
-            {/* Status Indicator */}
-            <div
-              className={`w-32 h-32 rounded-full flex items-center justify-center transition-colors ${
-                activeEntry
-                  ? "bg-green-500/20 border-4 border-green-500"
-                  : "bg-muted border-4 border-muted-foreground/20"
-              }`}
-            >
-              {activeEntry ? (
-                <Play className="h-16 w-16 text-green-500" />
-              ) : (
-                <Square className="h-16 w-16 text-muted-foreground" />
-              )}
-            </div>
-
-            {/* Status Text */}
-            <div className="text-center space-y-2">
-              <p className="text-2xl font-bold">
-                {activeEntry ? t("clockedIn") : t("clockedOut")}
-              </p>
-              {activeEntry && (
-                <>
-                  <p className="text-4xl font-mono font-bold text-primary">{elapsed}</p>
-                  <p className="text-muted-foreground">
-                    {t("startedAt")} {format(new Date(activeEntry.start_time), "h:mm a")}
-                  </p>
-                  {activeEntry.projects && (
-                    <p className="text-sm text-muted-foreground">
-                      {t("project")}: {activeEntry.projects.name}
-                    </p>
-                  )}
-                </>
-              )}
-            </div>
-
-            {/* Project Selection (only when clocking in) */}
-            {!activeEntry && projects && projects.length > 0 && (
-              <div className="w-full max-w-xs">
-                <Select value={selectedProject} onValueChange={setSelectedProject}>
-                  <SelectTrigger>
-                    <SelectValue placeholder={t("selectProject")} />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="">{t("noProject")}</SelectItem>
-                    {projects.map((project) => (
-                      <SelectItem key={project.id} value={project.id}>
-                        {project.name}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
-            )}
-
-            {/* Clock In/Out Button */}
-            <Button
-              size="lg"
-              className="w-full max-w-xs h-14 text-lg"
-              variant={activeEntry ? "destructive" : "default"}
-              onClick={activeEntry ? handleClockOut : handleClockIn}
-              disabled={clockIn.isPending || clockOut.isPending}
-            >
-              {(clockIn.isPending || clockOut.isPending) && (
-                <Loader2 className="mr-2 h-5 w-5 animate-spin" />
-              )}
-              <Clock className="mr-2 h-5 w-5" />
-              {activeEntry ? t("clockOut") : t("clockIn")}
-            </Button>
-          </CardContent>
-        </Card>
-
-        {/* Current Time */}
-        <Card>
-          <CardContent className="py-4">
-            <div className="text-center">
-              <p className="text-sm text-muted-foreground">{t("currentTime")}</p>
-              <p className="text-2xl font-mono">{format(new Date(), "EEEE, MMMM d, yyyy")}</p>
-              <p className="text-3xl font-mono font-bold">{format(new Date(), "h:mm:ss a")}</p>
-            </div>
-          </CardContent>
-        </Card>
-      </div>
-    </DashboardLayout>
+    <div className="min-h-screen bg-gray-50">
+      <TimeclockHeader currentTime={currentTime} language={language} setLanguage={setLanguage} t={t} />
+      <main>
+        {showBadgeScanner ? (
+          <section className="max-w-md mx-auto">
+            <QRScanner title="Scan Employee Badge" description="Scan your badge QR code or enter badge ID" onScan={handleBadgeScan} isLoading={scanningBadge} placeholder="Enter Badge ID or scan QR code" />
+            <div className="text-center mt-4"><Button variant="ghost" onClick={() => setShowBadgeScanner(false)}>Use Dropdown Instead</Button></div>
+          </section>
+        ) : showPinInput ? (
+          <section className="max-w-md mx-auto"><PinInput onPinEntered={handlePinEntered} employeeName={employees.find(emp => emp.id === selectedEmployee)?.display_name || "Employee"} loading={checkingPin} error={pinError} onCancel={handlePinCancel} /></section>
+        ) : (
+          <TimeclockMainCard selectedEmployee={selectedEmployee} setSelectedEmployee={handleEmployeeSelect} isActionEnabled={isActionEnabled} employees={employees} employeesLoading={employeesLoading} authenticatedEmployee={authenticatedEmployee} clockStatus={clockStatus} onClockIn={handleClockIn} onClockOut={handleClockOut} onBreak={handleBreak} onScanBadge={() => setShowBadgeScanner(true)} t={t} />
+        )}
+      </main>
+      <TimeclockFooter onClosePage={handleClosePage} closeDisabled={false} t={t} />
+      <PasswordDialog open={showPasswordDialog} onSubmit={handlePasswordSubmit} onCancel={() => setShowPasswordDialog(false)} loading={checkingPassword} error={passwordError} />
+      <PhotoCapture open={showPhotoCapture} onCapture={handlePhotoCapture} onCancel={() => { setShowPhotoCapture(false); setPhotoAction(null); }} title={photoAction === 'clock_in' ? "Clock In Photo" : "Clock Out Photo"} description={photoAction === 'clock_in' ? "Please take a photo to verify your clock in" : "Please take a photo to verify your clock out"} />
+    </div>
   );
 };
 
