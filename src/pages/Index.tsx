@@ -1,13 +1,29 @@
-// Update this page (the content is just a fallback if you fail to update the page)
+import React from "react";
+import { Header } from "@/components/layout/Header";
+import { Hero } from "@/components/home/Hero";
+import { Features } from "@/components/home/Features";
+import { Footer } from "@/components/layout/Footer";
 
 const Index = () => {
   return (
-    <div className="flex min-h-screen items-center justify-center bg-background">
-      <div className="text-center">
-        <h1 className="mb-4 text-4xl font-bold">Welcome to Your Blank App</h1>
-        <p className="text-xl text-muted-foreground">Start building your amazing project here!</p>
+    <>
+      <link
+        rel="stylesheet"
+        href="https://cdn.jsdelivr.net/npm/@tabler/icons-webfont@latest/dist/tabler-icons.min.css"
+      />
+      <link
+        href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700&display=swap"
+        rel="stylesheet"
+      />
+      <div className="min-h-screen flex flex-col">
+        <Header />
+        <main>
+          <Hero />
+          <Features />
+        </main>
+        <Footer />
       </div>
-    </div>
+    </>
   );
 };
 
