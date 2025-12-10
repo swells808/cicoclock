@@ -8,7 +8,7 @@ import { LanguageProvider } from "@/contexts/LanguageContext";
 import { CompanyProvider } from "@/contexts/CompanyContext";
 import { ProtectedRoute } from "@/components/auth/ProtectedRoute";
 
-import Home from "./pages/Home";
+import Index from "./pages/Index";
 import Login from "./pages/Login";
 import CompanySignup from "./pages/CompanySignup";
 import Dashboard from "./pages/Dashboard";
@@ -38,7 +38,8 @@ const App = () => (
             <BrowserRouter>
               <Routes>
                 {/* Public Routes */}
-                <Route path="/" element={<Home />} />
+                <Route path="/" element={<Index />} />
+                <Route path="/signup" element={<CompanySignup />} />
                 <Route path="/login" element={<Login />} />
                 <Route path="/company-signup" element={<CompanySignup />} />
                 <Route path="/features" element={<Features />} />
