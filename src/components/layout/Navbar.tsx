@@ -2,7 +2,7 @@ import { Link, useNavigate } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import { useAuth } from "@/contexts/AuthContext";
 import { useLanguage } from "@/contexts/LanguageContext";
-import { Clock, Menu, X, LogOut, User, Settings, LayoutDashboard } from "lucide-react";
+import { Clock, Menu, X, LogOut, Settings, LayoutDashboard } from "lucide-react";
 import { useState } from "react";
 import {
   DropdownMenu,
@@ -42,39 +42,47 @@ export const Navbar = () => {
         <div className="flex h-16 items-center justify-between">
           <Link to="/" className="flex items-center gap-2">
             <Clock className="h-8 w-8 text-primary" />
-            <span className="text-xl font-bold">CICO</span>
+            <span className="text-xl font-bold">
+              CICO<span className="text-primary">Timeclock</span>
+            </span>
           </Link>
 
           {/* Desktop Navigation */}
           <div className="hidden md:flex items-center gap-6">
             {!user ? (
               <>
+                <Link to="/" className="text-muted-foreground hover:text-foreground transition-colors">
+                  {t("nav.home")}
+                </Link>
                 <Link to="/features" className="text-muted-foreground hover:text-foreground transition-colors">
-                  {t("features")}
+                  {t("nav.features")}
                 </Link>
                 <Link to="/pricing" className="text-muted-foreground hover:text-foreground transition-colors">
-                  {t("pricing")}
+                  {t("nav.pricing")}
                 </Link>
                 <Link to="/about" className="text-muted-foreground hover:text-foreground transition-colors">
-                  {t("about")}
+                  {t("nav.about")}
                 </Link>
                 <Link to="/contact" className="text-muted-foreground hover:text-foreground transition-colors">
-                  {t("contact")}
+                  {t("nav.contact")}
                 </Link>
                 <Button variant="ghost" asChild>
-                  <Link to="/login">{t("login")}</Link>
+                  <Link to="/login">{t("nav.login")}</Link>
+                </Button>
+                <Button variant="outline" asChild>
+                  <Link to="/dashboard">{t("nav.dashboard")}</Link>
                 </Button>
                 <Button asChild>
-                  <Link to="/company-signup">{t("getStarted")}</Link>
+                  <Link to="/company-signup">{t("nav.signup")}</Link>
                 </Button>
               </>
             ) : (
               <>
                 <Link to="/dashboard" className="text-muted-foreground hover:text-foreground transition-colors">
-                  {t("dashboard")}
+                  {t("nav.dashboard")}
                 </Link>
                 <Link to="/timeclock" className="text-muted-foreground hover:text-foreground transition-colors">
-                  {t("timeclock")}
+                  {t("nav.timeclock")}
                 </Link>
                 <DropdownMenu>
                   <DropdownMenuTrigger asChild>
@@ -88,16 +96,16 @@ export const Navbar = () => {
                   <DropdownMenuContent align="end" className="w-56">
                     <DropdownMenuItem onClick={() => navigate("/dashboard")}>
                       <LayoutDashboard className="mr-2 h-4 w-4" />
-                      {t("dashboard")}
+                      {t("nav.dashboard")}
                     </DropdownMenuItem>
                     <DropdownMenuItem onClick={() => navigate("/settings")}>
                       <Settings className="mr-2 h-4 w-4" />
-                      {t("settings")}
+                      {t("nav.settings")}
                     </DropdownMenuItem>
                     <DropdownMenuSeparator />
                     <DropdownMenuItem onClick={handleSignOut}>
                       <LogOut className="mr-2 h-4 w-4" />
-                      {t("signOut")}
+                      {t("nav.signout")}
                     </DropdownMenuItem>
                   </DropdownMenuContent>
                 </DropdownMenu>
@@ -122,32 +130,39 @@ export const Navbar = () => {
             {!user ? (
               <>
                 <Link
+                  to="/"
+                  className="block py-2 text-muted-foreground hover:text-foreground"
+                  onClick={() => setMobileMenuOpen(false)}
+                >
+                  {t("nav.home")}
+                </Link>
+                <Link
                   to="/features"
                   className="block py-2 text-muted-foreground hover:text-foreground"
                   onClick={() => setMobileMenuOpen(false)}
                 >
-                  {t("features")}
+                  {t("nav.features")}
                 </Link>
                 <Link
                   to="/pricing"
                   className="block py-2 text-muted-foreground hover:text-foreground"
                   onClick={() => setMobileMenuOpen(false)}
                 >
-                  {t("pricing")}
+                  {t("nav.pricing")}
                 </Link>
                 <Link
                   to="/about"
                   className="block py-2 text-muted-foreground hover:text-foreground"
                   onClick={() => setMobileMenuOpen(false)}
                 >
-                  {t("about")}
+                  {t("nav.about")}
                 </Link>
                 <div className="flex gap-2 pt-4">
                   <Button variant="outline" asChild className="flex-1">
-                    <Link to="/login">{t("login")}</Link>
+                    <Link to="/login">{t("nav.login")}</Link>
                   </Button>
                   <Button asChild className="flex-1">
-                    <Link to="/company-signup">{t("getStarted")}</Link>
+                    <Link to="/company-signup">{t("nav.signup")}</Link>
                   </Button>
                 </div>
               </>
@@ -158,25 +173,25 @@ export const Navbar = () => {
                   className="block py-2 text-muted-foreground hover:text-foreground"
                   onClick={() => setMobileMenuOpen(false)}
                 >
-                  {t("dashboard")}
+                  {t("nav.dashboard")}
                 </Link>
                 <Link
                   to="/timeclock"
                   className="block py-2 text-muted-foreground hover:text-foreground"
                   onClick={() => setMobileMenuOpen(false)}
                 >
-                  {t("timeclock")}
+                  {t("nav.timeclock")}
                 </Link>
                 <Link
                   to="/settings"
                   className="block py-2 text-muted-foreground hover:text-foreground"
                   onClick={() => setMobileMenuOpen(false)}
                 >
-                  {t("settings")}
+                  {t("nav.settings")}
                 </Link>
                 <Button variant="outline" className="w-full mt-4" onClick={handleSignOut}>
                   <LogOut className="mr-2 h-4 w-4" />
-                  {t("signOut")}
+                  {t("nav.signout")}
                 </Button>
               </>
             )}
