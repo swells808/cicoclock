@@ -5,87 +5,678 @@ type Language = 'en' | 'es' | 'fr';
 interface LanguageContextType {
   language: Language;
   setLanguage: (lang: Language) => void;
-  t: (key: string) => string;
+  t: (key: string, params?: Record<string, string | number>) => string;
 }
 
-const translations = {
+const translations: Record<Language, Record<string, string>> = {
   en: {
-    // Header
-    'timeclock.title': 'CICO Timeclock',
+    // Navigation
+    'nav.home': 'Home',
+    'nav.dashboard': 'Dashboard',
+    'nav.timeclock': 'Timeclock',
+    'nav.projects': 'Projects',
+    'nav.users': 'Users',
+    'nav.clients': 'Clients',
+    'nav.reports': 'Reports',
+    'nav.settings': 'Settings',
+    'nav.features': 'Features',
+    'nav.pricing': 'Pricing',
+    'nav.about': 'About',
+    'nav.contact': 'Contact',
+    'nav.login': 'Login',
+    'nav.signup': 'Get Started',
+    'nav.signout': 'Sign Out',
 
-    // Date and time labels
+    // Common Actions
+    'common.save': 'Save',
+    'common.cancel': 'Cancel',
+    'common.delete': 'Delete',
+    'common.edit': 'Edit',
+    'common.add': 'Add',
+    'common.create': 'Create',
+    'common.update': 'Update',
+    'common.search': 'Search',
+    'common.filter': 'Filter',
+    'common.export': 'Export',
+    'common.import': 'Import',
+    'common.loading': 'Loading...',
+    'common.success': 'Success',
+    'common.error': 'Error',
+    'common.confirm': 'Confirm',
+    'common.back': 'Back',
+    'common.next': 'Next',
+    'common.submit': 'Submit',
+    'common.close': 'Close',
+    'common.view': 'View',
+    'common.actions': 'Actions',
+    'common.status': 'Status',
+    'common.active': 'Active',
+    'common.inactive': 'Inactive',
+    'common.all': 'All',
+    'common.none': 'None',
+    'common.yes': 'Yes',
+    'common.no': 'No',
+
+    // Form Labels
+    'form.email': 'Email',
+    'form.password': 'Password',
+    'form.confirmPassword': 'Confirm Password',
+    'form.firstName': 'First Name',
+    'form.lastName': 'Last Name',
+    'form.displayName': 'Display Name',
+    'form.phone': 'Phone',
+    'form.address': 'Address',
+    'form.city': 'City',
+    'form.state': 'State/Province',
+    'form.postalCode': 'Postal Code',
+    'form.country': 'Country',
+    'form.company': 'Company',
+    'form.department': 'Department',
+    'form.role': 'Role',
+    'form.employeeId': 'Employee ID',
+    'form.pin': 'PIN',
+    'form.description': 'Description',
+    'form.name': 'Name',
+    'form.startDate': 'Start Date',
+    'form.endDate': 'End Date',
+
+    // Timeclock
+    'timeclock.title': 'CICO Timeclock',
     'timeclock.selectEmployee': 'Select Employee',
     'timeclock.pleaseSelectAndPin': 'Please select your name and project',
-
-    // Form fields
     'timeclock.selectEmployeeDropdown': 'Select Employee',
     'timeclock.selectProjects': 'Select Projects',
     'timeclock.projectsSelected': '{count} Project Selected',
     'timeclock.projectsSelected_plural': '{count} Projects Selected',
     'timeclock.removeProject': 'Remove Project',
-
-    // Buttons
     'timeclock.clockIn': 'Clock In',
     'timeclock.clockOut': 'Clock Out',
     'timeclock.break': 'Break',
     'timeclock.closePage': 'Close Page',
+    'timeclock.currentlyWorking': 'Currently Working',
+    'timeclock.hoursToday': 'Hours Today',
+    'timeclock.enterPin': 'Enter PIN',
+    'timeclock.invalidPin': 'Invalid PIN',
+    'timeclock.clockedIn': 'Clocked In',
+    'timeclock.clockedOut': 'Clocked Out',
+    'timeclock.onBreak': 'On Break',
+    'timeclock.startBreak': 'Start Break',
+    'timeclock.endBreak': 'End Break',
+
+    // Dashboard
+    'dashboard.title': 'Dashboard',
+    'dashboard.welcome': 'Welcome back',
+    'dashboard.overview': 'Overview',
+    'dashboard.recentActivity': 'Recent Activity',
+    'dashboard.quickActions': 'Quick Actions',
+    'dashboard.totalHours': 'Total Hours',
+    'dashboard.activeEmployees': 'Active Employees',
+    'dashboard.projectsInProgress': 'Projects in Progress',
+    'dashboard.pendingApprovals': 'Pending Approvals',
+    'dashboard.thisWeek': 'This Week',
+    'dashboard.thisMonth': 'This Month',
+    'dashboard.today': 'Today',
+
+    // Users
+    'users.title': 'Users',
+    'users.addUser': 'Add User',
+    'users.editUser': 'Edit User',
+    'users.deleteUser': 'Delete User',
+    'users.userDetails': 'User Details',
+    'users.role.admin': 'Admin',
+    'users.role.supervisor': 'Supervisor',
+    'users.role.employee': 'Employee',
+    'users.status.active': 'Active',
+    'users.status.inactive': 'Inactive',
+    'users.noUsers': 'No users found',
+    'users.createAuthAccount': 'Create Login Account',
+
+    // Projects
+    'projects.title': 'Projects',
+    'projects.addProject': 'Add Project',
+    'projects.editProject': 'Edit Project',
+    'projects.deleteProject': 'Delete Project',
+    'projects.projectDetails': 'Project Details',
+    'projects.noProjects': 'No projects found',
+    'projects.client': 'Client',
+    'projects.budget': 'Budget',
+    'projects.estimatedHours': 'Estimated Hours',
+    'projects.actualHours': 'Actual Hours',
+    'projects.teamMembers': 'Team Members',
+
+    // Clients
+    'clients.title': 'Clients',
+    'clients.addClient': 'Add Client',
+    'clients.editClient': 'Edit Client',
+    'clients.deleteClient': 'Delete Client',
+    'clients.clientDetails': 'Client Details',
+    'clients.noClients': 'No clients found',
+    'clients.contactPerson': 'Contact Person',
+    'clients.companyName': 'Company Name',
+
+    // Reports
+    'reports.title': 'Reports',
+    'reports.generate': 'Generate Report',
+    'reports.download': 'Download',
+    'reports.schedule': 'Schedule Report',
+    'reports.timesheet': 'Timesheet Report',
+    'reports.attendance': 'Attendance Report',
+    'reports.projectSummary': 'Project Summary',
+    'reports.employeeSummary': 'Employee Summary',
+    'reports.dateRange': 'Date Range',
+    'reports.selectEmployees': 'Select Employees',
+    'reports.selectProjects': 'Select Projects',
+
+    // Settings
+    'settings.title': 'Settings',
+    'settings.profile': 'Profile',
+    'settings.company': 'Company',
+    'settings.features': 'Features',
+    'settings.departments': 'Departments',
+    'settings.taskTypes': 'Task Types',
+    'settings.badges': 'Badges',
+    'settings.notifications': 'Notifications',
+    'settings.security': 'Security',
+    'settings.billing': 'Billing',
+
+    // Auth
+    'auth.login': 'Login',
+    'auth.logout': 'Logout',
+    'auth.signup': 'Sign Up',
+    'auth.forgotPassword': 'Forgot Password?',
+    'auth.resetPassword': 'Reset Password',
+    'auth.rememberMe': 'Remember me',
+    'auth.dontHaveAccount': "Don't have an account?",
+    'auth.alreadyHaveAccount': 'Already have an account?',
+    'auth.loginSuccess': 'Login successful',
+    'auth.loginError': 'Login failed. Please check your credentials.',
+    'auth.signupSuccess': 'Account created successfully',
+    'auth.signupError': 'Failed to create account',
+
+    // Errors
+    'error.required': 'This field is required',
+    'error.invalidEmail': 'Invalid email address',
+    'error.passwordMismatch': 'Passwords do not match',
+    'error.minLength': 'Must be at least {min} characters',
+    'error.maxLength': 'Must be at most {max} characters',
+    'error.generic': 'Something went wrong. Please try again.',
+    'error.notFound': 'Not found',
+    'error.unauthorized': 'Unauthorized',
+    'error.forbidden': 'Access denied',
+
+    // Success Messages
+    'success.saved': 'Changes saved successfully',
+    'success.created': 'Created successfully',
+    'success.updated': 'Updated successfully',
+    'success.deleted': 'Deleted successfully',
 
     // Language names
     'language.english': 'English',
     'language.spanish': 'Spanish',
-    'language.french': 'French'
+    'language.french': 'French',
+
+    // Home Page
+    'home.hero.title': 'Simplify Your Time Tracking',
+    'home.hero.subtitle': 'CICO makes it easy to track employee hours, manage projects, and generate reports.',
+    'home.hero.cta': 'Get Started Free',
+    'home.features.title': 'Features',
+    'home.features.timeclock': 'Easy Time Tracking',
+    'home.features.timeclockDesc': 'Employees can clock in and out with just a few taps.',
+    'home.features.reports': 'Detailed Reports',
+    'home.features.reportsDesc': 'Generate comprehensive reports for payroll and analysis.',
+    'home.features.projects': 'Project Management',
+    'home.features.projectsDesc': 'Track time by project and client for accurate billing.',
+
+    // Footer
+    'footer.copyright': '© 2024 CICO. All rights reserved.',
+    'footer.privacy': 'Privacy Policy',
+    'footer.terms': 'Terms of Service',
   },
   es: {
-    // Header
-    'timeclock.title': 'Reloj CICO',
+    // Navigation
+    'nav.home': 'Inicio',
+    'nav.dashboard': 'Panel',
+    'nav.timeclock': 'Reloj',
+    'nav.projects': 'Proyectos',
+    'nav.users': 'Usuarios',
+    'nav.clients': 'Clientes',
+    'nav.reports': 'Informes',
+    'nav.settings': 'Configuración',
+    'nav.features': 'Características',
+    'nav.pricing': 'Precios',
+    'nav.about': 'Acerca de',
+    'nav.contact': 'Contacto',
+    'nav.login': 'Iniciar Sesión',
+    'nav.signup': 'Comenzar',
+    'nav.signout': 'Cerrar Sesión',
 
-    // Date and time labels
+    // Common Actions
+    'common.save': 'Guardar',
+    'common.cancel': 'Cancelar',
+    'common.delete': 'Eliminar',
+    'common.edit': 'Editar',
+    'common.add': 'Agregar',
+    'common.create': 'Crear',
+    'common.update': 'Actualizar',
+    'common.search': 'Buscar',
+    'common.filter': 'Filtrar',
+    'common.export': 'Exportar',
+    'common.import': 'Importar',
+    'common.loading': 'Cargando...',
+    'common.success': 'Éxito',
+    'common.error': 'Error',
+    'common.confirm': 'Confirmar',
+    'common.back': 'Atrás',
+    'common.next': 'Siguiente',
+    'common.submit': 'Enviar',
+    'common.close': 'Cerrar',
+    'common.view': 'Ver',
+    'common.actions': 'Acciones',
+    'common.status': 'Estado',
+    'common.active': 'Activo',
+    'common.inactive': 'Inactivo',
+    'common.all': 'Todos',
+    'common.none': 'Ninguno',
+    'common.yes': 'Sí',
+    'common.no': 'No',
+
+    // Form Labels
+    'form.email': 'Correo Electrónico',
+    'form.password': 'Contraseña',
+    'form.confirmPassword': 'Confirmar Contraseña',
+    'form.firstName': 'Nombre',
+    'form.lastName': 'Apellido',
+    'form.displayName': 'Nombre para Mostrar',
+    'form.phone': 'Teléfono',
+    'form.address': 'Dirección',
+    'form.city': 'Ciudad',
+    'form.state': 'Estado/Provincia',
+    'form.postalCode': 'Código Postal',
+    'form.country': 'País',
+    'form.company': 'Empresa',
+    'form.department': 'Departamento',
+    'form.role': 'Rol',
+    'form.employeeId': 'ID de Empleado',
+    'form.pin': 'PIN',
+    'form.description': 'Descripción',
+    'form.name': 'Nombre',
+    'form.startDate': 'Fecha de Inicio',
+    'form.endDate': 'Fecha de Fin',
+
+    // Timeclock
+    'timeclock.title': 'Reloj CICO',
     'timeclock.selectEmployee': 'Seleccionar Empleado',
     'timeclock.pleaseSelectAndPin': 'Por favor seleccione su nombre y proyecto',
-
-    // Form fields
     'timeclock.selectEmployeeDropdown': 'Seleccionar Empleado',
     'timeclock.selectProjects': 'Seleccionar Proyectos',
     'timeclock.projectsSelected': '{count} Proyecto Seleccionado',
     'timeclock.projectsSelected_plural': '{count} Proyectos Seleccionados',
     'timeclock.removeProject': 'Eliminar Proyecto',
-
-    // Buttons
     'timeclock.clockIn': 'Registrar Entrada',
     'timeclock.clockOut': 'Registrar Salida',
     'timeclock.break': 'Descanso',
     'timeclock.closePage': 'Cerrar Página',
+    'timeclock.currentlyWorking': 'Trabajando Actualmente',
+    'timeclock.hoursToday': 'Horas Hoy',
+    'timeclock.enterPin': 'Ingrese PIN',
+    'timeclock.invalidPin': 'PIN Inválido',
+    'timeclock.clockedIn': 'Entrada Registrada',
+    'timeclock.clockedOut': 'Salida Registrada',
+    'timeclock.onBreak': 'En Descanso',
+    'timeclock.startBreak': 'Iniciar Descanso',
+    'timeclock.endBreak': 'Terminar Descanso',
+
+    // Dashboard
+    'dashboard.title': 'Panel',
+    'dashboard.welcome': 'Bienvenido de nuevo',
+    'dashboard.overview': 'Resumen',
+    'dashboard.recentActivity': 'Actividad Reciente',
+    'dashboard.quickActions': 'Acciones Rápidas',
+    'dashboard.totalHours': 'Horas Totales',
+    'dashboard.activeEmployees': 'Empleados Activos',
+    'dashboard.projectsInProgress': 'Proyectos en Progreso',
+    'dashboard.pendingApprovals': 'Aprobaciones Pendientes',
+    'dashboard.thisWeek': 'Esta Semana',
+    'dashboard.thisMonth': 'Este Mes',
+    'dashboard.today': 'Hoy',
+
+    // Users
+    'users.title': 'Usuarios',
+    'users.addUser': 'Agregar Usuario',
+    'users.editUser': 'Editar Usuario',
+    'users.deleteUser': 'Eliminar Usuario',
+    'users.userDetails': 'Detalles del Usuario',
+    'users.role.admin': 'Administrador',
+    'users.role.supervisor': 'Supervisor',
+    'users.role.employee': 'Empleado',
+    'users.status.active': 'Activo',
+    'users.status.inactive': 'Inactivo',
+    'users.noUsers': 'No se encontraron usuarios',
+    'users.createAuthAccount': 'Crear Cuenta de Acceso',
+
+    // Projects
+    'projects.title': 'Proyectos',
+    'projects.addProject': 'Agregar Proyecto',
+    'projects.editProject': 'Editar Proyecto',
+    'projects.deleteProject': 'Eliminar Proyecto',
+    'projects.projectDetails': 'Detalles del Proyecto',
+    'projects.noProjects': 'No se encontraron proyectos',
+    'projects.client': 'Cliente',
+    'projects.budget': 'Presupuesto',
+    'projects.estimatedHours': 'Horas Estimadas',
+    'projects.actualHours': 'Horas Reales',
+    'projects.teamMembers': 'Miembros del Equipo',
+
+    // Clients
+    'clients.title': 'Clientes',
+    'clients.addClient': 'Agregar Cliente',
+    'clients.editClient': 'Editar Cliente',
+    'clients.deleteClient': 'Eliminar Cliente',
+    'clients.clientDetails': 'Detalles del Cliente',
+    'clients.noClients': 'No se encontraron clientes',
+    'clients.contactPerson': 'Persona de Contacto',
+    'clients.companyName': 'Nombre de la Empresa',
+
+    // Reports
+    'reports.title': 'Informes',
+    'reports.generate': 'Generar Informe',
+    'reports.download': 'Descargar',
+    'reports.schedule': 'Programar Informe',
+    'reports.timesheet': 'Informe de Horas',
+    'reports.attendance': 'Informe de Asistencia',
+    'reports.projectSummary': 'Resumen de Proyecto',
+    'reports.employeeSummary': 'Resumen de Empleado',
+    'reports.dateRange': 'Rango de Fechas',
+    'reports.selectEmployees': 'Seleccionar Empleados',
+    'reports.selectProjects': 'Seleccionar Proyectos',
+
+    // Settings
+    'settings.title': 'Configuración',
+    'settings.profile': 'Perfil',
+    'settings.company': 'Empresa',
+    'settings.features': 'Características',
+    'settings.departments': 'Departamentos',
+    'settings.taskTypes': 'Tipos de Tarea',
+    'settings.badges': 'Insignias',
+    'settings.notifications': 'Notificaciones',
+    'settings.security': 'Seguridad',
+    'settings.billing': 'Facturación',
+
+    // Auth
+    'auth.login': 'Iniciar Sesión',
+    'auth.logout': 'Cerrar Sesión',
+    'auth.signup': 'Registrarse',
+    'auth.forgotPassword': '¿Olvidó su contraseña?',
+    'auth.resetPassword': 'Restablecer Contraseña',
+    'auth.rememberMe': 'Recordarme',
+    'auth.dontHaveAccount': '¿No tiene una cuenta?',
+    'auth.alreadyHaveAccount': '¿Ya tiene una cuenta?',
+    'auth.loginSuccess': 'Inicio de sesión exitoso',
+    'auth.loginError': 'Error al iniciar sesión. Verifique sus credenciales.',
+    'auth.signupSuccess': 'Cuenta creada exitosamente',
+    'auth.signupError': 'Error al crear la cuenta',
+
+    // Errors
+    'error.required': 'Este campo es obligatorio',
+    'error.invalidEmail': 'Correo electrónico inválido',
+    'error.passwordMismatch': 'Las contraseñas no coinciden',
+    'error.minLength': 'Debe tener al menos {min} caracteres',
+    'error.maxLength': 'Debe tener como máximo {max} caracteres',
+    'error.generic': 'Algo salió mal. Por favor intente de nuevo.',
+    'error.notFound': 'No encontrado',
+    'error.unauthorized': 'No autorizado',
+    'error.forbidden': 'Acceso denegado',
+
+    // Success Messages
+    'success.saved': 'Cambios guardados exitosamente',
+    'success.created': 'Creado exitosamente',
+    'success.updated': 'Actualizado exitosamente',
+    'success.deleted': 'Eliminado exitosamente',
 
     // Language names
     'language.english': 'Inglés',
     'language.spanish': 'Español',
-    'language.french': 'Francés'
+    'language.french': 'Francés',
+
+    // Home Page
+    'home.hero.title': 'Simplifique su Control de Tiempo',
+    'home.hero.subtitle': 'CICO facilita el seguimiento de horas de empleados, la gestión de proyectos y la generación de informes.',
+    'home.hero.cta': 'Comenzar Gratis',
+    'home.features.title': 'Características',
+    'home.features.timeclock': 'Control de Tiempo Fácil',
+    'home.features.timeclockDesc': 'Los empleados pueden registrar entrada y salida con solo unos toques.',
+    'home.features.reports': 'Informes Detallados',
+    'home.features.reportsDesc': 'Genere informes completos para nómina y análisis.',
+    'home.features.projects': 'Gestión de Proyectos',
+    'home.features.projectsDesc': 'Rastree tiempo por proyecto y cliente para facturación precisa.',
+
+    // Footer
+    'footer.copyright': '© 2024 CICO. Todos los derechos reservados.',
+    'footer.privacy': 'Política de Privacidad',
+    'footer.terms': 'Términos de Servicio',
   },
   fr: {
-    // Header
-    'timeclock.title': 'Pointeuse CICO',
+    // Navigation
+    'nav.home': 'Accueil',
+    'nav.dashboard': 'Tableau de Bord',
+    'nav.timeclock': 'Pointeuse',
+    'nav.projects': 'Projets',
+    'nav.users': 'Utilisateurs',
+    'nav.clients': 'Clients',
+    'nav.reports': 'Rapports',
+    'nav.settings': 'Paramètres',
+    'nav.features': 'Fonctionnalités',
+    'nav.pricing': 'Tarifs',
+    'nav.about': 'À Propos',
+    'nav.contact': 'Contact',
+    'nav.login': 'Connexion',
+    'nav.signup': 'Commencer',
+    'nav.signout': 'Déconnexion',
 
-    // Date and time labels
+    // Common Actions
+    'common.save': 'Enregistrer',
+    'common.cancel': 'Annuler',
+    'common.delete': 'Supprimer',
+    'common.edit': 'Modifier',
+    'common.add': 'Ajouter',
+    'common.create': 'Créer',
+    'common.update': 'Mettre à jour',
+    'common.search': 'Rechercher',
+    'common.filter': 'Filtrer',
+    'common.export': 'Exporter',
+    'common.import': 'Importer',
+    'common.loading': 'Chargement...',
+    'common.success': 'Succès',
+    'common.error': 'Erreur',
+    'common.confirm': 'Confirmer',
+    'common.back': 'Retour',
+    'common.next': 'Suivant',
+    'common.submit': 'Soumettre',
+    'common.close': 'Fermer',
+    'common.view': 'Voir',
+    'common.actions': 'Actions',
+    'common.status': 'Statut',
+    'common.active': 'Actif',
+    'common.inactive': 'Inactif',
+    'common.all': 'Tous',
+    'common.none': 'Aucun',
+    'common.yes': 'Oui',
+    'common.no': 'Non',
+
+    // Form Labels
+    'form.email': 'Email',
+    'form.password': 'Mot de Passe',
+    'form.confirmPassword': 'Confirmer le Mot de Passe',
+    'form.firstName': 'Prénom',
+    'form.lastName': 'Nom',
+    'form.displayName': 'Nom d\'Affichage',
+    'form.phone': 'Téléphone',
+    'form.address': 'Adresse',
+    'form.city': 'Ville',
+    'form.state': 'État/Province',
+    'form.postalCode': 'Code Postal',
+    'form.country': 'Pays',
+    'form.company': 'Entreprise',
+    'form.department': 'Département',
+    'form.role': 'Rôle',
+    'form.employeeId': 'ID Employé',
+    'form.pin': 'PIN',
+    'form.description': 'Description',
+    'form.name': 'Nom',
+    'form.startDate': 'Date de Début',
+    'form.endDate': 'Date de Fin',
+
+    // Timeclock
+    'timeclock.title': 'Pointeuse CICO',
     'timeclock.selectEmployee': 'Sélectionner un Employé',
     'timeclock.pleaseSelectAndPin': 'Veuillez sélectionner votre nom et projet',
-
-    // Form fields
     'timeclock.selectEmployeeDropdown': 'Sélectionner un Employé',
     'timeclock.selectProjects': 'Sélectionner des Projets',
     'timeclock.projectsSelected': '{count} Projet Sélectionné',
     'timeclock.projectsSelected_plural': '{count} Projets Sélectionnés',
     'timeclock.removeProject': 'Supprimer le Projet',
-
-    // Buttons
     'timeclock.clockIn': 'Pointer Entrée',
     'timeclock.clockOut': 'Pointer Sortie',
     'timeclock.break': 'Pause',
     'timeclock.closePage': 'Fermer la Page',
+    'timeclock.currentlyWorking': 'Travaille Actuellement',
+    'timeclock.hoursToday': 'Heures Aujourd\'hui',
+    'timeclock.enterPin': 'Entrer le PIN',
+    'timeclock.invalidPin': 'PIN Invalide',
+    'timeclock.clockedIn': 'Entrée Pointée',
+    'timeclock.clockedOut': 'Sortie Pointée',
+    'timeclock.onBreak': 'En Pause',
+    'timeclock.startBreak': 'Commencer la Pause',
+    'timeclock.endBreak': 'Terminer la Pause',
+
+    // Dashboard
+    'dashboard.title': 'Tableau de Bord',
+    'dashboard.welcome': 'Bienvenue',
+    'dashboard.overview': 'Aperçu',
+    'dashboard.recentActivity': 'Activité Récente',
+    'dashboard.quickActions': 'Actions Rapides',
+    'dashboard.totalHours': 'Heures Totales',
+    'dashboard.activeEmployees': 'Employés Actifs',
+    'dashboard.projectsInProgress': 'Projets en Cours',
+    'dashboard.pendingApprovals': 'Approbations en Attente',
+    'dashboard.thisWeek': 'Cette Semaine',
+    'dashboard.thisMonth': 'Ce Mois',
+    'dashboard.today': 'Aujourd\'hui',
+
+    // Users
+    'users.title': 'Utilisateurs',
+    'users.addUser': 'Ajouter un Utilisateur',
+    'users.editUser': 'Modifier l\'Utilisateur',
+    'users.deleteUser': 'Supprimer l\'Utilisateur',
+    'users.userDetails': 'Détails de l\'Utilisateur',
+    'users.role.admin': 'Administrateur',
+    'users.role.supervisor': 'Superviseur',
+    'users.role.employee': 'Employé',
+    'users.status.active': 'Actif',
+    'users.status.inactive': 'Inactif',
+    'users.noUsers': 'Aucun utilisateur trouvé',
+    'users.createAuthAccount': 'Créer un Compte de Connexion',
+
+    // Projects
+    'projects.title': 'Projets',
+    'projects.addProject': 'Ajouter un Projet',
+    'projects.editProject': 'Modifier le Projet',
+    'projects.deleteProject': 'Supprimer le Projet',
+    'projects.projectDetails': 'Détails du Projet',
+    'projects.noProjects': 'Aucun projet trouvé',
+    'projects.client': 'Client',
+    'projects.budget': 'Budget',
+    'projects.estimatedHours': 'Heures Estimées',
+    'projects.actualHours': 'Heures Réelles',
+    'projects.teamMembers': 'Membres de l\'Équipe',
+
+    // Clients
+    'clients.title': 'Clients',
+    'clients.addClient': 'Ajouter un Client',
+    'clients.editClient': 'Modifier le Client',
+    'clients.deleteClient': 'Supprimer le Client',
+    'clients.clientDetails': 'Détails du Client',
+    'clients.noClients': 'Aucun client trouvé',
+    'clients.contactPerson': 'Personne de Contact',
+    'clients.companyName': 'Nom de l\'Entreprise',
+
+    // Reports
+    'reports.title': 'Rapports',
+    'reports.generate': 'Générer un Rapport',
+    'reports.download': 'Télécharger',
+    'reports.schedule': 'Planifier un Rapport',
+    'reports.timesheet': 'Rapport de Temps',
+    'reports.attendance': 'Rapport de Présence',
+    'reports.projectSummary': 'Résumé du Projet',
+    'reports.employeeSummary': 'Résumé de l\'Employé',
+    'reports.dateRange': 'Plage de Dates',
+    'reports.selectEmployees': 'Sélectionner les Employés',
+    'reports.selectProjects': 'Sélectionner les Projets',
+
+    // Settings
+    'settings.title': 'Paramètres',
+    'settings.profile': 'Profil',
+    'settings.company': 'Entreprise',
+    'settings.features': 'Fonctionnalités',
+    'settings.departments': 'Départements',
+    'settings.taskTypes': 'Types de Tâches',
+    'settings.badges': 'Badges',
+    'settings.notifications': 'Notifications',
+    'settings.security': 'Sécurité',
+    'settings.billing': 'Facturation',
+
+    // Auth
+    'auth.login': 'Connexion',
+    'auth.logout': 'Déconnexion',
+    'auth.signup': 'S\'inscrire',
+    'auth.forgotPassword': 'Mot de passe oublié?',
+    'auth.resetPassword': 'Réinitialiser le Mot de Passe',
+    'auth.rememberMe': 'Se souvenir de moi',
+    'auth.dontHaveAccount': 'Vous n\'avez pas de compte?',
+    'auth.alreadyHaveAccount': 'Vous avez déjà un compte?',
+    'auth.loginSuccess': 'Connexion réussie',
+    'auth.loginError': 'Échec de la connexion. Vérifiez vos identifiants.',
+    'auth.signupSuccess': 'Compte créé avec succès',
+    'auth.signupError': 'Échec de la création du compte',
+
+    // Errors
+    'error.required': 'Ce champ est obligatoire',
+    'error.invalidEmail': 'Adresse email invalide',
+    'error.passwordMismatch': 'Les mots de passe ne correspondent pas',
+    'error.minLength': 'Doit contenir au moins {min} caractères',
+    'error.maxLength': 'Doit contenir au maximum {max} caractères',
+    'error.generic': 'Une erreur s\'est produite. Veuillez réessayer.',
+    'error.notFound': 'Non trouvé',
+    'error.unauthorized': 'Non autorisé',
+    'error.forbidden': 'Accès refusé',
+
+    // Success Messages
+    'success.saved': 'Modifications enregistrées avec succès',
+    'success.created': 'Créé avec succès',
+    'success.updated': 'Mis à jour avec succès',
+    'success.deleted': 'Supprimé avec succès',
 
     // Language names
     'language.english': 'Anglais',
-    'language.spanish': 'Español',
-    'language.french': 'Français'
+    'language.spanish': 'Espagnol',
+    'language.french': 'Français',
+
+    // Home Page
+    'home.hero.title': 'Simplifiez Votre Suivi du Temps',
+    'home.hero.subtitle': 'CICO facilite le suivi des heures des employés, la gestion des projets et la génération de rapports.',
+    'home.hero.cta': 'Commencer Gratuitement',
+    'home.features.title': 'Fonctionnalités',
+    'home.features.timeclock': 'Suivi du Temps Facile',
+    'home.features.timeclockDesc': 'Les employés peuvent pointer en quelques clics.',
+    'home.features.reports': 'Rapports Détaillés',
+    'home.features.reportsDesc': 'Générez des rapports complets pour la paie et l\'analyse.',
+    'home.features.projects': 'Gestion de Projets',
+    'home.features.projectsDesc': 'Suivez le temps par projet et client pour une facturation précise.',
+
+    // Footer
+    'footer.copyright': '© 2024 CICO. Tous droits réservés.',
+    'footer.privacy': 'Politique de Confidentialité',
+    'footer.terms': 'Conditions d\'Utilisation',
   }
 };
 
@@ -94,12 +685,18 @@ const LanguageContext = createContext<LanguageContextType | undefined>(undefined
 export const LanguageProvider: React.FC<{ children: ReactNode }> = ({ children }) => {
   const [language, setLanguage] = useState<Language>('en');
 
-  const translate = (key: string): string => {
-    const translation = translations[language][key as keyof typeof translations[typeof language]];
+  const translate = (key: string, params?: Record<string, string | number>): string => {
+    let translation = translations[language][key];
 
     if (!translation) {
       console.warn(`Translation missing for key: ${key} in language: ${language}`);
       return key;
+    }
+
+    if (params) {
+      Object.entries(params).forEach(([paramKey, value]) => {
+        translation = translation.replace(`{${paramKey}}`, String(value));
+      });
     }
 
     return translation;
