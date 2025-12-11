@@ -1,84 +1,301 @@
-import React, { useState, useEffect } from "react";
-import { Clock, FolderOpen, ArrowUp, Download, Calendar, FileText, FileSpreadsheet } from "lucide-react";
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import React, { useState } from "react";
+import { useNavigate } from "react-router-dom";
+import {
+  Download,
+  Clock,
+  FolderOpen,
+  ArrowUp,
+  File,
+  File as FileIcon,
+} from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
-import { Calendar as CalendarComponent } from "@/components/ui/calendar";
-import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { supabase } from "@/integrations/supabase/client";
 import { StandardHeader } from "@/components/layout/StandardHeader";
 import { useAuth } from "@/contexts/AuthContext";
-import { useCompany } from "@/contexts/CompanyContext";
-import { ScheduledReportsList } from "@/components/reports/ScheduledReportsList";
-import { useLiveReports, getPresetDateRange, DateRange } from "@/hooks/useLiveReports";
-import { exportReportsToCSV, exportReportsToPDF } from "@/utils/reportExportUtils";
-import { format } from "date-fns";
-import { cn } from "@/lib/utils";
+import { useReports } from "@/hooks/useReports";
+import { ReportFilters, ReportFiltersValues } from "@/components/reports/ReportFilters";
+import { buildRealTableHTML } from "@/utils/reportUtils";
+import { DailyTimecardReport } from "@/components/reports/DailyTimecardReport";
+import { UnClockedUsersReport } from "@/components/reports/UnClockedUsersReport";
+import { ScheduledReportsManager } from "@/components/reports/ScheduledReportsManager";
+import { TimeEntryDetailsReport } from "@/components/reports/TimeEntryDetailsReport";
 
-const DATE_PRESETS = [
-  { value: 'today', label: 'Today' },
-  { value: 'yesterday', label: 'Yesterday' },
-  { value: 'thisWeek', label: 'This Week' },
-  { value: 'lastWeek', label: 'Last Week' },
-  { value: 'thisMonth', label: 'This Month' },
-  { value: 'lastMonth', label: 'Last Month' },
-  { value: 'last7Days', label: 'Last 7 Days' },
-  { value: 'last30Days', label: 'Last 30 Days' },
-  { value: 'custom', label: 'Custom Range' },
+// --- Report Export Utilities ---
+const sampleEmployeeRows = [
+  { name: "Jane Doe", week: 42, month: 172 },
+  { name: "Alex Lee", week: 39, month: 165 },
+  { name: "John Smith", week: 36, month: 159 },
+  { name: "Taylor Morgan", week: 27, month: 143 },
+  { name: "Chris Evans", week: 20, month: 128 },
 ];
 
+const sampleProjectRows = [
+  { name: "Redesign Q3", week: 41, month: 160 },
+  { name: "Project Alpha", week: 37, month: 149 },
+  { name: "Mobile App", week: 31, month: 137 },
+  { name: "New Onboarding", week: 24, month: 111 },
+  { name: "Remote HR", week: 15, month: 97 },
+];
+
+// Utility: Export HTML table as CSV
+function exportTableAsCSV(type: "employee" | "project") {
+  const rows = type === "employee" ? sampleEmployeeRows : sampleProjectRows;
+  const columns = ["Name", "Week", "Month"];
+  let csv =
+    columns.join(",") +
+    "\n" +
+    rows.map((row) => columns.map((col) => String((row as any)[col.toLowerCase()])).join(",")).join("\n");
+  const blob = new Blob([csv], { type: "text/csv" });
+  const url = window.URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = `${type}-report.csv`;
+  document.body.appendChild(a);
+  a.click();
+  url && window.URL.revokeObjectURL(url);
+  a.remove();
+}
+
+// Utility: Export HTML table as PDF using jsPDF + autotable
+function exportTableAsPDF(type: "employee" | "project") {
+  // @ts-ignore
+  import("jspdf").then(jsPDFImport => {
+    // @ts-ignore
+    import("jspdf-autotable").then(() => {
+      const { jsPDF } = jsPDFImport;
+      const doc = new jsPDF();
+      const rows = type === "employee" ? sampleEmployeeRows : sampleProjectRows;
+      const columns = ["Name", "Week", "Month"];
+      doc.text(`${type === "employee" ? "Employee" : "Project"} Report`, 14, 16);
+      // @ts-ignore
+      doc.autoTable({
+        head: [columns],
+        body: rows.map((row) => columns.map((col) => (row as any)[col.toLowerCase()])),
+        startY: 20,
+      });
+      doc.save(`${type}-report.pdf`);
+    });
+  });
+}
+
 const Reports = () => {
+  const navigate = useNavigate();
   const { signOut } = useAuth();
-  const { company } = useCompany();
-  const { metrics, employeeReports, projectReports, loading, fetchReports } = useLiveReports();
-  
-  const [datePreset, setDatePreset] = useState('thisMonth');
-  const [dateRange, setDateRange] = useState<DateRange>(getPresetDateRange('thisMonth'));
-  const [customDateOpen, setCustomDateOpen] = useState(false);
+  const [selectedStartDate, setSelectedStartDate] = useState<Date | undefined>(undefined);
+  const [selectedEndDate, setSelectedEndDate] = useState<Date | undefined>(undefined);
+  const { metrics, employeeReports, projectReports, loading, error } = useReports(selectedStartDate, selectedEndDate);
 
-  useEffect(() => {
-    fetchReports(dateRange);
-  }, [dateRange, fetchReports]);
+  // Generate report logic
+  const handleGenerateReport = async (filters: ReportFiltersValues) => {
+    // Update selected dates for the hook to update overview metrics
+    setSelectedStartDate(filters.startDate);
+    setSelectedEndDate(filters.endDate);
 
-  const handlePresetChange = (preset: string) => {
-    setDatePreset(preset);
-    if (preset !== 'custom') {
-      setDateRange(getPresetDateRange(preset));
+    const newWin = window.open("", "_blank", "width=900,height=700");
+    if (!newWin) {
+      alert("Please enable popups for this site.");
+      return;
+    }
+
+    // Fetch fresh data directly with the selected date range
+    const start = filters.startDate || new Date(new Date().getFullYear(), new Date().getMonth(), 1);
+    const end = filters.endDate || new Date(new Date().getFullYear(), new Date().getMonth() + 1, 0, 23, 59, 59);
+
+    const { data: profiles } = await supabase
+      .from('profiles')
+      .select('user_id, display_name, first_name, last_name, department_id, company_id');
+
+    const companyId = profiles?.[0]?.company_id;
+    if (!companyId) {
+      newWin.close();
+      alert("Unable to fetch company data");
+      return;
+    }
+
+    const { data: rawTimeEntries } = await supabase
+      .from('time_entries')
+      .select(`
+        duration_minutes,
+        start_time,
+        end_time,
+        user_id,
+        projects(id, name, status)
+      `)
+      .eq('company_id', companyId)
+      .gte('start_time', start.toISOString())
+      .lte('start_time', end.toISOString());
+
+    // Calculate minutes for each entry
+    const timeEntries = rawTimeEntries?.map(entry => {
+      let minutes = entry.duration_minutes;
+      if (!minutes && entry.start_time) {
+        const startTime = new Date(entry.start_time).getTime();
+        const endTime = entry.end_time ? new Date(entry.end_time).getTime() : Date.now();
+        minutes = Math.floor((endTime - startTime) / 1000 / 60);
+      }
+      return { ...entry, calculated_minutes: minutes || 0 };
+    }) || [];
+
+    const userProfiles = profiles?.reduce((acc, profile) => {
+      acc[profile.user_id] = profile;
+      return acc;
+    }, {} as Record<string, any>) || {};
+
+    // Build employee or project reports from fresh data
+    let reportData: any[] = [];
+
+    if (filters.reportType === 'employee') {
+      const employeeHours = timeEntries.reduce((acc, entry: any) => {
+        const profile = userProfiles[entry.user_id];
+        const name = `${profile?.first_name || ''} ${profile?.last_name || ''}`.trim() ||
+                    profile?.display_name ||
+                    'Unknown User';
+        const hours = entry.calculated_minutes / 60;
+        const userId = entry.user_id;
+
+        if (!acc[userId]) {
+          acc[userId] = {
+            name,
+            week: 0,
+            month: 0,
+            userId,
+            departmentId: profile?.department_id
+          };
+        }
+        acc[userId].month += hours;
+
+        const entryDate = new Date(entry.start_time);
+        const weekAgo = new Date();
+        weekAgo.setDate(weekAgo.getDate() - 7);
+        if (entryDate >= weekAgo) {
+          acc[userId].week += hours;
+        }
+
+        return acc;
+      }, {} as Record<string, any>);
+
+      reportData = Object.values(employeeHours).map((data: any) => ({
+        name: data.name,
+        week: Math.round(data.week),
+        month: Math.round(data.month),
+        userId: data.userId,
+        departmentId: data.departmentId,
+      })).sort((a: any, b: any) => b.month - a.month);
+
     } else {
-      setCustomDateOpen(true);
+      const projectHours = timeEntries.reduce((acc, entry: any) => {
+        const project = entry.projects;
+        if (!project) return acc;
+
+        const projectId = project.id;
+        const projectName = project.name || 'No Project';
+        const projectStatus = project.status;
+        const hours = entry.calculated_minutes / 60;
+
+        if (!acc[projectId]) {
+          acc[projectId] = {
+            name: projectName,
+            week: 0,
+            month: 0,
+            projectId,
+            status: projectStatus
+          };
+        }
+        acc[projectId].month += hours;
+
+        const entryDate = new Date(entry.start_time);
+        const weekAgo = new Date();
+        weekAgo.setDate(weekAgo.getDate() - 7);
+        if (entryDate >= weekAgo) {
+          acc[projectId].week += hours;
+        }
+
+        return acc;
+      }, {} as Record<string, any>);
+
+      reportData = Object.values(projectHours).map((data: any) => ({
+        name: data.name,
+        week: Math.round(data.week),
+        month: Math.round(data.month),
+        projectId: data.projectId,
+        status: data.status,
+      })).sort((a: any, b: any) => b.month - a.month);
     }
-  };
 
-  const handleCustomDateSelect = (range: { from?: Date; to?: Date } | undefined) => {
-    if (range?.from && range?.to) {
-      setDateRange({ from: range.from, to: range.to });
-      setCustomDateOpen(false);
-    }
-  };
+    const reportTable = buildRealTableHTML(filters.reportType === 'employee' ? 'employee' : 'project', reportData);
+    const title =
+      filters.reportType === "employee"
+        ? "Work Hours Per Employee"
+        : "Project Time Distribution";
 
-  const handleExportCSV = () => {
-    exportReportsToCSV({
-      employeeReports,
-      projectReports,
-      dateRange,
-      companyName: company?.company_name,
-    });
-  };
+    const style = `
+      <style>
+        body { font-family: sans-serif; background: #F6F6F7; margin:0;padding:24px; }
+        .download-btn {
+          margin-top: 24px; margin-right: 16px;
+          padding: 10px 16px; border: none; border-radius:6px;
+          font-size: 15px; background: #4BA0F4; color: #fff; cursor: pointer; display:inline-flex; align-items:center; gap:7px;
+        }
+        .download-btn:last-child { margin-right: 0; }
+        h2 { margin-bottom: 18px; }
+        .export-bar { margin-bottom: 20px; }
+        table { background: #fff; border:1px solid #ececec; }
+      </style>
+    `;
 
-  const handleExportPDF = () => {
-    exportReportsToPDF({
-      employeeReports,
-      projectReports,
-      dateRange,
-      companyName: company?.company_name,
-    });
+    // Markup for buttons
+    const pdfBtnId = "btn-pdf";
+    const csvBtnId = "btn-csv";
+    const html = `
+      <html>
+        <head>
+          <title>${title} - Report</title>
+          ${style}
+        </head>
+        <body>
+          <h2>${title}</h2>
+          <div class="export-bar">
+            <button class="download-btn" id="${pdfBtnId}">
+              <svg fill="none" height="18" width="18" viewBox="0 0 24 24" stroke="currentColor" stroke-width="1.5">
+                <rect width="18" height="22" x="3" y="1" stroke="#fff" fill="none" rx="2"/>
+                <text x="7" y="18" font-size="9" fill="#fff">PDF</text>
+              </svg> Save as PDF
+            </button>
+            <button class="download-btn" id="${csvBtnId}">
+              <svg fill="none" height="18" width="18" viewBox="0 0 24 24" stroke="currentColor" stroke-width="1.5">
+                <rect width="18" height="22" x="3" y="1" stroke="#fff" fill="none" rx="2"/>
+                <text x="7" y="18" font-size="9" fill="#fff">CSV</text>
+              </svg> Save as CSV
+            </button>
+          </div>
+          ${reportTable}
+          <script>
+              window.exportTableAsCSV = ${exportTableAsCSV.toString()};
+              window.exportTableAsPDF = ${exportTableAsPDF.toString()};
+              document.getElementById('${csvBtnId}').addEventListener('click', function() {
+                window.opener.exportTableAsCSV && window.opener.exportTableAsCSV('${filters.reportType}');
+              });
+              document.getElementById('${pdfBtnId}').addEventListener('click', function() {
+                window.opener.exportTableAsPDF && window.opener.exportTableAsPDF('${filters.reportType}');
+              });
+          </script>
+        </body>
+      </html>
+    `;
+    newWin.document.write(html);
+    // attach utility functions to opener so popup can invoke
+    (window as any).exportTableAsCSV = exportTableAsCSV;
+    (window as any).exportTableAsPDF = exportTableAsPDF;
   };
 
   return (
     <div className="min-h-screen bg-background">
       <StandardHeader />
 
+      {/* Main Content */}
       <main className="container mx-auto px-4 py-8">
+        {/* Reports Header */}
         <section className="mb-8">
           <div className="flex justify-between items-center mb-6">
             <h1 className="text-2xl font-bold text-gray-800">Reports</h1>
@@ -91,72 +308,8 @@ const Reports = () => {
             </TabsList>
 
             <TabsContent value="live" className="space-y-8">
-              {/* Date Range & Export Controls */}
-              <div className="flex flex-wrap items-center justify-between gap-4 bg-white p-4 rounded-xl shadow-sm border border-gray-100">
-                <div className="flex items-center gap-4">
-                  <div className="flex items-center gap-2">
-                    <Calendar className="h-4 w-4 text-muted-foreground" />
-                    <span className="text-sm font-medium">Date Range:</span>
-                  </div>
-                  
-                  <Select value={datePreset} onValueChange={handlePresetChange}>
-                    <SelectTrigger className="w-[160px]">
-                      <SelectValue />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {DATE_PRESETS.map((preset) => (
-                        <SelectItem key={preset.value} value={preset.value}>
-                          {preset.label}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-
-                  {datePreset === 'custom' && (
-                    <Popover open={customDateOpen} onOpenChange={setCustomDateOpen}>
-                      <PopoverTrigger asChild>
-                        <Button variant="outline" className="min-w-[240px] justify-start text-left font-normal">
-                          <Calendar className="mr-2 h-4 w-4" />
-                          {format(dateRange.from, "MMM d, yyyy")} - {format(dateRange.to, "MMM d, yyyy")}
-                        </Button>
-                      </PopoverTrigger>
-                      <PopoverContent className="w-auto p-0" align="start">
-                        <CalendarComponent
-                          mode="range"
-                          selected={{ from: dateRange.from, to: dateRange.to }}
-                          onSelect={handleCustomDateSelect}
-                          numberOfMonths={2}
-                        />
-                      </PopoverContent>
-                    </Popover>
-                  )}
-
-                  {datePreset !== 'custom' && (
-                    <span className="text-sm text-muted-foreground">
-                      {format(dateRange.from, "MMM d, yyyy")} - {format(dateRange.to, "MMM d, yyyy")}
-                    </span>
-                  )}
-                </div>
-
-                <DropdownMenu>
-                  <DropdownMenuTrigger asChild>
-                    <Button variant="outline" disabled={loading || (employeeReports.length === 0 && projectReports.length === 0)}>
-                      <Download className="h-4 w-4 mr-2" />
-                      Export
-                    </Button>
-                  </DropdownMenuTrigger>
-                  <DropdownMenuContent align="end">
-                    <DropdownMenuItem onClick={handleExportCSV}>
-                      <FileSpreadsheet className="h-4 w-4 mr-2" />
-                      Export as CSV
-                    </DropdownMenuItem>
-                    <DropdownMenuItem onClick={handleExportPDF}>
-                      <FileText className="h-4 w-4 mr-2" />
-                      Export as PDF
-                    </DropdownMenuItem>
-                  </DropdownMenuContent>
-                </DropdownMenu>
-              </div>
+              {/* Report Filters */}
+              <ReportFilters onApply={handleGenerateReport} />
 
               {/* Overview Cards */}
               <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
@@ -165,10 +318,10 @@ const Reports = () => {
                     <div className="text-gray-500">Total Hours</div>
                     <Clock className="text-[#008000]" />
                   </div>
-                  <div className="text-2xl font-bold">{loading ? '...' : metrics.totalHours}</div>
-                  <div className="text-sm text-muted-foreground mt-2">
-                    {format(dateRange.from, "MMM d")} - {format(dateRange.to, "MMM d, yyyy")}
-                  </div>
+                    <div className="text-2xl font-bold">{metrics.totalHours}</div>
+                    <div className="text-sm text-green-600 mt-2 flex items-center">
+                      <ArrowUp className="w-4 h-4 mr-1" /> {metrics.totalHoursChange}% vs last month
+                    </div>
                 </div>
 
                 <div className="bg-white p-6 rounded-xl shadow-sm border border-gray-100">
@@ -176,10 +329,10 @@ const Reports = () => {
                     <div className="text-gray-500">Active Projects</div>
                     <FolderOpen className="text-[#4BA0F4]" />
                   </div>
-                  <div className="text-2xl font-bold">{loading ? '...' : metrics.activeProjects}</div>
-                  <div className="text-sm text-muted-foreground mt-2">
-                    With time entries
-                  </div>
+                    <div className="text-2xl font-bold">{metrics.activeProjects}</div>
+                    <div className="text-sm text-blue-600 mt-2 flex items-center">
+                      <ArrowUp className="w-4 h-4 mr-1" /> {metrics.activeProjectsChange} new this week
+                    </div>
                 </div>
 
                 <div className="bg-white p-6 rounded-xl shadow-sm border border-gray-100">
@@ -187,14 +340,23 @@ const Reports = () => {
                     <div className="text-gray-500">Overtime Hours</div>
                     <Clock className="text-orange-500" />
                   </div>
-                  <div className="text-2xl font-bold">{loading ? '...' : metrics.overtimeHours}</div>
-                  <div className="text-sm text-muted-foreground mt-2">
-                    Over standard 160h/month
-                  </div>
+                    <div className="text-2xl font-bold">{metrics.overtimeHours}</div>
+                    <div className="text-sm text-orange-600 mt-2 flex items-center">
+                      <ArrowUp className="w-4 h-4 mr-1" /> {metrics.overtimeHoursChange} hours vs last month
+                    </div>
                 </div>
               </div>
 
-              {/* Report Tables */}
+              {/* Un-Clocked Users Report */}
+              <UnClockedUsersReport />
+
+              {/* Daily Timecard Report */}
+              <DailyTimecardReport />
+
+              {/* Time Entry Details Report with Photos */}
+              <TimeEntryDetailsReport />
+
+              {/* Report Content */}
               <section className="bg-white rounded-xl shadow-sm border border-gray-100 mb-8">
                 <div className="border-b border-gray-100">
                   <div className="flex space-x-6 px-6">
@@ -204,84 +366,92 @@ const Reports = () => {
                   </div>
                 </div>
                 <div className="p-6">
-                  <div className={cn("grid gap-6", loading && "opacity-50")}>
-                    <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-                      {/* Employee Hours */}
-                      <div className="bg-gray-50 rounded-lg p-4 h-[300px] overflow-auto">
-                        <div className="font-semibold text-gray-700 mb-2">Work Hours Per Employee</div>
-                        <table className="min-w-full text-sm rounded-lg overflow-hidden">
-                          <thead>
-                            <tr className="bg-white border-b border-gray-200">
-                              <th className="py-2 px-3 text-left text-gray-500">Name</th>
-                              <th className="py-2 px-3 text-right text-gray-500">Hours</th>
-                            </tr>
-                          </thead>
-                          <tbody>
-                            {employeeReports.map((row, i) => (
-                              <tr key={row.id} className={i % 2 === 0 ? "bg-white" : "bg-gray-100"}>
-                                <td className="py-2 px-3">{row.name}</td>
-                                <td className="py-2 px-3 text-right font-medium">{row.hours}</td>
-                              </tr>
-                            ))}
-                            {employeeReports.length === 0 && !loading && (
-                              <tr>
-                                <td colSpan={2} className="py-4 px-3 text-center text-gray-500">
-                                  No employee data for selected period
-                                </td>
-                              </tr>
-                            )}
-                          </tbody>
-                        </table>
-                      </div>
-
-                      {/* Project Hours */}
-                      <div className="bg-gray-50 rounded-lg p-4 h-[300px] overflow-auto">
-                        <div className="font-semibold text-gray-700 mb-2">Project Time Distribution</div>
-                        <table className="min-w-full text-sm rounded-lg overflow-hidden">
-                          <thead>
-                            <tr className="bg-white border-b border-gray-200">
-                              <th className="py-2 px-3 text-left text-gray-500">Project Name</th>
-                              <th className="py-2 px-3 text-right text-gray-500">Hours</th>
-                            </tr>
-                          </thead>
-                          <tbody>
-                            {projectReports.map((row, i) => (
-                              <tr key={row.id} className={i % 2 === 0 ? "bg-white" : "bg-gray-100"}>
-                                <td className="py-2 px-3">{row.name}</td>
-                                <td className="py-2 px-3 text-right font-medium">{row.hours}</td>
-                              </tr>
-                            ))}
-                            {projectReports.length === 0 && !loading && (
-                              <tr>
-                                <td colSpan={2} className="py-4 px-3 text-center text-gray-500">
-                                  No project data for selected period
-                                </td>
-                              </tr>
-                            )}
-                          </tbody>
-                        </table>
-                      </div>
-                    </div>
+                  <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                    {/* Work Hours Per Employee Table */}
+                    <div className="bg-gray-50 rounded-lg p-4 h-[300px] overflow-auto">
+                      <div className="font-semibold text-gray-700 mb-2">Work Hours Per Employee</div>
+                      <table className="min-w-full text-sm rounded-lg overflow-hidden">
+                  <thead>
+                    <tr className="bg-white border-b border-gray-200">
+                      <th className="py-2 px-3 text-left text-gray-500">Name</th>
+                      <th className="py-2 px-3 text-left text-gray-500">Week</th>
+                      <th className="py-2 px-3 text-left text-gray-500">Month</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {employeeReports.slice(0, 5).map((row, i) => (
+                      <tr key={row.name} className={i % 2 === 0 ? "bg-white" : "bg-gray-100"}>
+                        <td className="py-2 px-3">{row.name}</td>
+                        <td className="py-2 px-3">{row.week}</td>
+                        <td className="py-2 px-3">{row.month}</td>
+                      </tr>
+                    ))}
+                    {employeeReports.length === 0 && (
+                      <tr>
+                        <td colSpan={3} className="py-4 px-3 text-center text-gray-500">
+                          No employee data available
+                        </td>
+                      </tr>
+                    )}
+                      </tbody>
+                    </table>
+                  </div>
+                  {/* Project Time Distribution Table */}
+                  <div className="bg-gray-50 rounded-lg p-4 h-[300px] overflow-auto">
+                    <div className="font-semibold text-gray-700 mb-2">Project Time Distribution</div>
+                    <table className="min-w-full text-sm rounded-lg overflow-auto">
+                  <thead>
+                    <tr className="bg-white border-b border-gray-200">
+                      <th className="py-2 px-3 text-left text-gray-500">Project Name</th>
+                      <th className="py-2 px-3 text-left text-gray-500">Week</th>
+                      <th className="py-2 px-3 text-left text-gray-500">Month</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {projectReports.slice(0, 5).map((row, i) => (
+                      <tr key={row.name} className={i % 2 === 0 ? "bg-white" : "bg-gray-100"}>
+                        <td className="py-2 px-3">{row.name}</td>
+                        <td className="py-2 px-3">{row.week}</td>
+                        <td className="py-2 px-3">{row.month}</td>
+                      </tr>
+                    ))}
+                    {projectReports.length === 0 && (
+                      <tr>
+                        <td colSpan={3} className="py-4 px-3 text-center text-gray-500">
+                          No project data available
+                        </td>
+                      </tr>
+                    )}
+                      </tbody>
+                    </table>
                   </div>
                 </div>
-              </section>
+              </div>
+            </section>
             </TabsContent>
 
             <TabsContent value="scheduled">
-              <ScheduledReportsList />
+              <ScheduledReportsManager />
             </TabsContent>
           </Tabs>
         </section>
       </main>
 
+      {/* Footer */}
       <footer className="fixed bottom-0 w-full bg-background border-t border-border shadow-sm z-40">
         <div className="container mx-auto px-4 py-4">
           <div className="flex items-center justify-between text-sm text-muted-foreground">
             <div className="flex space-x-6">
               <a href="#" className="hover:text-primary">Support</a>
               <a href="#" className="hover:text-primary">Privacy Policy</a>
+              <a href="#" className="hover:text-primary">Terms</a>
             </div>
-            <button onClick={signOut} className="text-destructive hover:text-destructive/80">Logout</button>
+            <button
+              onClick={signOut}
+              className="text-destructive hover:text-destructive/80"
+            >
+              Logout
+            </button>
           </div>
         </div>
       </footer>

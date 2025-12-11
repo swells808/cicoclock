@@ -132,6 +132,22 @@ export const useScheduledReports = () => {
     await updateReport(id, { is_active });
   };
 
+  const sendTestEmail = async (reportId: string, testEmail?: string) => {
+    const { error } = await supabase.functions.invoke('send-test-report', {
+      body: { report_id: reportId, test_email: testEmail }
+    });
+    if (error) throw error;
+    toast.success('Test email sent successfully');
+  };
+
+  const getReportPreview = async (reportId: string): Promise<string> => {
+    const { data, error } = await supabase.functions.invoke('send-test-report', {
+      body: { report_id: reportId, preview_only: true }
+    });
+    if (error) throw error;
+    return data?.html || '<p>No preview available</p>';
+  };
+
   useEffect(() => {
     fetchReports();
   }, [company?.id]);
@@ -145,6 +161,56 @@ export const useScheduledReports = () => {
     updateReport,
     deleteReport,
     toggleReportStatus,
+    sendTestEmail,
+    getReportPreview,
+  };
+};
+
+export interface ReportExecutionLog {
+  id: string;
+  scheduled_report_id: string;
+  executed_at: string;
+  recipients_count: number;
+  status: string;
+  error_message: string | null;
+}
+
+export const useReportExecutionLog = (reportId?: string) => {
+  const [logs, setLogs] = useState<ReportExecutionLog[]>([]);
+  const [loading, setLoading] = useState(true);
+
+  const fetchLogs = async () => {
+    if (!reportId) {
+      setLogs([]);
+      setLoading(false);
+      return;
+    }
+
+    try {
+      setLoading(true);
+      const { data, error } = await supabase
+        .from('report_execution_log')
+        .select('*')
+        .eq('scheduled_report_id', reportId)
+        .order('executed_at', { ascending: false });
+
+      if (error) throw error;
+      setLogs(data || []);
+    } catch (err) {
+      console.error('Error fetching execution logs:', err);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    fetchLogs();
+  }, [reportId]);
+
+  return {
+    logs,
+    loading,
+    refetch: fetchLogs,
   };
 };
 
