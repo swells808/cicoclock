@@ -9,8 +9,9 @@ import { useDepartments } from '@/hooks/useDepartments';
 import { useCompany } from '@/contexts/CompanyContext';
 import { supabase } from '@/integrations/supabase/client';
 import { toast } from 'sonner';
-import { User, Mail, Phone, Building2, Shield, IdCard, KeyRound } from 'lucide-react';
+import { User, Mail, Phone, Building2, Shield, IdCard, KeyRound, Award } from 'lucide-react';
 import type { User as UserType } from '@/hooks/useUsers';
+import { CertificationsList } from './CertificationsList';
 
 interface UserDialogProps {
   open: boolean;
@@ -192,10 +193,11 @@ export const UserDialog = ({ open, onOpenChange, user, onSave }: UserDialogProps
 
         <form onSubmit={handleSubmit}>
           <Tabs defaultValue="basic" className="w-full">
-            <TabsList className="grid w-full grid-cols-3">
+            <TabsList className={`grid w-full ${isEditing ? 'grid-cols-4' : 'grid-cols-3'}`}>
               <TabsTrigger value="basic">Basic Info</TabsTrigger>
               <TabsTrigger value="work">Work Details</TabsTrigger>
               <TabsTrigger value="access">Access & Security</TabsTrigger>
+              {isEditing && <TabsTrigger value="certifications">Certifications</TabsTrigger>}
             </TabsList>
 
             <TabsContent value="basic" className="space-y-4 mt-4">
@@ -390,6 +392,12 @@ export const UserDialog = ({ open, onOpenChange, user, onSave }: UserDialogProps
                 </div>
               )}
             </TabsContent>
+
+            {isEditing && user && (
+              <TabsContent value="certifications" className="mt-4">
+                <CertificationsList profileId={user.id} />
+              </TabsContent>
+            )}
           </Tabs>
 
           <DialogFooter className="mt-6">
