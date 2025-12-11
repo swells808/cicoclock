@@ -298,7 +298,7 @@ const Reports = () => {
         {/* Reports Header */}
         <section className="mb-8">
           <div className="flex justify-between items-center mb-6">
-            <h1 className="text-2xl font-bold text-gray-800">Reports</h1>
+            <h1 className="text-2xl font-bold text-foreground">Reports</h1>
           </div>
 
           <Tabs defaultValue="live" className="w-full">
@@ -313,34 +313,34 @@ const Reports = () => {
 
               {/* Overview Cards */}
               <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-                <div className="bg-white p-6 rounded-xl shadow-sm border border-gray-100">
+                <div className="bg-card p-6 rounded-xl shadow-sm border border-border">
                   <div className="flex justify-between items-start mb-4">
-                    <div className="text-gray-500">Total Hours</div>
-                    <Clock className="text-[#008000]" />
+                    <div className="text-muted-foreground">Total Hours</div>
+                    <Clock className="text-green-600" />
                   </div>
-                    <div className="text-2xl font-bold">{metrics.totalHours}</div>
+                    <div className="text-2xl font-bold text-foreground">{metrics.totalHours}</div>
                     <div className="text-sm text-green-600 mt-2 flex items-center">
                       <ArrowUp className="w-4 h-4 mr-1" /> {metrics.totalHoursChange}% vs last month
                     </div>
                 </div>
 
-                <div className="bg-white p-6 rounded-xl shadow-sm border border-gray-100">
+                <div className="bg-card p-6 rounded-xl shadow-sm border border-border">
                   <div className="flex justify-between items-start mb-4">
-                    <div className="text-gray-500">Active Projects</div>
-                    <FolderOpen className="text-[#4BA0F4]" />
+                    <div className="text-muted-foreground">Active Projects</div>
+                    <FolderOpen className="text-primary" />
                   </div>
-                    <div className="text-2xl font-bold">{metrics.activeProjects}</div>
-                    <div className="text-sm text-blue-600 mt-2 flex items-center">
+                    <div className="text-2xl font-bold text-foreground">{metrics.activeProjects}</div>
+                    <div className="text-sm text-primary mt-2 flex items-center">
                       <ArrowUp className="w-4 h-4 mr-1" /> {metrics.activeProjectsChange} new this week
                     </div>
                 </div>
 
-                <div className="bg-white p-6 rounded-xl shadow-sm border border-gray-100">
+                <div className="bg-card p-6 rounded-xl shadow-sm border border-border">
                   <div className="flex justify-between items-start mb-4">
-                    <div className="text-gray-500">Overtime Hours</div>
+                    <div className="text-muted-foreground">Overtime Hours</div>
                     <Clock className="text-orange-500" />
                   </div>
-                    <div className="text-2xl font-bold">{metrics.overtimeHours}</div>
+                    <div className="text-2xl font-bold text-foreground">{metrics.overtimeHours}</div>
                     <div className="text-sm text-orange-600 mt-2 flex items-center">
                       <ArrowUp className="w-4 h-4 mr-1" /> {metrics.overtimeHoursChange} hours vs last month
                     </div>
@@ -357,10 +357,10 @@ const Reports = () => {
               <TimeEntryDetailsReport />
 
               {/* Report Content */}
-              <section className="bg-white rounded-xl shadow-sm border border-gray-100 mb-8">
-                <div className="border-b border-gray-100">
+              <section className="bg-card rounded-xl shadow-sm border border-border mb-8">
+                <div className="border-b border-border">
                   <div className="flex space-x-6 px-6">
-                    <button className="px-4 py-4 text-[#4BA0F4] border-b-2 border-[#4BA0F4] font-semibold">
+                    <button className="px-4 py-4 text-primary border-b-2 border-primary font-semibold">
                       Metrics
                     </button>
                   </div>
@@ -368,27 +368,27 @@ const Reports = () => {
                 <div className="p-6">
                   <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
                     {/* Work Hours Per Employee Table */}
-                    <div className="bg-gray-50 rounded-lg p-4 h-[300px] overflow-auto">
-                      <div className="font-semibold text-gray-700 mb-2">Work Hours Per Employee</div>
+                    <div className="bg-muted rounded-lg p-4 h-[300px] overflow-auto">
+                      <div className="font-semibold text-foreground mb-2">Work Hours Per Employee</div>
                       <table className="min-w-full text-sm rounded-lg overflow-hidden">
                   <thead>
-                    <tr className="bg-white border-b border-gray-200">
-                      <th className="py-2 px-3 text-left text-gray-500">Name</th>
-                      <th className="py-2 px-3 text-left text-gray-500">Week</th>
-                      <th className="py-2 px-3 text-left text-gray-500">Month</th>
+                    <tr className="bg-card border-b border-border">
+                      <th className="py-2 px-3 text-left text-muted-foreground">Name</th>
+                      <th className="py-2 px-3 text-left text-muted-foreground">Week</th>
+                      <th className="py-2 px-3 text-left text-muted-foreground">Month</th>
                     </tr>
                   </thead>
                   <tbody>
                     {employeeReports.slice(0, 5).map((row, i) => (
-                      <tr key={row.name} className={i % 2 === 0 ? "bg-white" : "bg-gray-100"}>
-                        <td className="py-2 px-3">{row.name}</td>
-                        <td className="py-2 px-3">{row.week}</td>
-                        <td className="py-2 px-3">{row.month}</td>
+                      <tr key={row.name} className={i % 2 === 0 ? "bg-card" : "bg-muted"}>
+                        <td className="py-2 px-3 text-foreground">{row.name}</td>
+                        <td className="py-2 px-3 text-foreground">{row.week}</td>
+                        <td className="py-2 px-3 text-foreground">{row.month}</td>
                       </tr>
                     ))}
                     {employeeReports.length === 0 && (
                       <tr>
-                        <td colSpan={3} className="py-4 px-3 text-center text-gray-500">
+                        <td colSpan={3} className="py-4 px-3 text-center text-muted-foreground">
                           No employee data available
                         </td>
                       </tr>
@@ -397,27 +397,27 @@ const Reports = () => {
                     </table>
                   </div>
                   {/* Project Time Distribution Table */}
-                  <div className="bg-gray-50 rounded-lg p-4 h-[300px] overflow-auto">
-                    <div className="font-semibold text-gray-700 mb-2">Project Time Distribution</div>
+                  <div className="bg-muted rounded-lg p-4 h-[300px] overflow-auto">
+                    <div className="font-semibold text-foreground mb-2">Project Time Distribution</div>
                     <table className="min-w-full text-sm rounded-lg overflow-auto">
                   <thead>
-                    <tr className="bg-white border-b border-gray-200">
-                      <th className="py-2 px-3 text-left text-gray-500">Project Name</th>
-                      <th className="py-2 px-3 text-left text-gray-500">Week</th>
-                      <th className="py-2 px-3 text-left text-gray-500">Month</th>
+                    <tr className="bg-card border-b border-border">
+                      <th className="py-2 px-3 text-left text-muted-foreground">Project Name</th>
+                      <th className="py-2 px-3 text-left text-muted-foreground">Week</th>
+                      <th className="py-2 px-3 text-left text-muted-foreground">Month</th>
                     </tr>
                   </thead>
                   <tbody>
                     {projectReports.slice(0, 5).map((row, i) => (
-                      <tr key={row.name} className={i % 2 === 0 ? "bg-white" : "bg-gray-100"}>
-                        <td className="py-2 px-3">{row.name}</td>
-                        <td className="py-2 px-3">{row.week}</td>
-                        <td className="py-2 px-3">{row.month}</td>
+                      <tr key={row.name} className={i % 2 === 0 ? "bg-card" : "bg-muted"}>
+                        <td className="py-2 px-3 text-foreground">{row.name}</td>
+                        <td className="py-2 px-3 text-foreground">{row.week}</td>
+                        <td className="py-2 px-3 text-foreground">{row.month}</td>
                       </tr>
                     ))}
                     {projectReports.length === 0 && (
                       <tr>
-                        <td colSpan={3} className="py-4 px-3 text-center text-gray-500">
+                        <td colSpan={3} className="py-4 px-3 text-center text-muted-foreground">
                           No project data available
                         </td>
                       </tr>
@@ -443,7 +443,7 @@ const Reports = () => {
           <div className="flex items-center justify-between text-sm text-muted-foreground">
             <div className="flex space-x-6">
               <a href="#" className="hover:text-primary">Support</a>
-              <a href="#" className="hover:text-primary">Privacy Policy</a>
+              <a href="/privacy" className="hover:text-primary">Privacy Policy</a>
               <a href="#" className="hover:text-primary">Terms</a>
             </div>
             <button

@@ -37,10 +37,10 @@ export const ReportFilters: React.FC<ReportFiltersProps> = ({ onApply, loading }
   };
 
   return (
-    <div className="bg-white p-6 rounded-xl shadow-sm border border-gray-100 space-y-4">
+    <div className="bg-card p-6 rounded-xl shadow-sm border border-border space-y-4">
       <div className="flex items-center gap-2 mb-4">
         <Filter className="h-5 w-5 text-muted-foreground" />
-        <h3 className="font-semibold">Report Filters</h3>
+        <h3 className="font-semibold text-foreground">Report Filters</h3>
       </div>
 
       <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
