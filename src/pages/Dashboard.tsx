@@ -3,6 +3,8 @@ import { useAuth } from "@/contexts/AuthContext";
 import { useProfile } from "@/hooks/useProfile";
 import { useUserRole } from "@/hooks/useUserRole";
 import { useTimeEntries, useActiveTimeEntry } from "@/hooks/useTimeEntries";
+import { useActiveProjects } from "@/hooks/useProjects";
+import { useEmployees } from "@/hooks/useEmployees";
 import { useLanguage } from "@/contexts/LanguageContext";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -16,6 +18,8 @@ const Dashboard = () => {
   const { isAdmin, isSupervisor } = useUserRole();
   const { data: timeEntries } = useTimeEntries();
   const { data: activeEntry } = useActiveTimeEntry();
+  const { data: activeProjects } = useActiveProjects();
+  const { employees } = useEmployees();
   const { t } = useLanguage();
 
   const todayEntries = timeEntries?.filter((entry) => {
@@ -95,7 +99,7 @@ const Dashboard = () => {
                   <FolderKanban className="h-4 w-4 text-muted-foreground" />
                 </CardHeader>
                 <CardContent>
-                  <div className="text-2xl font-bold">--</div>
+                  <div className="text-2xl font-bold">{activeProjects?.length ?? 0}</div>
                   <p className="text-xs text-muted-foreground">{t("inProgress")}</p>
                 </CardContent>
               </Card>
@@ -106,7 +110,7 @@ const Dashboard = () => {
                   <Users className="h-4 w-4 text-muted-foreground" />
                 </CardHeader>
                 <CardContent>
-                  <div className="text-2xl font-bold">--</div>
+                  <div className="text-2xl font-bold">{employees?.length ?? 0}</div>
                   <p className="text-xs text-muted-foreground">{t("activeUsers")}</p>
                 </CardContent>
               </Card>

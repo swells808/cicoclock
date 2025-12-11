@@ -14,6 +14,7 @@ import Login from "./pages/Login";
 import CompanySignup from "./pages/CompanySignup";
 import Dashboard from "./pages/Dashboard";
 import Timeclock from "./pages/Timeclock";
+import TaskCheckin from "./pages/TaskCheckin";
 import Users from "./pages/Users";
 import Projects from "./pages/Projects";
 import Clients from "./pages/Clients";
@@ -54,6 +55,7 @@ const App = () => (
                 {/* Protected Routes */}
                 <Route path="/dashboard" element={<ProtectedRoute><Dashboard /></ProtectedRoute>} />
                 <Route path="/timeclock" element={<ProtectedRoute><Timeclock /></ProtectedRoute>} />
+                <Route path="/task-checkin" element={<ProtectedRoute><TaskCheckin /></ProtectedRoute>} />
                 <Route path="/users" element={<ProtectedRoute><Users /></ProtectedRoute>} />
                 <Route path="/projects" element={<ProtectedRoute><Projects /></ProtectedRoute>} />
                 <Route path="/clients" element={<ProtectedRoute><Clients /></ProtectedRoute>} />
