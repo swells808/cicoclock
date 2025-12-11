@@ -17,6 +17,8 @@ import {
   X,
   ChevronLeft,
   ChevronRight,
+  IdCard,
+  ClipboardCheck,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
@@ -52,12 +54,14 @@ export const DashboardLayout = ({ children }: DashboardLayoutProps) => {
   const navItems = [
     { icon: LayoutDashboard, label: t("dashboard"), path: "/dashboard" },
     { icon: Clock, label: t("timeclock"), path: "/timeclock" },
+    { icon: ClipboardCheck, label: t("taskCheckin") || "Task Check-in", path: "/task-checkin" },
     ...(isAdmin || isSupervisor
       ? [
           { icon: Users, label: t("users"), path: "/users" },
           { icon: FolderKanban, label: t("projects"), path: "/projects" },
           { icon: Building2, label: t("clients"), path: "/clients" },
           { icon: FileText, label: t("reports"), path: "/reports" },
+          { icon: IdCard, label: t("badgeDesigner") || "Badge Designer", path: "/badge-designer" },
         ]
       : []),
     { icon: Settings, label: t("settings"), path: "/settings" },
