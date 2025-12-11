@@ -60,7 +60,7 @@ export const UserTable: React.FC<UserTableProps> = ({
   };
 
   return (
-    <div className="bg-white rounded-lg shadow overflow-hidden">
+    <div className="bg-card rounded-lg shadow overflow-hidden">
       <Table>
         <TableHeader>
           <TableRow>
@@ -81,7 +81,7 @@ export const UserTable: React.FC<UserTableProps> = ({
         <TableBody>
           {users.length === 0 ? (
             <TableRow>
-              <TableCell colSpan={7} className="h-24 text-center text-gray-500">
+              <TableCell colSpan={7} className="h-24 text-center text-muted-foreground">
                 No users found.
               </TableCell>
             </TableRow>
@@ -89,7 +89,7 @@ export const UserTable: React.FC<UserTableProps> = ({
             users.map((user) => (
               <TableRow 
                 key={user.id} 
-                className="cursor-pointer hover:bg-gray-50"
+                className="cursor-pointer hover:bg-muted/50"
                 onClick={() => onUserClick(user)}
               >
                 <TableCell onClick={(e) => e.stopPropagation()}>
@@ -100,16 +100,16 @@ export const UserTable: React.FC<UserTableProps> = ({
                 </TableCell>
                 <TableCell>
                   <div className="flex items-center gap-3">
-                    <div className="h-10 w-10 rounded-full bg-gray-200 flex items-center justify-center text-gray-600 font-medium">
+                    <div className="h-10 w-10 rounded-full bg-muted flex items-center justify-center text-muted-foreground font-medium">
                       {user.name.split(' ').map(n => n[0]).join('').slice(0, 2).toUpperCase()}
                     </div>
                     <div>
-                      <div className="font-medium text-gray-900">{user.name}</div>
-                      <div className="text-sm text-gray-500">{user.email}</div>
+                      <div className="font-medium text-foreground">{user.name}</div>
+                      <div className="text-sm text-muted-foreground">{user.email}</div>
                     </div>
                   </div>
                 </TableCell>
-                <TableCell className="text-gray-600">{user.department || '—'}</TableCell>
+                <TableCell className="text-muted-foreground">{user.department || '—'}</TableCell>
                 <TableCell>
                   <Badge variant={getRoleBadgeVariant(user.role)}>{user.role}</Badge>
                 </TableCell>
@@ -118,11 +118,11 @@ export const UserTable: React.FC<UserTableProps> = ({
                     {user.status}
                   </span>
                 </TableCell>
-                <TableCell className="text-gray-600">{user.employeeId || '—'}</TableCell>
+                <TableCell className="text-muted-foreground">{user.employeeId || '—'}</TableCell>
                 <TableCell className="text-right" onClick={(e) => e.stopPropagation()}>
                   <DropdownMenu>
-                    <DropdownMenuTrigger className="p-2 hover:bg-gray-100 rounded-md">
-                      <MoreHorizontal className="h-4 w-4 text-gray-500" />
+                    <DropdownMenuTrigger className="p-2 hover:bg-muted rounded-md">
+                      <MoreHorizontal className="h-4 w-4 text-muted-foreground" />
                     </DropdownMenuTrigger>
                     <DropdownMenuContent align="end">
                       <DropdownMenuItem onClick={() => onUserClick(user)}>

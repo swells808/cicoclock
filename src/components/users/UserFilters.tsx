@@ -38,15 +38,15 @@ export const UserFilters: React.FC<UserFiltersProps> = ({
 }) => {
 
   return (
-    <div className="bg-white rounded-lg shadow p-4 mb-6 flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
+    <div className="bg-card rounded-lg shadow p-4 mb-6 flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
       <div className="flex-1 relative w-full">
-        <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 h-4 w-4" />
+        <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-muted-foreground h-4 w-4" />
         <input
           type="text"
           placeholder="Search users by name or email..."
           value={searchQuery}
           onChange={(e) => onSearch(e.target.value)}
-          className="pl-9 pr-4 py-2 border border-gray-300 rounded-md w-full focus:outline-none focus:ring-2 focus:ring-[#4BA0F4] focus:border-transparent"
+          className="pl-9 pr-4 py-2 border border-border rounded-md w-full bg-background text-foreground focus:outline-none focus:ring-2 focus:ring-primary focus:border-transparent"
         />
       </div>
 
