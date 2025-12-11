@@ -2,6 +2,7 @@ import JSZip from "jszip";
 import { saveAs } from "file-saver";
 import QRCode from "qrcode";
 import html2canvas from "html2canvas";
+import { format } from "date-fns";
 
 // Type definitions to avoid circular imports
 export interface ReportUser {
@@ -38,8 +39,38 @@ function sanitizeFilename(name: string): string {
     .replace(/^_|_$/g, '');
 }
 
-export function buildRealTableHTML(type: "employee" | "project", data: ReportEmployeeData[] | ReportProjectData[]) {
+export function buildRealTableHTML(
+  type: "employee" | "project",
+  data: ReportEmployeeData[] | ReportProjectData[],
+  title?: string,
+  dateRange?: { start: Date; end: Date }
+) {
   const columns = ["Name", "Week", "Month"];
+
+  let html = title ? `
+    <!DOCTYPE html>
+    <html>
+    <head>
+      <title>${title}</title>
+      <style>
+        body { font-family: Arial, sans-serif; padding: 20px; }
+        h1 { color: #333; margin-bottom: 10px; }
+        .date-range { color: #666; margin-bottom: 20px; }
+        table { border-collapse: collapse; width: 100%; margin-top: 20px; }
+        th { background-color: #f5f5f5; padding: 12px; text-align: left; border: 1px solid #ddd; }
+        td { padding: 12px; border: 1px solid #ddd; }
+        tr:nth-child(even) { background-color: #fafafa; }
+        .total-row { font-weight: bold; background-color: #e8f5e9 !important; }
+        @media print { body { padding: 0; } }
+      </style>
+    </head>
+    <body>
+      <h1>${title}</h1>
+  ` : '';
+
+  if (dateRange && title) {
+    html += `<div class="date-range">Period: ${format(dateRange.start, 'MMM d, yyyy')} - ${format(dateRange.end, 'MMM d, yyyy')}</div>`;
+  }
 
   let table =
     "<table border='1' style='border-collapse:collapse;width:100%;font-family:sans-serif;'>" +
@@ -47,18 +78,63 @@ export function buildRealTableHTML(type: "employee" | "project", data: ReportEmp
     columns.map((col) => `<th style='padding:8px;background:#F6F6F7;'>${col}</th>`).join("") +
     "</tr></thead><tbody>";
 
+  let totalWeek = 0;
+  let totalMonth = 0;
+
   table += data
     .map(
-      (row) =>
-        "<tr>" +
-        columns
-          .map((col) => `<td style='padding:8px;'>${(row as any)[col.toLowerCase()] ?? ""}</td>`)
-          .join("") +
-        "</tr>"
+      (row) => {
+        totalWeek += row.week || 0;
+        totalMonth += row.month || 0;
+        return "<tr>" +
+          columns
+            .map((col) => `<td style='padding:8px;'>${(row as any)[col.toLowerCase()] ?? ""}</td>`)
+            .join("") +
+          "</tr>";
+      }
     )
     .join("");
+
+  if (title) {
+    table += `<tr style='font-weight:bold;background-color:#e8f5e9;'>
+      <td style='padding:8px;'>Total</td>
+      <td style='padding:8px;'>${totalWeek.toFixed(1)}</td>
+      <td style='padding:8px;'>${totalMonth.toFixed(1)}</td>
+    </tr>`;
+  }
+
   table += "</tbody></table>";
+
+  if (title) {
+    html += table + "</body></html>";
+    return html;
+  }
+
   return table;
+}
+
+export function generateReportFilename(
+  reportType: string,
+  fileFormat: 'csv' | 'pdf',
+  dateRange?: { start: Date; end: Date }
+): string {
+  const dateStr = dateRange 
+    ? `_${format(dateRange.start, 'yyyy-MM-dd')}_to_${format(dateRange.end, 'yyyy-MM-dd')}`
+    : `_${format(new Date(), 'yyyy-MM-dd')}`;
+  
+  return `${reportType}_report${dateStr}.${fileFormat}`;
+}
+
+export function formatHoursDisplay(minutes: number): string {
+  const hours = Math.floor(minutes / 60);
+  const mins = Math.round(minutes % 60);
+  return `${hours}h ${mins}m`;
+}
+
+export function calculateTotalHours(entries: { duration_minutes?: number | null }[]): number {
+  return entries.reduce((total, entry) => {
+    return total + (entry.duration_minutes || 0) / 60;
+  }, 0);
 }
 
 export function exportRealDataAsCSV(type: "employee" | "project", data: ReportEmployeeData[] | ReportProjectData[]) {
