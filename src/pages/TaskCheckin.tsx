@@ -1,258 +1,338 @@
-import { useState } from "react";
-import { DashboardLayout } from "@/components/layout/DashboardLayout";
-import { useLanguage } from "@/contexts/LanguageContext";
-import { useCompany } from "@/contexts/CompanyContext";
-import { useAuth } from "@/contexts/AuthContext";
-import { useProfile } from "@/hooks/useProfile";
-import { useActiveTimeEntry } from "@/hooks/useTimeEntries";
-import { useActiveProjects } from "@/hooks/useProjects";
-import { useTaskTypes } from "@/hooks/useTaskTypes";
-import { useTaskActivities } from "@/hooks/useTaskActivities";
-import { supabase } from "@/integrations/supabase/client";
-import { toast } from "sonner";
-import { TaskCheckinScanner } from "@/components/task-checkin/TaskCheckinScanner";
-import { TaskSelectionPanel } from "@/components/task-checkin/TaskSelectionPanel";
-import { ActiveTaskDisplay } from "@/components/task-checkin/ActiveTaskDisplay";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
-import { AlertCircle, ClipboardCheck, Clock } from "lucide-react";
+import { useState } from 'react';
+import { supabase } from '@/integrations/supabase/client';
+import { useTaskTypes } from '@/hooks/useTaskTypes';
+import { QRScanner } from '@/components/task-checkin/QRScanner';
+import { TaskActionForm } from '@/components/task-checkin/TaskActionForm';
+import { Button } from '@/components/ui/button';
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { CheckCircle, AlertCircle, ArrowLeft } from 'lucide-react';
+import { useToast } from '@/hooks/use-toast';
 
-const TaskCheckin = () => {
-  const { t } = useLanguage();
-  const { company } = useCompany();
-  const { user } = useAuth();
-  const { data: profile } = useProfile();
-  const { data: activeTimeEntry } = useActiveTimeEntry();
-  const { data: projects } = useActiveProjects();
-  const { taskTypes, loading: taskTypesLoading } = useTaskTypes(company?.id);
-  const { taskActivities, loading: activitiesLoading, refetch: refetchActivities } = useTaskActivities({
-    startDate: new Date(),
-    endDate: new Date(),
-    userId: user?.id,
-  });
-  const [isProcessing, setIsProcessing] = useState(false);
+interface User {
+  id: string;
+  profileId: string;
+  companyId: string;
+  firstName: string;
+  lastName: string;
+  displayName: string;
+  employeeId: string;
+  companyName: string;
+}
 
-  // Find currently active task (started but not finished)
-  const activeTask = taskActivities?.find((activity) => {
-    if (activity.action_type !== 'start') return false;
-    // Check if there's a matching finish for this task
-    const hasFinish = taskActivities.some(
-      (a) => a.action_type === 'finish' && 
-             a.task_id === activity.task_id && 
-             new Date(a.timestamp) > new Date(activity.timestamp)
-    );
-    return !hasFinish;
-  });
+interface Task {
+  id: string;
+  name: string;
+  status: string;
+  assigneeId: string;
+  dueDate: string;
+  projectId: string;
+  projectName: string;
+  companyId: string;
+  companyName: string;
+}
 
-  const handleTaskAction = async (taskTypeId: string, projectId: string, actionType: 'start' | 'finish') => {
-    if (!user?.id || !profile?.id || !company?.id || !activeTimeEntry?.id) {
-      toast.error("Missing required information");
-      return;
-    }
+interface ClockStatus {
+  isClockedIn: boolean;
+  timeEntryId: string | null;
+  startTime: string | null;
+}
 
-    setIsProcessing(true);
+type Step = 'badge' | 'task' | 'action' | 'success' | 'error';
+
+export default function TaskCheckin() {
+  const { toast } = useToast();
+  const [currentStep, setCurrentStep] = useState<Step>('badge');
+  const [user, setUser] = useState<User | null>(null);
+  const [task, setTask] = useState<Task | null>(null);
+  const [clockStatus, setClockStatus] = useState<ClockStatus | null>(null);
+  const [isLoading, setIsLoading] = useState(false);
+  const [errorMessage, setErrorMessage] = useState<string>('');
+  const [successMessage, setSuccessMessage] = useState<string>('');
+
+  const { taskTypes } = useTaskTypes(user?.companyId);
+
+  const handleBadgeScan = async (badgeId: string) => {
+    setIsLoading(true);
+    setErrorMessage('');
+
     try {
-      const { data, error } = await supabase.functions.invoke('record-task-activity', {
-        body: {
-          user_id: user.id,
-          profile_id: profile.id,
-          task_id: crypto.randomUUID(), // Generate unique task instance ID
-          project_id: projectId,
-          company_id: company.id,
-          time_entry_id: activeTimeEntry.id,
-          task_type_id: taskTypeId,
-          action_type: actionType,
-        },
+      const { data, error } = await supabase.functions.invoke('verify-badge', {
+        body: { badgeId }
       });
 
-      if (error) throw error;
-
-      toast.success(actionType === 'start' ? "Task started" : "Task completed");
-      refetchActivities();
-    } catch (error: any) {
-      console.error('Task action error:', error);
-      toast.error(error.message || "Failed to record task activity");
-    } finally {
-      setIsProcessing(false);
-    }
-  };
-
-  const handleQRScan = async (scannedCode: string) => {
-    if (!company?.id) return;
-
-    setIsProcessing(true);
-    try {
-      // Verify the task code
-      const { data, error } = await supabase.functions.invoke('verify-task', {
-        body: {
-          task_code: scannedCode,
-          company_id: company.id,
-        },
-      });
-
-      if (error) throw error;
-
-      if (!data?.valid) {
-        toast.error("Invalid task code");
+      if (error) {
+        setErrorMessage('Failed to verify badge. Please try again.');
+        setCurrentStep('error');
         return;
       }
 
-      // If valid, show task selection with the verified task type
-      toast.success(`Task verified: ${data.task_type.name}`);
-    } catch (error: any) {
-      console.error('QR scan error:', error);
-      toast.error(error.message || "Failed to verify task");
+      if (!data.success) {
+        setErrorMessage(data.error || 'Invalid badge');
+        setCurrentStep('error');
+        return;
+      }
+
+      setUser(data.user);
+
+      // Check clock status
+      const clockResponse = await supabase.functions.invoke('check-clock-status', {
+        body: { userId: data.user.id }
+      });
+
+      if (clockResponse.error || !clockResponse.data.success) {
+        setErrorMessage('Failed to check clock status. Please try again.');
+        setCurrentStep('error');
+        return;
+      }
+
+      if (!clockResponse.data.isClockedIn) {
+        setErrorMessage('You must be clocked in to check in/out of tasks. Please clock in first.');
+        setCurrentStep('error');
+        return;
+      }
+
+      setClockStatus(clockResponse.data);
+      setCurrentStep('task');
+
+    } catch (error) {
+      console.error('Badge verification error:', error);
+      setErrorMessage('Network error. Please check your connection and try again.');
+      setCurrentStep('error');
     } finally {
-      setIsProcessing(false);
+      setIsLoading(false);
     }
   };
 
-  const handleFinishTask = async () => {
-    if (!activeTask) return;
+  const handleTaskScan = async (taskId: string) => {
+    setIsLoading(true);
+    setErrorMessage('');
 
-    await handleTaskAction(
-      activeTask.task_type_id,
-      activeTask.project_id,
-      'finish'
-    );
+    try {
+      const { data, error } = await supabase.functions.invoke('verify-task', {
+        body: { taskId }
+      });
+
+      if (error) {
+        setErrorMessage('Failed to verify task. Please try again.');
+        setCurrentStep('error');
+        return;
+      }
+
+      if (!data.success) {
+        setErrorMessage(data.error || 'Invalid task');
+        setCurrentStep('error');
+        return;
+      }
+
+      // Check if task belongs to same company
+      if (data.task.companyId !== user?.companyId) {
+        setErrorMessage('This task does not belong to your company.');
+        setCurrentStep('error');
+        return;
+      }
+
+      setTask(data.task);
+      setCurrentStep('action');
+
+    } catch (error) {
+      console.error('Task verification error:', error);
+      setErrorMessage('Network error. Please check your connection and try again.');
+      setCurrentStep('error');
+    } finally {
+      setIsLoading(false);
+    }
   };
 
-  // Check if user is clocked in
-  if (!activeTimeEntry) {
-    return (
-      <DashboardLayout>
-        <div className="space-y-6">
-          <div>
-            <h1 className="text-3xl font-bold flex items-center gap-2">
-              <ClipboardCheck className="h-8 w-8" />
-              {t("taskCheckin") || "Task Check-in"}
-            </h1>
-            <p className="text-muted-foreground mt-1">
-              {t("taskCheckinDescription") || "Start and track tasks during your shift"}
-            </p>
-          </div>
+  const handleTaskAction = async (taskTypeId: string, actionType: 'start' | 'finish') => {
+    if (!user || !task || !clockStatus) return;
 
-          <Alert variant="destructive">
-            <AlertCircle className="h-4 w-4" />
-            <AlertTitle>{t("notClockedIn") || "Not Clocked In"}</AlertTitle>
-            <AlertDescription>
-              {t("mustBeClockdInForTasks") || "You must be clocked in to start or finish tasks. Please go to the Timeclock to clock in first."}
-            </AlertDescription>
-          </Alert>
-        </div>
-      </DashboardLayout>
-    );
-  }
+    setIsLoading(true);
+    setErrorMessage('');
+
+    try {
+      const { data, error } = await supabase.functions.invoke('record-task-activity', {
+        body: {
+          userId: user.id,
+          profileId: user.profileId,
+          taskId: task.id,
+          projectId: task.projectId,
+          companyId: user.companyId,
+          timeEntryId: clockStatus.timeEntryId,
+          taskTypeId,
+          actionType
+        }
+      });
+
+      if (error) {
+        setErrorMessage('Failed to record activity. Please try again.');
+        setCurrentStep('error');
+        return;
+      }
+
+      if (!data.success) {
+        setErrorMessage(data.error || 'Failed to record activity');
+        setCurrentStep('error');
+        return;
+      }
+
+      const taskTypeName = taskTypes.find(tt => tt.id === taskTypeId)?.name || 'Unknown';
+      setSuccessMessage(
+        `Successfully ${actionType === 'start' ? 'started' : 'finished'} ${taskTypeName} for "${task.name}"`
+      );
+      setCurrentStep('success');
+
+    } catch (error) {
+      console.error('Task activity error:', error);
+      setErrorMessage('Network error. Please check your connection and try again.');
+      setCurrentStep('error');
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const resetFlow = () => {
+    setCurrentStep('badge');
+    setUser(null);
+    setTask(null);
+    setClockStatus(null);
+    setErrorMessage('');
+    setSuccessMessage('');
+  };
+
+  const goBack = () => {
+    if (currentStep === 'task') {
+      setCurrentStep('badge');
+      setUser(null);
+      setClockStatus(null);
+    } else if (currentStep === 'action') {
+      setCurrentStep('task');
+      setTask(null);
+    }
+  };
 
   return (
-    <DashboardLayout>
-      <div className="space-y-6">
+    <div className="min-h-screen bg-background flex flex-col items-center justify-center p-4">
+      <div className="w-full max-w-lg space-y-6">
         {/* Header */}
-        <div>
-          <h1 className="text-3xl font-bold flex items-center gap-2">
-            <ClipboardCheck className="h-8 w-8" />
-            {t("taskCheckin") || "Task Check-in"}
-          </h1>
-          <p className="text-muted-foreground mt-1">
-            {t("taskCheckinDescription") || "Start and track tasks during your shift"}
-          </p>
+        <div className="text-center space-y-2">
+          <h1 className="text-3xl font-bold">Task Check-In</h1>
+          <p className="text-muted-foreground">Scan your badge and task QR codes to record work</p>
         </div>
 
-        {/* Current Shift Info */}
-        <Card>
-          <CardHeader className="pb-2">
-            <CardTitle className="text-sm font-medium flex items-center gap-2">
-              <Clock className="h-4 w-4" />
-              {t("currentShift") || "Current Shift"}
-            </CardTitle>
-          </CardHeader>
-          <CardContent>
-            <p className="text-sm text-muted-foreground">
-              {t("clockedInAt") || "Clocked in at"}: {new Date(activeTimeEntry.start_time).toLocaleTimeString()}
-              {activeTimeEntry.projects?.name && ` • ${activeTimeEntry.projects.name}`}
-            </p>
-          </CardContent>
-        </Card>
-
-        <div className="grid gap-6 md:grid-cols-2">
-          {/* Active Task Display */}
-          {activeTask && (
-            <div className="md:col-span-2">
-              <ActiveTaskDisplay
-                task={activeTask}
-                onFinish={handleFinishTask}
-                isLoading={isProcessing}
-              />
-            </div>
-          )}
-
-          {/* QR Scanner */}
-          <TaskCheckinScanner
-            onScan={handleQRScan}
-            isLoading={isProcessing}
-          />
-
-          {/* Manual Task Selection */}
-          <TaskSelectionPanel
-            taskTypes={taskTypes}
-            projects={projects || []}
-            onStartTask={handleTaskAction}
-            isLoading={isProcessing || taskTypesLoading}
-            hasActiveTask={!!activeTask}
-          />
+        {/* Progress Indicator */}
+        <div className="flex justify-center space-x-2">
+          {['badge', 'task', 'action'].map((step, index) => (
+            <div
+              key={step}
+              className={`w-3 h-3 rounded-full ${
+                currentStep === step || (['success', 'error'].includes(currentStep) && index < 3)
+                  ? 'bg-primary'
+                  : 'bg-muted'
+              }`}
+            />
+          ))}
         </div>
 
-        {/* Today's Task Activity */}
-        <Card>
-          <CardHeader>
-            <CardTitle>{t("todayTaskActivity") || "Today's Task Activity"}</CardTitle>
-          </CardHeader>
-          <CardContent>
-            {activitiesLoading ? (
-              <p className="text-muted-foreground">Loading...</p>
-            ) : taskActivities && taskActivities.length > 0 ? (
-              <div className="space-y-3">
-                {taskActivities.map((activity) => (
-                  <div
-                    key={activity.id}
-                    className="flex items-center justify-between py-2 border-b last:border-0"
-                  >
-                    <div className="flex items-center gap-3">
-                      <div
-                        className={`w-2 h-2 rounded-full ${
-                          activity.action_type === 'start' ? 'bg-green-500' : 'bg-blue-500'
-                        }`}
-                      />
-                      <div>
-                        <p className="font-medium">
-                          {activity.task_type?.name || "Unknown Task"}
-                        </p>
-                        <p className="text-sm text-muted-foreground">
-                          {activity.project?.name || "No Project"}
-                        </p>
-                      </div>
-                    </div>
-                    <div className="text-right">
-                      <p className="text-sm font-medium">
-                        {activity.action_type === 'start' ? t("started") || "Started" : t("finished") || "Finished"}
-                      </p>
-                      <p className="text-xs text-muted-foreground">
-                        {new Date(activity.timestamp).toLocaleTimeString()}
-                      </p>
-                    </div>
-                  </div>
-                ))}
+        {/* Step Content */}
+        {currentStep === 'badge' && (
+          <QRScanner
+            title="Scan Your Badge"
+            description="Scan your employee badge or enter your badge ID"
+            onScan={handleBadgeScan}
+            isLoading={isLoading}
+            placeholder="Enter badge ID"
+          />
+        )}
+
+        {currentStep === 'task' && user && (
+          <div className="space-y-4">
+            <Card className="bg-muted/50">
+              <CardContent className="pt-4">
+                <p className="text-sm text-center">
+                  Welcome, <strong>{user.displayName || `${user.firstName} ${user.lastName}`}</strong>
+                  <br />
+                  <span className="text-muted-foreground">{user.companyName}</span>
+                </p>
+              </CardContent>
+            </Card>
+
+            <QRScanner
+              title="Scan Task QR Code"
+              description="Scan the QR code for the task you want to work on"
+              onScan={handleTaskScan}
+              isLoading={isLoading}
+              placeholder="Enter task ID"
+            />
+
+            <Button variant="outline" onClick={goBack} className="w-full">
+              <ArrowLeft className="w-4 h-4 mr-2" />
+              Back to Badge Scan
+            </Button>
+          </div>
+        )}
+
+        {currentStep === 'action' && user && task && (
+          <div className="space-y-4">
+            <Card className="bg-muted/50">
+              <CardContent className="pt-4">
+                <p className="text-sm text-center">
+                  <strong>{task.name}</strong>
+                  <br />
+                  <span className="text-muted-foreground">Project: {task.projectName}</span>
+                </p>
+              </CardContent>
+            </Card>
+
+            <TaskActionForm
+              taskTypes={taskTypes}
+              onSubmit={handleTaskAction}
+              isLoading={isLoading}
+            />
+
+            <Button variant="outline" onClick={goBack} className="w-full">
+              <ArrowLeft className="w-4 h-4 mr-2" />
+              Back to Task Scan
+            </Button>
+          </div>
+        )}
+
+        {currentStep === 'success' && (
+          <Card className="border-green-200 bg-green-50 dark:bg-green-950/20 dark:border-green-800">
+            <CardHeader className="text-center">
+              <CheckCircle className="w-16 h-16 text-green-500 mx-auto mb-2" />
+              <CardTitle className="text-green-700 dark:text-green-400">Success!</CardTitle>
+            </CardHeader>
+            <CardContent className="text-center space-y-4">
+              <p className="text-green-600 dark:text-green-400">{successMessage}</p>
+              <Button onClick={resetFlow} className="w-full">
+                Check In Another Task
+              </Button>
+            </CardContent>
+          </Card>
+        )}
+
+        {currentStep === 'error' && (
+          <Card className="border-red-200 bg-red-50 dark:bg-red-950/20 dark:border-red-800">
+            <CardHeader className="text-center">
+              <AlertCircle className="w-16 h-16 text-red-500 mx-auto mb-2" />
+              <CardTitle className="text-red-700 dark:text-red-400">Error</CardTitle>
+            </CardHeader>
+            <CardContent className="text-center space-y-4">
+              <p className="text-red-600 dark:text-red-400">{errorMessage}</p>
+              <div className="flex flex-col gap-2">
+                <Button onClick={resetFlow}>
+                  Start Over
+                </Button>
+                {['task', 'action'].includes(currentStep) && (
+                  <Button variant="outline" onClick={() => setCurrentStep('badge')}>
+                    Back to Badge Scan
+                  </Button>
+                )}
               </div>
-            ) : (
-              <p className="text-muted-foreground text-center py-4">
-                {t("noTasksToday") || "No tasks recorded today"}
-              </p>
-            )}
-          </CardContent>
-        </Card>
+            </CardContent>
+          </Card>
+        )}
       </div>
-    </DashboardLayout>
+    </div>
   );
-};
-
-export default TaskCheckin;
+}
