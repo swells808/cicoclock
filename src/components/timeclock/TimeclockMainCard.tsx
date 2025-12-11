@@ -44,17 +44,17 @@ export const TimeclockMainCard: React.FC<TimeclockMainCardProps> = ({
   <section className="max-w-md mx-auto">
     <Card className="p-6">
       <div className="text-center mb-6">
-        <h2 className="text-xl font-semibold mb-2">{t("timeclock.selectEmployee")}</h2>
+        <h2 className="text-xl font-semibold mb-2 text-foreground">{t("timeclock.selectEmployee")}</h2>
         {authenticatedEmployee ? (
-          <div className="bg-green-50 border border-green-200 rounded-md p-3">
-            <p className="text-green-800 font-medium">{authenticatedEmployee.display_name}</p>
-            <p className="text-green-600 text-sm">Authenticated</p>
-            <p className="text-green-700 text-xs mt-1 font-semibold">
+          <div className="bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-800 rounded-md p-3">
+            <p className="text-green-800 dark:text-green-200 font-medium">{authenticatedEmployee.display_name}</p>
+            <p className="text-green-600 dark:text-green-400 text-sm">Authenticated</p>
+            <p className="text-green-700 dark:text-green-300 text-xs mt-1 font-semibold">
               Status: {clockStatus === 'in' ? 'Clocked In' : 'Clocked Out'}
             </p>
           </div>
         ) : (
-          <p className="text-gray-600">{t("timeclock.pleaseSelectAndPin")}</p>
+          <p className="text-muted-foreground">{t("timeclock.pleaseSelectAndPin")}</p>
         )}
       </div>
 
@@ -109,7 +109,7 @@ export const TimeclockMainCard: React.FC<TimeclockMainCardProps> = ({
       <div className="grid grid-cols-2 gap-4 mb-6">
         <Button
           disabled={!isActionEnabled || clockStatus === 'in'}
-          className="bg-[#008000] hover:bg-[#008000]/90 text-white"
+          className="bg-green-600 hover:bg-green-700 text-white"
           onClick={onClockIn}
         >
           <Play className="w-4 h-4 mr-2" />
@@ -127,7 +127,7 @@ export const TimeclockMainCard: React.FC<TimeclockMainCardProps> = ({
 
       <Button
         disabled={!isActionEnabled}
-        className="w-full bg-[#4BA0F4] hover:bg-[#4BA0F4]/90 text-white mb-6"
+        className="w-full bg-primary hover:bg-primary/90 text-primary-foreground mb-6"
         onClick={onBreak}
       >
         <Coffee className="w-4 h-4 mr-2" />
