@@ -151,7 +151,7 @@ const Timeclock = () => {
   }
 
   return (
-    <div className="min-h-screen bg-gray-50">
+    <div className="min-h-screen bg-background">
       <TimeclockHeader currentTime={currentTime} language={language} setLanguage={setLanguage} t={t} />
       <main>
         {showBadgeScanner ? (
