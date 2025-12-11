@@ -1,143 +1,132 @@
-import { Link } from "react-router-dom";
-import { PublicLayout } from "@/components/layout/PublicLayout";
-import { useLanguage } from "@/contexts/LanguageContext";
+import React, { useEffect, useState } from "react";
+import { Header } from "@/components/layout/Header";
+import { Footer } from "@/components/layout/Footer";
+import { CustomButton } from "@/components/ui/custom-button";
 import { Check } from "lucide-react";
+import { supabase } from "@/integrations/supabase/client";
+import { Json } from "@/integrations/supabase/types";
+
+interface SubscriptionPlan {
+  id: string;
+  name: string;
+  price: number;
+  features: Json | null;
+  stripe_price_id: string | null;
+}
 
 const Pricing = () => {
-  const { t } = useLanguage();
+  const [plans, setPlans] = useState<SubscriptionPlan[] | null>(null);
+  const [isLoading, setIsLoading] = useState(true);
 
-  const plans = [
-    {
-      name: "Free",
-      price: "$0",
-      period: "/month",
-      description: "Perfect for small teams getting started",
-      features: [
-        "Up to 5 employees",
-        "Basic time tracking",
-        "Daily reports",
-        "Email support",
-      ],
-      cta: "Get Started",
-      ctaLink: "/company-signup",
-      popular: false,
-      buttonStyle: "border border-gray-300 text-gray-700 hover:bg-gray-50",
-    },
-    {
-      name: "Pro",
-      price: "$9",
-      period: "/user/month",
-      description: "For growing teams that need more features",
-      features: [
-        "Unlimited employees",
-        "Photo verification",
-        "GPS location tracking",
-        "Advanced reports",
-        "Scheduled reports",
-        "Priority support",
-      ],
-      cta: "Start Free Trial",
-      ctaLink: "/company-signup",
-      popular: true,
-      buttonStyle: "bg-primary text-primary-foreground hover:bg-primary/90",
-    },
-    {
-      name: "Enterprise",
-      price: "Custom",
-      period: "",
-      description: "For large organizations with custom needs",
-      features: [
-        "Everything in Pro",
-        "Custom integrations",
-        "Dedicated account manager",
-        "SLA guarantee",
-        "On-premise deployment",
-        "24/7 phone support",
-      ],
-      cta: "Contact Sales",
-      ctaLink: "/contact",
-      popular: false,
-      buttonStyle: "border border-gray-300 text-gray-700 hover:bg-gray-50",
-    },
-  ];
+  useEffect(() => {
+    (async () => {
+      setIsLoading(true);
+      const { data, error } = await supabase
+        .from('subscription_plans')
+        .select('id, name, price, features, stripe_price_id');
+      if (!error && data) {
+        setPlans(data);
+      }
+      setIsLoading(false);
+    })();
+  }, []);
+
+  const personal = plans?.find(plan =>
+    plan.name.toLowerCase().includes('personal')
+  );
+  const pro = plans?.find(plan =>
+    plan.name.toLowerCase().includes('pro')
+  );
 
   return (
-    <PublicLayout>
-      <div className="bg-white py-24 mt-[65px]">
-        <div className="max-w-screen-xl mx-auto px-4 md:px-20">
-          {/* Header */}
-          <div className="text-center mb-16">
-            <h1 className="text-5xl font-bold text-gray-900 mb-6">
-              Simple, Transparent Pricing
+    <div className="min-h-screen flex flex-col">
+      <Header />
+      <main className="pt-16">
+        <section className="bg-gradient-to-b from-gray-50 to-white py-20 relative">
+          <div className="absolute inset-0 overflow-hidden z-0">
+            <img
+              src="https://images.unsplash.com/photo-1486312338219-ce68d2c6f44d"
+              alt="Business laptop workspace"
+              className="w-full h-full object-cover opacity-10"
+            />
+          </div>
+          <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 text-center relative z-10">
+            <h1 className="text-4xl md:text-5xl font-bold text-gray-900 mb-4">
+              Simple & Transparent Pricing<br />Start Your 30-Day Free Trial Today!
             </h1>
-            <p className="text-xl text-gray-600 max-w-2xl mx-auto">
-              Choose the plan that's right for your business. All plans include a 14-day free trial.
+            <p className="text-xl text-gray-600 mb-8">
+              No credit card required. Cancel anytime.
             </p>
           </div>
-
-          {/* Pricing Cards */}
-          <div className="grid md:grid-cols-3 gap-8 max-w-5xl mx-auto">
-            {plans.map((plan, index) => (
-              <div
-                key={index}
-                className={`relative bg-white rounded-2xl p-8 ${
-                  plan.popular 
-                    ? "border-2 border-primary shadow-xl scale-105" 
-                    : "border border-gray-200 shadow-sm"
-                }`}
-              >
-                {plan.popular && (
-                  <div className="absolute -top-4 left-1/2 -translate-x-1/2">
-                    <span className="bg-primary text-primary-foreground px-4 py-1.5 rounded-full text-sm font-semibold">
-                      Most Popular
-                    </span>
-                  </div>
-                )}
-                
-                <div className="text-center mb-8">
-                  <h3 className="text-2xl font-bold text-gray-900 mb-2">{plan.name}</h3>
-                  <div className="flex items-baseline justify-center gap-1">
-                    <span className="text-5xl font-bold text-gray-900">{plan.price}</span>
-                    {plan.period && (
-                      <span className="text-gray-500">{plan.period}</span>
-                    )}
-                  </div>
-                  <p className="text-gray-600 mt-3">{plan.description}</p>
+        </section>
+        <section className="py-20">
+          <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+            <div className="grid md:grid-cols-2 gap-8">
+              {/* Personal Plan */}
+              <div className="border border-gray-200 rounded-xl p-8 bg-white shadow-sm hover:shadow-md transition-shadow">
+                <h3 className="text-xl font-semibold mb-2">Personal Plan</h3>
+                <p className="text-gray-600 mb-4">For Solopreneurs</p>
+                <div className="text-4xl font-bold mb-6">
+                  {isLoading ? '...' : personal ? `$${personal.price}` : '--'}
+                  <span className="text-lg text-gray-500">/month</span>
                 </div>
-
                 <ul className="space-y-4 mb-8">
-                  {plan.features.map((feature, i) => (
-                    <li key={i} className="flex items-start gap-3">
-                      <div className="w-5 h-5 rounded-full bg-primary/10 flex items-center justify-center flex-shrink-0 mt-0.5">
-                        <Check className="h-3 w-3 text-primary" />
-                      </div>
-                      <span className="text-gray-600">{feature}</span>
-                    </li>
-                  ))}
+                  <li className="flex items-center">
+                    <Check className="text-[#008000] mr-2 h-5 w-5" />
+                    <span>Basic reporting</span>
+                  </li>
+                  <li className="flex items-center">
+                    <Check className="text-[#008000] mr-2 h-5 w-5" />
+                    <span>Photo verification</span>
+                  </li>
+                  <li className="flex items-center">
+                    <Check className="text-[#008000] mr-2 h-5 w-5" />
+                    <span>Location tracking</span>
+                  </li>
                 </ul>
-
-                <Link
-                  to={plan.ctaLink}
-                  className={`block w-full py-3 px-6 rounded-lg text-center font-semibold transition-colors ${plan.buttonStyle}`}
-                >
-                  {plan.cta}
-                </Link>
+                <CustomButton variant="secondary" className="w-full bg-[#4BA0F4] text-white hover:bg-[#4BA0F4]/90">
+                  Start Free Trial
+                </CustomButton>
               </div>
-            ))}
+              {/* Pro Plan */}
+              <div className="border-2 border-[#4BA0F4] rounded-xl p-8 bg-white shadow-md hover:shadow-lg transition-shadow relative">
+                <div className="absolute -top-4 left-1/2 transform -translate-x-1/2 bg-[#4BA0F4] text-white px-4 py-1 rounded-full text-sm">
+                  Most Popular
+                </div>
+                <h3 className="text-xl font-semibold mb-2">Pro Plan</h3>
+                <p className="text-gray-600 mb-4">For Growing Businesses</p>
+                <div className="text-4xl font-bold mb-6">
+                  {isLoading ? '...' : pro ? `$${pro.price}` : '--'}
+                  <span className="text-lg text-gray-500">/month per user</span>
+                </div>
+                <ul className="space-y-4 mb-8">
+                  <li className="flex items-center">
+                    <Check className="text-[#008000] mr-2 h-5 w-5" />
+                    <span>Everything included in Personal</span>
+                  </li>
+                  <li className="flex items-center">
+                    <Check className="text-[#008000] mr-2 h-5 w-5" />
+                    <span>Unlimited employees</span>
+                  </li>
+                  <li className="flex items-center">
+                    <Check className="text-[#008000] mr-2 h-5 w-5" />
+                    <span>Advanced reporting</span>
+                  </li>
+                  <li className="flex items-center">
+                    <Check className="text-[#008000] mr-2 h-5 w-5" />
+                    <span>Advanced external software integrations</span>
+                  </li>
+                </ul>
+                <CustomButton variant="primary" className="w-full bg-[#008000] hover:bg-[#008000]/90">
+                  Start Free Trial
+                </CustomButton>
+              </div>
+            </div>
           </div>
-
-          {/* FAQ Teaser */}
-          <div className="text-center mt-20">
-            <p className="text-gray-600">
-              Have questions?{" "}
-              <Link to="/contact" className="text-primary font-semibold hover:underline">
-                Contact us
-              </Link>
-            </p>
-          </div>
-        </div>
-      </div>
-    </PublicLayout>
+        </section>
+      </main>
+      <Footer />
+    </div>
   );
 };
 

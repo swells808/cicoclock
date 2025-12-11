@@ -1,176 +1,165 @@
-import { useState } from "react";
-import { PublicLayout } from "@/components/layout/PublicLayout";
-import { useLanguage } from "@/contexts/LanguageContext";
-import { Mail, Phone, MapPin, Loader2, Send } from "lucide-react";
-import { toast } from "sonner";
+import React, { useState } from "react";
+import { Header } from "@/components/layout/Header";
+import { Footer } from "@/components/layout/Footer";
+import { CustomButton } from "@/components/ui/custom-button";
+import {
+  Mail,
+  Phone,
+  Clock,
+  MapPin,
+  Linkedin,
+  Twitter,
+  Facebook,
+  Instagram,
+  MessageSquare
+} from "lucide-react";
 
 const Contact = () => {
-  const { t } = useLanguage();
-  const [loading, setLoading] = useState(false);
-  const [name, setName] = useState("");
-  const [email, setEmail] = useState("");
-  const [subject, setSubject] = useState("");
-  const [message, setMessage] = useState("");
+  const [formData, setFormData] = useState({
+    fullName: "",
+    email: "",
+    subject: "General Inquiry",
+    message: "",
+  });
 
-  const handleSubmit = async (e: React.FormEvent) => {
+  const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    setLoading(true);
-    // Simulate sending
-    await new Promise((resolve) => setTimeout(resolve, 1000));
-    toast.success("Message sent successfully! We'll get back to you soon.");
-    setName("");
-    setEmail("");
-    setSubject("");
-    setMessage("");
-    setLoading(false);
+    // Add form submission logic here
+    console.log("Form submitted:", formData);
+  };
+
+  const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>) => {
+    setFormData(prev => ({
+      ...prev,
+      [e.target.name]: e.target.value
+    }));
   };
 
   return (
-    <PublicLayout>
-      <div className="bg-white py-24 mt-[65px]">
-        <div className="max-w-screen-xl mx-auto px-4 md:px-20">
-          {/* Header */}
-          <div className="text-center mb-16">
-            <h1 className="text-5xl font-bold text-gray-900 mb-6">
-              Get in Touch
-            </h1>
-            <p className="text-xl text-gray-600 max-w-2xl mx-auto">
-              Have questions? We'd love to hear from you. Send us a message and we'll respond as soon as possible.
-            </p>
-          </div>
-
-          <div className="grid lg:grid-cols-2 gap-16 max-w-5xl mx-auto">
-            {/* Contact Form */}
-            <div className="bg-white rounded-2xl border border-gray-200 p-8 shadow-sm">
-              <h2 className="text-2xl font-bold text-gray-900 mb-6">Send a Message</h2>
-              <form onSubmit={handleSubmit} className="space-y-6">
-                <div>
-                  <label htmlFor="name" className="block text-sm font-medium text-gray-700 mb-2">
-                    Name
-                  </label>
-                  <input
-                    id="name"
-                    type="text"
-                    value={name}
-                    onChange={(e) => setName(e.target.value)}
-                    required
-                    className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary focus:border-primary outline-none transition-colors"
-                    placeholder="Your name"
-                  />
-                </div>
-                <div>
-                  <label htmlFor="email" className="block text-sm font-medium text-gray-700 mb-2">
-                    Email
-                  </label>
-                  <input
-                    id="email"
-                    type="email"
-                    value={email}
-                    onChange={(e) => setEmail(e.target.value)}
-                    required
-                    className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary focus:border-primary outline-none transition-colors"
-                    placeholder="you@example.com"
-                  />
-                </div>
-                <div>
-                  <label htmlFor="subject" className="block text-sm font-medium text-gray-700 mb-2">
-                    Subject
-                  </label>
-                  <input
-                    id="subject"
-                    type="text"
-                    value={subject}
-                    onChange={(e) => setSubject(e.target.value)}
-                    required
-                    className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary focus:border-primary outline-none transition-colors"
-                    placeholder="How can we help?"
-                  />
-                </div>
-                <div>
-                  <label htmlFor="message" className="block text-sm font-medium text-gray-700 mb-2">
-                    Message
-                  </label>
-                  <textarea
-                    id="message"
-                    rows={5}
-                    value={message}
-                    onChange={(e) => setMessage(e.target.value)}
-                    required
-                    className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary focus:border-primary outline-none transition-colors resize-none"
-                    placeholder="Your message..."
-                  />
-                </div>
-                <button
-                  type="submit"
-                  disabled={loading}
-                  className="w-full bg-primary text-primary-foreground py-4 px-6 rounded-lg font-semibold hover:bg-primary/90 transition-colors flex items-center justify-center gap-2 disabled:opacity-50"
-                >
-                  {loading ? (
-                    <>
-                      <Loader2 className="h-5 w-5 animate-spin" />
-                      Sending...
-                    </>
-                  ) : (
-                    <>
-                      <Send className="h-5 w-5" />
-                      Send Message
-                    </>
-                  )}
-                </button>
-              </form>
+    <div className="min-h-screen flex flex-col">
+      <Header />
+      <main className="flex-grow">
+        <section className="pt-24 pb-16 bg-gradient-to-b from-blue-50/50">
+          <div className="container mx-auto px-4">
+            <div className="max-w-4xl mx-auto text-center">
+              <h1 className="text-4xl md:text-5xl font-bold text-gray-900 mb-4">Get in Touch with Us</h1>
+              <p className="text-xl text-gray-600 mb-8">Have questions? We're here to help. Reach out to our team anytime.</p>
             </div>
+          </div>
+        </section>
 
-            {/* Contact Info */}
-            <div className="space-y-8">
-              <div>
-                <h2 className="text-2xl font-bold text-gray-900 mb-6">Contact Information</h2>
-                <p className="text-gray-600 mb-8">
-                  Reach out to us through any of the following channels. We typically respond within 24 hours.
-                </p>
-              </div>
-
-              <div className="space-y-6">
-                <div className="flex items-start gap-4 p-6 bg-gray-50 rounded-xl">
-                  <div className="w-12 h-12 bg-primary/10 rounded-lg flex items-center justify-center flex-shrink-0">
-                    <Mail className="h-6 w-6 text-primary" />
-                  </div>
-                  <div>
-                    <h3 className="font-semibold text-gray-900 mb-1">Email Us</h3>
-                    <p className="text-gray-600">support@cico.app</p>
-                    <p className="text-gray-600">sales@cico.app</p>
+        <section className="py-16">
+          <div className="container mx-auto px-4">
+            <div className="grid md:grid-cols-2 gap-12 max-w-6xl mx-auto">
+              <div className="space-y-8">
+                <div className="bg-white rounded-2xl shadow-lg p-8">
+                  <h3 className="text-2xl font-bold mb-6">Contact Information</h3>
+                  <div className="space-y-4">
+                    <div className="flex items-center space-x-4">
+                      <Mail className="text-[#4BA0F4] w-6 h-6" />
+                      <span>support@cicotimeclock.com</span>
+                    </div>
+                    <div className="flex items-center space-x-4">
+                      <Phone className="text-[#4BA0F4] w-6 h-6" />
+                      <span>+1 (702) 577-2193</span>
+                    </div>
+                    <div className="flex items-center space-x-4">
+                      <Clock className="text-[#4BA0F4] w-6 h-6" />
+                      <span>Monday–Friday, 9 AM–4 PM (PST)</span>
+                    </div>
+                    <div className="flex items-start space-x-4">
+                      <MapPin className="text-[#4BA0F4] w-6 h-6 mt-1" />
+                      <span>7995 Blue Diamond Blvd. Ste. 102-247<br />Las Vegas, NV 89178 USA</span>
+                    </div>
                   </div>
                 </div>
 
-                <div className="flex items-start gap-4 p-6 bg-gray-50 rounded-xl">
-                  <div className="w-12 h-12 bg-primary/10 rounded-lg flex items-center justify-center flex-shrink-0">
-                    <Phone className="h-6 w-6 text-primary" />
-                  </div>
-                  <div>
-                    <h3 className="font-semibold text-gray-900 mb-1">Call Us</h3>
-                    <p className="text-gray-600">+1 (555) 123-4567</p>
-                    <p className="text-sm text-gray-500">Mon-Fri 9am-6pm PST</p>
-                  </div>
-                </div>
-
-                <div className="flex items-start gap-4 p-6 bg-gray-50 rounded-xl">
-                  <div className="w-12 h-12 bg-primary/10 rounded-lg flex items-center justify-center flex-shrink-0">
-                    <MapPin className="h-6 w-6 text-primary" />
-                  </div>
-                  <div>
-                    <h3 className="font-semibold text-gray-900 mb-1">Visit Us</h3>
-                    <p className="text-gray-600">
-                      123 Business Ave, Suite 100<br />
-                      San Francisco, CA 94102<br />
-                      United States
-                    </p>
+                <div className="bg-white rounded-2xl shadow-lg p-8">
+                  <h3 className="text-2xl font-bold mb-6">Connect With Us</h3>
+                  <div className="flex space-x-6">
+                    <a href="#" className="text-gray-600 hover:text-[#4BA0F4] transition-colors">
+                      <Linkedin className="w-6 h-6" />
+                    </a>
+                    <a href="#" className="text-gray-600 hover:text-[#4BA0F4] transition-colors">
+                      <Twitter className="w-6 h-6" />
+                    </a>
+                    <a href="#" className="text-gray-600 hover:text-[#4BA0F4] transition-colors">
+                      <Facebook className="w-6 h-6" />
+                    </a>
+                    <a href="#" className="text-gray-600 hover:text-[#4BA0F4] transition-colors">
+                      <Instagram className="w-6 h-6" />
+                    </a>
                   </div>
                 </div>
               </div>
+
+              <div className="bg-white rounded-2xl shadow-lg p-8">
+                <h3 className="text-2xl font-bold mb-6">Send us a Message</h3>
+                <form onSubmit={handleSubmit} className="space-y-6">
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-2">Full Name</label>
+                    <input 
+                      type="text" 
+                      name="fullName"
+                      value={formData.fullName}
+                      onChange={handleChange}
+                      className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#4BA0F4] focus:border-transparent" 
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-2">Email Address</label>
+                    <input 
+                      type="email" 
+                      name="email"
+                      value={formData.email}
+                      onChange={handleChange}
+                      className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#4BA0F4] focus:border-transparent" 
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-2">Subject</label>
+                    <select 
+                      name="subject"
+                      value={formData.subject}
+                      onChange={handleChange}
+                      className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#4BA0F4] focus:border-transparent"
+                    >
+                      <option>General Inquiry</option>
+                      <option>Technical Support</option>
+                      <option>Billing</option>
+                      <option>Other</option>
+                    </select>
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-2">Message</label>
+                    <textarea 
+                      rows={4} 
+                      name="message"
+                      value={formData.message}
+                      onChange={handleChange}
+                      className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#4BA0F4] focus:border-transparent"
+                    ></textarea>
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-2">Attachment (Optional)</label>
+                    <input 
+                      type="file" 
+                      className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#4BA0F4] focus:border-transparent" 
+                    />
+                  </div>
+                  <CustomButton variant="primary" className="w-full">Send Message</CustomButton>
+                </form>
+              </div>
             </div>
           </div>
-        </div>
-      </div>
-    </PublicLayout>
+        </section>
+
+        <button className="fixed bottom-6 right-6 bg-[#4BA0F4] text-white p-4 rounded-full shadow-lg hover:bg-[#3b80c4] transition-colors">
+          <MessageSquare className="w-6 h-6" />
+        </button>
+      </main>
+      <Footer />
+    </div>
   );
 };
 

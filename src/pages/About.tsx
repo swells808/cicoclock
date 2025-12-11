@@ -1,121 +1,98 @@
-import { PublicLayout } from "@/components/layout/PublicLayout";
-import { useLanguage } from "@/contexts/LanguageContext";
-import { Clock, Users, Target, Award, Shield, Heart } from "lucide-react";
+import React from "react";
+import { Header } from "@/components/layout/Header";
+import { Footer } from "@/components/layout/Footer";
+import { CustomButton } from "@/components/ui/custom-button";
+import { Shield, BarChart3, Puzzle, Smartphone } from "lucide-react";
 
 const About = () => {
-  const { t } = useLanguage();
-
-  const values = [
-    {
-      icon: Clock,
-      title: "Simplicity",
-      description: "We believe time tracking should be effortless. Our tools are designed to be intuitive and easy to use.",
-    },
-    {
-      icon: Users,
-      title: "Teamwork",
-      description: "We build tools that bring teams together, making collaboration and management seamless.",
-    },
-    {
-      icon: Target,
-      title: "Accuracy",
-      description: "Precision matters. Our systems ensure every minute is tracked accurately for fair payroll.",
-    },
-    {
-      icon: Award,
-      title: "Excellence",
-      description: "We're committed to delivering the best time tracking experience in the industry.",
-    },
-    {
-      icon: Shield,
-      title: "Security",
-      description: "Your data is protected with enterprise-grade security and encryption.",
-    },
-    {
-      icon: Heart,
-      title: "Customer Focus",
-      description: "Our customers are at the heart of everything we do. Your success is our success.",
-    },
-  ];
-
-  const stats = [
-    { value: "10K+", label: "Businesses" },
-    { value: "500K+", label: "Employees Tracked" },
-    { value: "99.9%", label: "Uptime" },
-    { value: "24/7", label: "Support" },
-  ];
-
   return (
-    <PublicLayout>
-      <div className="bg-white py-24 mt-[65px]">
-        <div className="max-w-screen-xl mx-auto px-4 md:px-20">
-          {/* Hero */}
-          <div className="text-center mb-20">
-            <h1 className="text-5xl font-bold text-gray-900 mb-6">
-              About CICO Timeclock
-            </h1>
-            <p className="text-xl text-gray-600 max-w-3xl mx-auto">
-              We're on a mission to make time tracking simple, secure, and reliable for businesses of all sizes.
-            </p>
+    <div className="min-h-screen flex flex-col">
+      <Header />
+      <main className="pt-16">
+        <section className="relative h-[600px] flex items-center">
+          <div className="absolute inset-0">
+            <img
+              className="w-full h-full object-cover"
+              src="https://storage.googleapis.com/uxpilot-auth.appspot.com/71f33e02d5-3b4ee9b4f6ff3271ca82.png"
+              alt="modern office space with people working, bright and airy, minimalist style"
+            />
+            <div className="absolute inset-0 bg-white/80"></div>
           </div>
-
-          {/* Mission */}
-          <div className="bg-gray-50 rounded-2xl p-12 mb-20">
-            <div className="max-w-3xl mx-auto text-center">
-              <h2 className="text-3xl font-bold text-gray-900 mb-6">Our Mission</h2>
-              <p className="text-lg text-gray-600 leading-relaxed">
-                We believe that tracking employee time shouldn't be complicated. CICO Timeclock was built 
-                to provide businesses with a modern, reliable, and secure solution for managing workforce 
-                attendance. Our platform combines photo verification, GPS tracking, and intuitive reporting 
-                to help you focus on what matters most—running your business.
+          <div className="relative max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+            <div className="max-w-3xl">
+              <h1 className="text-4xl md:text-5xl font-bold text-gray-900 mb-6">
+                Empowering Businesses with Simple & Efficient Time Tracking
+              </h1>
+              <p className="text-xl text-gray-600">
+                CICO Timeclock was built to help small and medium-sized businesses track work hours with ease and accuracy.
               </p>
             </div>
           </div>
+        </section>
 
-          {/* Stats */}
-          <div className="grid grid-cols-2 md:grid-cols-4 gap-8 mb-20">
-            {stats.map((stat, index) => (
-              <div key={index} className="text-center">
-                <div className="text-4xl md:text-5xl font-bold text-primary mb-2">{stat.value}</div>
-                <div className="text-gray-600">{stat.label}</div>
-              </div>
-            ))}
-          </div>
-
-          {/* Values */}
-          <div className="mb-20">
-            <h2 className="text-3xl font-bold text-gray-900 mb-12 text-center">Our Values</h2>
-            <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-8">
-              {values.map((value, index) => (
-                <div key={index} className="bg-white p-8 rounded-xl border border-gray-200 hover:shadow-lg transition-shadow">
-                  <div className="w-14 h-14 bg-primary/10 rounded-xl flex items-center justify-center mb-6">
-                    <value.icon className="h-7 w-7 text-primary" />
+        <section className="py-20 bg-gradient-to-b from-white to-gray-50">
+          <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+            <div className="grid md:grid-cols-2 gap-16">
+              <div>
+                <h2 className="text-3xl font-bold text-gray-900 mb-6">Our Story</h2>
+                <p className="text-gray-600 mb-6">
+                  Founded in 2018, CICO Timeclock emerged from a simple observation: small businesses needed a better way to track employee time. Our founders experienced firsthand the challenges of manual time tracking and decided to create a solution that would make it effortless.
+                </p>
+                <div className="space-y-4">
+                  <div className="flex items-start space-x-4">
+                    <svg className="w-5 h-5 text-[#4BA0F4] mt-1 flex-shrink-0" viewBox="0 0 20 20" fill="currentColor">
+                      <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clipRule="evenodd" />
+                    </svg>
+                    <p className="text-gray-600">
+                      Our mission is to simplify workforce management while ensuring accuracy and compliance.
+                    </p>
                   </div>
-                  <h3 className="text-xl font-semibold text-gray-900 mb-3">{value.title}</h3>
-                  <p className="text-gray-600">{value.description}</p>
+                  <div className="flex items-start space-x-4">
+                    <svg className="w-5 h-5 text-[#4BA0F4] mt-1 flex-shrink-0" viewBox="0 0 20 20" fill="currentColor">
+                      <path fillRule="evenodd" d="M3.172 5.172a4 4 0 015.656 0L10 6.343l1.172-1.171a4 4 0 115.656 5.656L10 17.657l-6.828-6.829a4 4 0 010-5.656z" clipRule="evenodd" />
+                    </svg>
+                    <p className="text-gray-600">
+                      We value transparency, reliability, and user-centered design in everything we do.
+                    </p>
+                  </div>
                 </div>
-              ))}
+              </div>
+
+              <div className="grid grid-cols-2 gap-8">
+                <div className="bg-white p-6 rounded-xl shadow-sm">
+                  <Shield className="w-12 h-12 text-[#008000] mb-4" />
+                  <h3 className="text-lg font-semibold mb-2">Secure Clock-Ins</h3>
+                  <p className="text-gray-600">Photo verification and geolocation tracking for accurate attendance.</p>
+                </div>
+                <div className="bg-white p-6 rounded-xl shadow-sm">
+                  <BarChart3 className="w-12 h-12 text-[#008000] mb-4" />
+                  <h3 className="text-lg font-semibold mb-2">Smart Reporting</h3>
+                  <p className="text-gray-600">Comprehensive insights for better workforce management.</p>
+                </div>
+                <div className="bg-white p-6 rounded-xl shadow-sm">
+                  <Puzzle className="w-12 h-12 text-[#008000] mb-4" />
+                  <h3 className="text-lg font-semibold mb-2">Easy Integration</h3>
+                  <p className="text-gray-600">Seamless connection with your existing tools.</p>
+                </div>
+                <div className="bg-white p-6 rounded-xl shadow-sm">
+                  <Smartphone className="w-12 h-12 text-[#008000] mb-4" />
+                  <h3 className="text-lg font-semibold mb-2">Multi-Platform</h3>
+                  <p className="text-gray-600">Works on any device, anywhere, anytime.</p>
+                </div>
+              </div>
+            </div>
+
+            <div className="mt-20 text-center">
+              <h2 className="text-3xl font-bold mb-8">
+                Join Thousands of Businesses Tracking Time the Smart Way!
+              </h2>
+              <CustomButton variant="primary">Start Free Trial</CustomButton>
             </div>
           </div>
-
-          {/* CTA */}
-          <div className="bg-primary rounded-2xl p-12 text-center">
-            <h2 className="text-3xl font-bold text-primary-foreground mb-4">
-              Ready to Get Started?
-            </h2>
-            <p className="text-primary-foreground/90 mb-8 max-w-2xl mx-auto">
-              Join thousands of businesses using CICO Timeclock to streamline their workforce management.
-            </p>
-            <a
-              href="/company-signup"
-              className="inline-flex items-center justify-center px-8 py-4 bg-white text-primary font-semibold rounded-lg hover:bg-gray-100 transition-colors"
-            >
-              Start Free Trial
-            </a>
-          </div>
-        </div>
-      </div>
-    </PublicLayout>
+        </section>
+      </main>
+      <Footer />
+    </div>
   );
 };
 
