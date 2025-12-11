@@ -17,6 +17,8 @@ import { User, ImagePlus } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { CompanyForm } from "@/components/settings/CompanyForm";
 import { DepartmentManagement } from "@/components/settings/DepartmentManagement";
+import { BadgeTemplateDesigner } from "@/components/badge/BadgeTemplateDesigner";
+import { PhotoMigrationPanel } from "@/components/admin/PhotoMigrationPanel";
 import { useAuth } from "@/contexts/AuthContext";
 import { useToast } from "@/hooks/use-toast";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
@@ -244,18 +246,18 @@ const Settings = () => {
           <h1 className="text-2xl font-bold text-gray-800 mb-8">Settings</h1>
 
           <Tabs defaultValue="company" className="space-y-6">
-            <TabsList className="grid w-full grid-cols-3">
+            <TabsList className="grid w-full grid-cols-4">
               <TabsTrigger value="company">Company</TabsTrigger>
-              <TabsTrigger value="departments">Departments</TabsTrigger>
               <TabsTrigger value="profile">Profile</TabsTrigger>
+              <TabsTrigger value="badges">Badge Templates</TabsTrigger>
+              <TabsTrigger value="system">System</TabsTrigger>
             </TabsList>
 
             <TabsContent value="company">
-              <CompanyForm />
-            </TabsContent>
-
-            <TabsContent value="departments">
-              <DepartmentManagement />
+              <div className="space-y-6">
+                <CompanyForm />
+                <DepartmentManagement />
+              </div>
             </TabsContent>
 
             <TabsContent value="profile">
@@ -398,6 +400,35 @@ const Settings = () => {
                   <Button variant="outline" onClick={handleLogout}>Logout</Button>
                 </CardFooter>
               </Card>
+            </TabsContent>
+
+            <TabsContent value="badges">
+              <BadgeTemplateDesigner />
+            </TabsContent>
+
+            <TabsContent value="system">
+              <div className="space-y-6">
+                <PhotoMigrationPanel />
+                
+                <Card>
+                  <CardHeader>
+                    <CardTitle>System Information</CardTitle>
+                    <CardDescription>Technical details about your system</CardDescription>
+                  </CardHeader>
+                  <CardContent className="space-y-4">
+                    <div className="grid grid-cols-2 gap-4 text-sm">
+                      <div>
+                        <span className="text-muted-foreground">Version</span>
+                        <p className="font-medium">1.0.0</p>
+                      </div>
+                      <div>
+                        <span className="text-muted-foreground">Environment</span>
+                        <p className="font-medium">Production</p>
+                      </div>
+                    </div>
+                  </CardContent>
+                </Card>
+              </div>
             </TabsContent>
           </Tabs>
         </div>
