@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from "react";
-import { Play, Square, Coffee, Clock, Download, FileText, Edit2, CheckCircle, PlayCircle, StickyNote } from "lucide-react";
+import { Play, Square, Coffee, Clock, MapPin, Download, FileText, Edit2, CheckCircle, PlayCircle, StickyNote } from "lucide-react";
 import { RecentTaskActivity } from "@/components/dashboard/RecentTaskActivity";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -27,6 +27,7 @@ const Dashboard = () => {
   const [isClockedIn, setIsClockedIn] = useState(false);
   const [selectedProject, setSelectedProject] = useState<string>("");
   const [selectedTaskType, setSelectedTaskType] = useState<string>("");
+  const [location, setLocation] = useState<GeolocationPosition | null>(null);
   const [isOnBreak, setIsOnBreak] = useState(false);
   const [currentTimeEntry, setCurrentTimeEntry] = useState<string | null>(null);
   const [showPhotoCapture, setShowPhotoCapture] = useState(false);
@@ -45,6 +46,14 @@ const Dashboard = () => {
     const timer = setInterval(() => {
       setCurrentTime(new Date());
     }, 1000);
+
+    // Get user's location automatically
+    if (navigator.geolocation) {
+      navigator.geolocation.getCurrentPosition(
+        (position) => setLocation(position),
+        (error) => console.error("Error getting location:", error)
+      );
+    }
 
     return () => clearInterval(timer);
   }, []);
@@ -139,8 +148,29 @@ const Dashboard = () => {
       refetchTimeEntries();
       refetchActiveEntry();
 
-      // Auto-assign task type if selected
-      if (selectedTaskType) {
+      // Auto-assign "Other" task type if no task type selected
+      if (!selectedTaskType) {
+        const otherTaskType = taskTypes.find(tt => tt.code === '8050' || tt.code === 'OTH');
+        if (otherTaskType) {
+          try {
+            await supabase.functions.invoke('record-task-activity', {
+              body: {
+                userId: user.id,
+                profileId: profile.id,
+                taskId: otherTaskType.id,
+                taskTypeId: otherTaskType.id,
+                actionType: 'start',
+                timeEntryId: entry.id,
+                projectId: selectedProject || null,
+                companyId: company.id,
+              }
+            });
+          } catch (taskError) {
+            console.error('Error creating auto "Other" task activity:', taskError);
+          }
+        }
+      } else {
+        // Create task activity for selected task type
         try {
           await supabase.functions.invoke('record-task-activity', {
             body: {
@@ -193,17 +223,41 @@ const Dashboard = () => {
 
       if (error) throw error;
 
+      // Auto-close any open tasks
+      try {
+        const { data, error: autoCloseError } = await supabase.functions.invoke('auto-close-tasks-on-shift-end', {
+          body: {
+            time_entry_id: currentTimeEntry,
+            end_timestamp: endTime.toISOString()
+          }
+        });
+
+        if (!autoCloseError && data?.closed_count > 0) {
+          const taskNames = data.tasks.map((t: any) => t.task_name).join(', ');
+          toast({
+            title: "Clocked Out",
+            description: `Shift ended. ${data.closed_count} active task(s) automatically completed: ${taskNames}`,
+          });
+        } else {
+          toast({
+            title: "Clocked Out",
+            description: `You worked for ${Math.floor(durationMinutes / 60)}h ${durationMinutes % 60}m.`,
+          });
+        }
+      } catch (autoCloseError) {
+        console.error('Auto-close tasks error:', autoCloseError);
+        toast({
+          title: "Clocked Out",
+          description: `You worked for ${Math.floor(durationMinutes / 60)}h ${durationMinutes % 60}m.`,
+        });
+      }
+
       setIsClockedIn(false);
       setCurrentTimeEntry(null);
       setSelectedProject("");
       setSelectedTaskType("");
       refetchTimeEntries();
       refetchActiveEntry();
-
-      toast({
-        title: "Clocked Out",
-        description: `You worked for ${Math.floor(durationMinutes / 60)}h ${durationMinutes % 60}m.`,
-      });
     } catch (error) {
       console.error('Error clocking out:', error);
       toast({
@@ -235,40 +289,31 @@ const Dashboard = () => {
 
       <main className="pt-20 pb-20">
         <div className="container mx-auto px-4">
-          {/* Status Cards */}
+          {/* Current Status Section */}
           <Card className="mb-8 p-6">
-            <div className="flex items-center justify-between mb-4">
-              <h2 className="text-xl font-bold text-foreground">Today's Summary</h2>
+            <div className="flex items-center justify-between">
+              <div>
+                <h2 className="text-2xl font-bold text-foreground mb-2">
+                  {isClockedIn ? "Currently Working" : "Not Clocked In"}
+                </h2>
+                <p className="text-muted-foreground">
+                  {isClockedIn && currentTimeEntry
+                    ? `Clocked in at ${format(new Date(timeEntries?.find(e => e.id === currentTimeEntry)?.start_time || new Date()), "h:mm a")}`
+                    : "Ready to start work?"}
+                </p>
+              </div>
               <div className="flex items-center gap-2">
-                <Clock className="h-5 w-5 text-muted-foreground" />
-                <span className="text-muted-foreground">{format(currentTime, "EEEE, MMMM d")}</span>
-              </div>
-            </div>
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-              <div className="bg-muted/50 p-4 rounded-lg">
-                <div className="text-sm text-muted-foreground">Total Hours Today</div>
-                <div className="text-2xl font-bold text-foreground">
-                  {(() => {
-                    const totalMinutes = todayEntries.reduce((acc, entry) => {
-                      if (entry.duration_minutes) return acc + entry.duration_minutes;
-                      if (!entry.end_time) {
-                        return acc + Math.round((Date.now() - new Date(entry.start_time).getTime()) / 60000);
-                      }
-                      return acc;
-                    }, 0);
-                    return `${Math.floor(totalMinutes / 60)}h ${totalMinutes % 60}m`;
-                  })()}
-                </div>
-              </div>
-              <div className="bg-muted/50 p-4 rounded-lg">
-                <div className="text-sm text-muted-foreground">Status</div>
-                <div className={`text-2xl font-bold ${isClockedIn ? 'text-green-600' : 'text-muted-foreground'}`}>
-                  {isClockedIn ? 'Clocked In' : 'Clocked Out'}
-                </div>
-              </div>
-              <div className="bg-muted/50 p-4 rounded-lg">
-                <div className="text-sm text-muted-foreground">Entries Today</div>
-                <div className="text-2xl font-bold text-foreground">{todayEntries.length}</div>
+                {location && (
+                  <span className="flex items-center text-green-600 text-sm">
+                    <MapPin className="h-4 w-4 mr-1" />
+                    Location Verified
+                  </span>
+                )}
+                {isClockedIn && (
+                  <span className="bg-green-100 dark:bg-green-900/30 text-green-800 dark:text-green-400 px-3 py-1 rounded-full text-sm font-medium">
+                    Active
+                  </span>
+                )}
               </div>
             </div>
           </Card>
@@ -299,7 +344,7 @@ const Dashboard = () => {
 
               <Select value={selectedTaskType} onValueChange={setSelectedTaskType}>
                 <SelectTrigger className="w-full mb-4">
-                  <SelectValue placeholder="Select Task Type (Optional)" />
+                  <SelectValue placeholder="Select Task Type (Optional - defaults to Other)" />
                 </SelectTrigger>
                 <SelectContent>
                   <SelectGroup>
@@ -314,7 +359,7 @@ const Dashboard = () => {
               </Select>
 
               <Button
-                className={`w-full h-14 text-lg mb-4 ${isClockedIn ? 'bg-destructive hover:bg-destructive/90' : 'bg-green-600 hover:bg-green-700'}`}
+                className={`w-full h-14 text-lg mb-4 ${isClockedIn ? 'bg-red-500 hover:bg-red-600' : 'bg-[#008000] hover:bg-[#008000]/90'}`}
                 onClick={handleClockInOut}
               >
                 {isClockedIn ? "Clock Out" : "Clock In"}
@@ -322,14 +367,15 @@ const Dashboard = () => {
 
               <div className="flex gap-2">
                 <Button
-                  variant="outline"
-                  className="flex-1"
+                  className="flex-1 bg-orange-500 hover:bg-orange-600 text-white"
                   onClick={() => setIsOnBreak(!isOnBreak)}
                 >
                   <Coffee className="mr-2 h-4 w-4" />
-                  {isOnBreak ? "End Break" : "Break"}
+                  {isOnBreak ? "End Break" : "Start Break"}
                 </Button>
-                <Button variant="outline" className="flex-1">
+                <Button
+                  className="flex-1 bg-[#4BA0F4] hover:bg-[#4BA0F4]/90 text-white"
+                >
                   <StickyNote className="mr-2 h-4 w-4" />
                   Add Note
                 </Button>
