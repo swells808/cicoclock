@@ -1,197 +1,486 @@
-import { DashboardLayout } from "@/components/layout/DashboardLayout";
-import { useAuth } from "@/contexts/AuthContext";
-import { useProfile } from "@/hooks/useProfile";
-import { useUserRole } from "@/hooks/useUserRole";
-import { useTimeEntries, useActiveTimeEntry } from "@/hooks/useTimeEntries";
-import { useActiveProjects } from "@/hooks/useProjects";
-import { useEmployees } from "@/hooks/useEmployees";
-import { useLanguage } from "@/contexts/LanguageContext";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import React, { useState, useEffect } from "react";
+import { Play, Square, Coffee, Clock, Download, FileText, Edit2, CheckCircle, PlayCircle, StickyNote } from "lucide-react";
+import { RecentTaskActivity } from "@/components/dashboard/RecentTaskActivity";
+import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { Clock, Users, FolderKanban, TrendingUp, Play, Square } from "lucide-react";
-import { Link } from "react-router-dom";
-import { format, formatDistanceToNow } from "date-fns";
+import { Select, SelectContent, SelectGroup, SelectItem, SelectLabel, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { format } from "date-fns";
+import { StandardHeader } from "@/components/layout/StandardHeader";
+import { supabase } from "@/integrations/supabase/client";
+import { useAuth } from "@/contexts/AuthContext";
+import { useActiveProjects } from "@/hooks/useProjects";
+import { useTimeEntries, useActiveTimeEntry } from "@/hooks/useTimeEntries";
+import { useToast } from "@/hooks/use-toast";
+import { useTaskTypes } from "@/hooks/useTaskTypes";
+import { useCompany } from "@/contexts/CompanyContext";
+import { PhotoCapture } from "@/components/timeclock/PhotoCapture";
 
 const Dashboard = () => {
-  const { user } = useAuth();
-  const { data: profile } = useProfile();
-  const { isAdmin, isSupervisor } = useUserRole();
-  const { data: timeEntries } = useTimeEntries();
-  const { data: activeEntry } = useActiveTimeEntry();
-  const { data: activeProjects } = useActiveProjects();
-  const { employees } = useEmployees();
-  const { t } = useLanguage();
+  const { signOut, user } = useAuth();
+  const { company, companyFeatures } = useCompany();
+  const { data: projects } = useActiveProjects();
+  const { data: timeEntries, refetch: refetchTimeEntries } = useTimeEntries();
+  const { data: activeEntry, refetch: refetchActiveEntry } = useActiveTimeEntry();
+  const { toast } = useToast();
+  const { taskTypes } = useTaskTypes(company?.id);
+  const [currentTime, setCurrentTime] = useState(new Date());
+  const [isClockedIn, setIsClockedIn] = useState(false);
+  const [selectedProject, setSelectedProject] = useState<string>("");
+  const [selectedTaskType, setSelectedTaskType] = useState<string>("");
+  const [isOnBreak, setIsOnBreak] = useState(false);
+  const [currentTimeEntry, setCurrentTimeEntry] = useState<string | null>(null);
+  const [showPhotoCapture, setShowPhotoCapture] = useState(false);
+  const [photoAction, setPhotoAction] = useState<'clock_in' | 'clock_out' | null>(null);
 
-  const todayEntries = timeEntries?.filter((entry) => {
-    const entryDate = new Date(entry.start_time).toDateString();
-    return entryDate === new Date().toDateString();
-  }) || [];
-
-  const todayMinutes = todayEntries.reduce((acc, entry) => {
-    if (entry.duration_minutes) {
-      return acc + entry.duration_minutes;
-    }
-    if (!entry.end_time) {
-      const start = new Date(entry.start_time);
-      return acc + Math.round((Date.now() - start.getTime()) / 60000);
-    }
-    return acc;
-  }, 0);
-
-  const formatDuration = (minutes: number) => {
-    const hours = Math.floor(minutes / 60);
-    const mins = minutes % 60;
-    return `${hours}h ${mins}m`;
+  // Helper function to check if a date is today
+  const isToday = (date: Date | string) => {
+    const today = new Date();
+    const checkDate = new Date(date);
+    return checkDate.getDate() === today.getDate() &&
+      checkDate.getMonth() === today.getMonth() &&
+      checkDate.getFullYear() === today.getFullYear();
   };
 
+  useEffect(() => {
+    const timer = setInterval(() => {
+      setCurrentTime(new Date());
+    }, 1000);
+
+    return () => clearInterval(timer);
+  }, []);
+
+  // Check for active time entry on mount to sync state with database
+  useEffect(() => {
+    if (activeEntry) {
+      setIsClockedIn(true);
+      setCurrentTimeEntry(activeEntry.id);
+      setSelectedProject(activeEntry.project_id || "");
+    } else {
+      setIsClockedIn(false);
+      setCurrentTimeEntry(null);
+    }
+  }, [activeEntry]);
+
+  const uploadPhoto = async (photoBlob: Blob, action: 'clock_in' | 'clock_out'): Promise<string> => {
+    if (!company || !user) throw new Error('Company or user not found');
+
+    const timestamp = new Date().toISOString().replace(/:/g, '-').replace(/\./g, '-');
+    const userId = user.id.toUpperCase();
+    const actionPath = action === 'clock_in' ? 'clock-in' : 'clock-out';
+    const filePath = `${company.id}/${actionPath}/${timestamp}_${userId}.jpg`;
+
+    const { error } = await supabase.storage
+      .from('timeclock-photos')
+      .upload(filePath, photoBlob, {
+        contentType: 'image/jpeg',
+        upsert: false
+      });
+
+    if (error) throw error;
+    return filePath;
+  };
+
+  const handlePhotoCapture = async (photoBlob: Blob) => {
+    try {
+      const photoUrl = await uploadPhoto(photoBlob, photoAction!);
+      setShowPhotoCapture(false);
+
+      if (photoAction === 'clock_in') {
+        await performClockIn(photoUrl);
+      } else if (photoAction === 'clock_out') {
+        await performClockOut(photoUrl);
+      }
+    } catch (error) {
+      console.error('Error uploading photo:', error);
+      toast({
+        title: "Photo Upload Failed",
+        description: "Failed to upload photo. Continuing without photo.",
+        variant: "destructive"
+      });
+
+      if (photoAction === 'clock_in') {
+        await performClockIn();
+      } else if (photoAction === 'clock_out') {
+        await performClockOut();
+      }
+    }
+    setPhotoAction(null);
+  };
+
+  const performClockIn = async (photoUrl?: string) => {
+    if (!company || !user) return;
+
+    try {
+      const { data: profile } = await supabase
+        .from('profiles')
+        .select('id')
+        .eq('user_id', user.id)
+        .single();
+
+      if (!profile) throw new Error('Profile not found');
+
+      const { data: entry, error } = await supabase
+        .from('time_entries')
+        .insert({
+          user_id: user.id,
+          company_id: company.id,
+          project_id: selectedProject || null,
+          start_time: new Date().toISOString(),
+          is_break: false,
+          clock_in_photo_url: photoUrl
+        })
+        .select()
+        .single();
+
+      if (error) throw error;
+
+      setCurrentTimeEntry(entry.id);
+      setIsClockedIn(true);
+      refetchTimeEntries();
+      refetchActiveEntry();
+
+      // Auto-assign task type if selected
+      if (selectedTaskType) {
+        try {
+          await supabase.functions.invoke('record-task-activity', {
+            body: {
+              userId: user.id,
+              profileId: profile.id,
+              taskId: selectedTaskType,
+              taskTypeId: selectedTaskType,
+              actionType: 'start',
+              timeEntryId: entry.id,
+              projectId: selectedProject || null,
+              companyId: company.id,
+            }
+          });
+        } catch (taskError) {
+          console.error('Error creating task activity:', taskError);
+        }
+      }
+
+      toast({
+        title: "Clocked In",
+        description: "You have successfully clocked in.",
+      });
+    } catch (error) {
+      console.error('Error clocking in:', error);
+      toast({
+        title: "Clock In Failed",
+        description: "Failed to clock in. Please try again.",
+        variant: "destructive"
+      });
+    }
+  };
+
+  const performClockOut = async (photoUrl?: string) => {
+    if (!currentTimeEntry || !company) return;
+
+    try {
+      const endTime = new Date();
+      const entry = timeEntries?.find(e => e.id === currentTimeEntry);
+      const startTime = entry ? new Date(entry.start_time) : new Date();
+      const durationMinutes = Math.round((endTime.getTime() - startTime.getTime()) / 60000);
+
+      const { error } = await supabase
+        .from('time_entries')
+        .update({
+          end_time: endTime.toISOString(),
+          duration_minutes: durationMinutes,
+          clock_out_photo_url: photoUrl
+        })
+        .eq('id', currentTimeEntry);
+
+      if (error) throw error;
+
+      setIsClockedIn(false);
+      setCurrentTimeEntry(null);
+      setSelectedProject("");
+      setSelectedTaskType("");
+      refetchTimeEntries();
+      refetchActiveEntry();
+
+      toast({
+        title: "Clocked Out",
+        description: `You worked for ${Math.floor(durationMinutes / 60)}h ${durationMinutes % 60}m.`,
+      });
+    } catch (error) {
+      console.error('Error clocking out:', error);
+      toast({
+        title: "Clock Out Failed",
+        description: "Failed to clock out. Please try again.",
+        variant: "destructive"
+      });
+    }
+  };
+
+  const handleClockInOut = () => {
+    if (companyFeatures?.photo_capture) {
+      setPhotoAction(isClockedIn ? 'clock_out' : 'clock_in');
+      setShowPhotoCapture(true);
+    } else {
+      if (isClockedIn) {
+        performClockOut();
+      } else {
+        performClockIn();
+      }
+    }
+  };
+
+  const todayEntries = timeEntries?.filter(entry => isToday(entry.start_time)) || [];
+
   return (
-    <DashboardLayout>
-      <div className="space-y-8">
-        {/* Welcome Section */}
-        <div>
-          <h1 className="text-3xl font-bold">
-            {t("welcomeBack")}, {profile?.first_name || user?.email?.split("@")[0]}!
-          </h1>
-          <p className="text-muted-foreground mt-1">{t("dashboardSubtitle")}</p>
-        </div>
+    <div className="min-h-screen bg-background">
+      <StandardHeader />
 
-        {/* Quick Actions */}
-        <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
-          <Card className="relative overflow-hidden">
-            <CardHeader className="flex flex-row items-center justify-between pb-2">
-              <CardTitle className="text-sm font-medium">{t("todayHours")}</CardTitle>
-              <Clock className="h-4 w-4 text-muted-foreground" />
-            </CardHeader>
-            <CardContent>
-              <div className="text-2xl font-bold">{formatDuration(todayMinutes)}</div>
-              <p className="text-xs text-muted-foreground">
-                {todayEntries.length} {t("entriesRecorded")}
-              </p>
-            </CardContent>
-          </Card>
-
-          <Card>
-            <CardHeader className="flex flex-row items-center justify-between pb-2">
-              <CardTitle className="text-sm font-medium">{t("currentStatus")}</CardTitle>
-              {activeEntry ? (
-                <Play className="h-4 w-4 text-green-500" />
-              ) : (
-                <Square className="h-4 w-4 text-muted-foreground" />
-              )}
-            </CardHeader>
-            <CardContent>
-              <div className="text-2xl font-bold">
-                {activeEntry ? t("clockedIn") : t("clockedOut")}
+      <main className="pt-20 pb-20">
+        <div className="container mx-auto px-4">
+          {/* Status Cards */}
+          <Card className="mb-8 p-6">
+            <div className="flex items-center justify-between mb-4">
+              <h2 className="text-xl font-bold text-foreground">Today's Summary</h2>
+              <div className="flex items-center gap-2">
+                <Clock className="h-5 w-5 text-muted-foreground" />
+                <span className="text-muted-foreground">{format(currentTime, "EEEE, MMMM d")}</span>
               </div>
-              {activeEntry && (
-                <p className="text-xs text-muted-foreground">
-                  {t("since")} {format(new Date(activeEntry.start_time), "h:mm a")}
-                </p>
-              )}
-            </CardContent>
+            </div>
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+              <div className="bg-muted/50 p-4 rounded-lg">
+                <div className="text-sm text-muted-foreground">Total Hours Today</div>
+                <div className="text-2xl font-bold text-foreground">
+                  {(() => {
+                    const totalMinutes = todayEntries.reduce((acc, entry) => {
+                      if (entry.duration_minutes) return acc + entry.duration_minutes;
+                      if (!entry.end_time) {
+                        return acc + Math.round((Date.now() - new Date(entry.start_time).getTime()) / 60000);
+                      }
+                      return acc;
+                    }, 0);
+                    return `${Math.floor(totalMinutes / 60)}h ${totalMinutes % 60}m`;
+                  })()}
+                </div>
+              </div>
+              <div className="bg-muted/50 p-4 rounded-lg">
+                <div className="text-sm text-muted-foreground">Status</div>
+                <div className={`text-2xl font-bold ${isClockedIn ? 'text-green-600' : 'text-muted-foreground'}`}>
+                  {isClockedIn ? 'Clocked In' : 'Clocked Out'}
+                </div>
+              </div>
+              <div className="bg-muted/50 p-4 rounded-lg">
+                <div className="text-sm text-muted-foreground">Entries Today</div>
+                <div className="text-2xl font-bold text-foreground">{todayEntries.length}</div>
+              </div>
+            </div>
           </Card>
 
-          {(isAdmin || isSupervisor) && (
-            <>
-              <Card>
-                <CardHeader className="flex flex-row items-center justify-between pb-2">
-                  <CardTitle className="text-sm font-medium">{t("activeProjects")}</CardTitle>
-                  <FolderKanban className="h-4 w-4 text-muted-foreground" />
-                </CardHeader>
-                <CardContent>
-                  <div className="text-2xl font-bold">{activeProjects?.length ?? 0}</div>
-                  <p className="text-xs text-muted-foreground">{t("inProgress")}</p>
-                </CardContent>
-              </Card>
+          {/* Clock In/Out Section */}
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-8 mb-8">
+            <Card className="md:col-span-1 p-6">
+              <div className="text-center mb-6">
+                <div className="text-3xl font-bold mb-2">{format(currentTime, "h:mm:ss a")}</div>
+                <div className="text-muted-foreground">{format(currentTime, "EEEE, MMMM d, yyyy")}</div>
+              </div>
 
-              <Card>
-                <CardHeader className="flex flex-row items-center justify-between pb-2">
-                  <CardTitle className="text-sm font-medium">{t("teamMembers")}</CardTitle>
-                  <Users className="h-4 w-4 text-muted-foreground" />
-                </CardHeader>
-                <CardContent>
-                  <div className="text-2xl font-bold">{employees?.length ?? 0}</div>
-                  <p className="text-xs text-muted-foreground">{t("activeUsers")}</p>
-                </CardContent>
-              </Card>
-            </>
-          )}
-        </div>
+              <Select value={selectedProject} onValueChange={setSelectedProject}>
+                <SelectTrigger className="w-full mb-4">
+                  <SelectValue placeholder="Select Project (Optional)" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectGroup>
+                    <SelectLabel>Projects</SelectLabel>
+                    {projects?.filter(p => p.is_active).map((project) => (
+                      <SelectItem key={project.id} value={project.id}>
+                        {project.name}
+                      </SelectItem>
+                    ))}
+                  </SelectGroup>
+                </SelectContent>
+              </Select>
 
-        {/* Quick Clock Action */}
-        <Card>
-          <CardHeader>
-            <CardTitle>{t("quickActions")}</CardTitle>
-            <CardDescription>{t("quickActionsDescription")}</CardDescription>
-          </CardHeader>
-          <CardContent className="flex flex-wrap gap-4">
-            <Button asChild size="lg">
-              <Link to="/timeclock">
-                <Clock className="mr-2 h-5 w-5" />
-                {activeEntry ? t("clockOut") : t("clockIn")}
-              </Link>
-            </Button>
-            {(isAdmin || isSupervisor) && (
-              <>
-                <Button variant="outline" asChild size="lg">
-                  <Link to="/reports">
-                    <TrendingUp className="mr-2 h-5 w-5" />
-                    {t("viewReports")}
-                  </Link>
+              <Select value={selectedTaskType} onValueChange={setSelectedTaskType}>
+                <SelectTrigger className="w-full mb-4">
+                  <SelectValue placeholder="Select Task Type (Optional)" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectGroup>
+                    <SelectLabel>Task Types</SelectLabel>
+                    {taskTypes.map((taskType) => (
+                      <SelectItem key={taskType.id} value={taskType.id}>
+                        {taskType.name} ({taskType.code})
+                      </SelectItem>
+                    ))}
+                  </SelectGroup>
+                </SelectContent>
+              </Select>
+
+              <Button
+                className={`w-full h-14 text-lg mb-4 ${isClockedIn ? 'bg-destructive hover:bg-destructive/90' : 'bg-green-600 hover:bg-green-700'}`}
+                onClick={handleClockInOut}
+              >
+                {isClockedIn ? "Clock Out" : "Clock In"}
+              </Button>
+
+              <div className="flex gap-2">
+                <Button
+                  variant="outline"
+                  className="flex-1"
+                  onClick={() => setIsOnBreak(!isOnBreak)}
+                >
+                  <Coffee className="mr-2 h-4 w-4" />
+                  {isOnBreak ? "End Break" : "Break"}
                 </Button>
-                <Button variant="outline" asChild size="lg">
-                  <Link to="/users">
-                    <Users className="mr-2 h-5 w-5" />
-                    {t("manageUsers")}
-                  </Link>
+                <Button variant="outline" className="flex-1">
+                  <StickyNote className="mr-2 h-4 w-4" />
+                  Add Note
                 </Button>
-              </>
-            )}
-          </CardContent>
-        </Card>
+              </div>
+            </Card>
 
-        {/* Recent Activity */}
-        <Card>
-          <CardHeader>
-            <CardTitle>{t("recentActivity")}</CardTitle>
-            <CardDescription>{t("recentActivityDescription")}</CardDescription>
-          </CardHeader>
-          <CardContent>
-            {timeEntries && timeEntries.length > 0 ? (
+            {/* Live Time Log */}
+            <Card className="md:col-span-2 p-6">
+              <div className="flex justify-between items-center mb-6">
+                <h2 className="text-xl font-bold text-foreground">Today's Activity</h2>
+                <div className="flex gap-2">
+                  <Button variant="outline" size="sm">
+                    <FileText className="h-4 w-4 mr-1" />
+                    Export
+                  </Button>
+                  <Button variant="outline" size="sm">
+                    <Edit2 className="h-4 w-4 mr-1" />
+                    Edit
+                  </Button>
+                </div>
+              </div>
+
               <div className="space-y-4">
-                {timeEntries.slice(0, 5).map((entry) => (
-                  <div
-                    key={entry.id}
-                    className="flex items-center justify-between py-2 border-b last:border-0"
-                  >
-                    <div>
-                      <p className="font-medium">
-                        {entry.projects?.name || t("noProject")}
-                      </p>
-                      <p className="text-sm text-muted-foreground">
-                        {format(new Date(entry.start_time), "MMM d, yyyy 'at' h:mm a")}
-                      </p>
-                    </div>
-                    <div className="text-right">
-                      <p className="font-medium">
-                        {entry.duration_minutes
-                          ? formatDuration(entry.duration_minutes)
-                          : t("inProgress")}
-                      </p>
-                      <p className="text-xs text-muted-foreground">
-                        {formatDistanceToNow(new Date(entry.start_time), { addSuffix: true })}
-                      </p>
+                {/* Current Session */}
+                {isClockedIn && activeEntry && (
+                  <div className="flex items-start space-x-4 p-4 bg-green-50 dark:bg-green-950/30 border border-green-100 dark:border-green-900 rounded-lg">
+                    <PlayCircle className="text-green-600 w-5 h-5 mt-1" />
+                    <div className="flex-1">
+                      <div className="flex justify-between">
+                        <div>
+                          <div className="font-medium">Current Session</div>
+                          <div className="text-sm text-muted-foreground">
+                            {projects?.find(p => p.id === selectedProject)?.name || 'No Project'}
+                          </div>
+                        </div>
+                        <div className="text-sm text-muted-foreground">
+                          Started at {format(new Date(activeEntry.start_time), "h:mm a")}
+                        </div>
+                      </div>
                     </div>
                   </div>
-                ))}
+                )}
+
+                {/* Previous Sessions */}
+                {todayEntries
+                  .filter(entry => entry.end_time && entry.id !== currentTimeEntry)
+                  .slice(0, 5)
+                  .map((entry) => (
+                    <div key={entry.id} className="flex items-start space-x-4 p-4 bg-muted/50 rounded-lg">
+                      <CheckCircle className="text-blue-600 w-5 h-5 mt-1" />
+                      <div className="flex-1">
+                        <div className="flex justify-between">
+                          <div>
+                            <div className="font-medium">Work Session</div>
+                            <div className="text-sm text-muted-foreground">{entry.projects?.name || 'No Project'}</div>
+                          </div>
+                          <div className="text-sm text-muted-foreground">
+                            {format(new Date(entry.start_time), 'h:mm a')} - {format(new Date(entry.end_time!), 'h:mm a')} ({entry.duration_minutes ? `${Math.round(entry.duration_minutes / 60 * 10) / 10}h` : '0h'})
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                  ))}
+
+                {todayEntries.filter(entry => entry.end_time).length === 0 && !isClockedIn && (
+                  <div className="text-center py-4 text-muted-foreground">
+                    No activity yet today. Clock in to start tracking your time.
+                  </div>
+                )}
               </div>
-            ) : (
-              <p className="text-muted-foreground text-center py-8">{t("noRecentActivity")}</p>
-            )}
-          </CardContent>
-        </Card>
-      </div>
-    </DashboardLayout>
+            </Card>
+          </div>
+
+          {/* Timesheet History */}
+          <Card className="mb-8 p-6">
+            <div className="flex justify-between items-center mb-6">
+              <h2 className="text-xl font-bold text-foreground">Timesheet History</h2>
+              <Button variant="outline">
+                <Download className="h-4 w-4 mr-2" />
+                Export Timesheet
+              </Button>
+            </div>
+
+            <div className="space-y-4">
+              <div className="grid grid-cols-5 gap-4 text-sm font-medium text-muted-foreground mb-2">
+                <div>Date</div>
+                <div>Project</div>
+                <div>Clock In</div>
+                <div>Clock Out</div>
+                <div>Total Hours</div>
+              </div>
+
+              {timeEntries
+                ?.filter(entry => entry.end_time)
+                .slice(0, 10)
+                .map((entry) => (
+                  <div key={entry.id} className="grid grid-cols-5 gap-4 text-sm border-b border-border pb-4">
+                    <div>{new Date(entry.start_time).toLocaleDateString()}</div>
+                    <div>{entry.projects?.name || 'No Project'}</div>
+                    <div>{format(new Date(entry.start_time), 'h:mm a')}</div>
+                    <div>{entry.end_time ? format(new Date(entry.end_time), 'h:mm a') : 'In Progress'}</div>
+                    <div>{entry.duration_minutes ? `${Math.round(entry.duration_minutes / 60 * 10) / 10}h` : '0h'}</div>
+                  </div>
+                ))}
+
+              {(!timeEntries || timeEntries.filter(entry => entry.end_time).length === 0) && (
+                <div className="text-center py-4 text-muted-foreground">
+                  No time entries yet. Clock in to start tracking your time.
+                </div>
+              )}
+            </div>
+          </Card>
+
+          {/* Task Activities Section */}
+          <div className="mt-6">
+            <RecentTaskActivity />
+          </div>
+        </div>
+      </main>
+
+      {/* Photo Capture Modal */}
+      <PhotoCapture
+        open={showPhotoCapture}
+        onCapture={handlePhotoCapture}
+        onCancel={() => {
+          setShowPhotoCapture(false);
+          setPhotoAction(null);
+        }}
+        title={photoAction === 'clock_in' ? "Clock In Photo" : "Clock Out Photo"}
+        description={photoAction === 'clock_in' ? "Please take a photo to verify your clock in" : "Please take a photo to verify your clock out"}
+      />
+
+      {/* Footer */}
+      <footer className="fixed bottom-0 w-full bg-background border-t border-border shadow-sm z-40">
+        <div className="container mx-auto px-4 py-4">
+          <div className="flex items-center justify-between text-sm text-muted-foreground">
+            <div className="flex space-x-6">
+              <a href="#" className="hover:text-primary">Support</a>
+              <a href="#" className="hover:text-primary">Privacy Policy</a>
+              <a href="#" className="hover:text-primary">Terms</a>
+            </div>
+            <button
+              onClick={signOut}
+              className="text-destructive hover:text-destructive/80"
+            >
+              Logout
+            </button>
+          </div>
+        </div>
+      </footer>
+    </div>
   );
 };
 
