@@ -84,15 +84,15 @@ const Login = () => {
   };
 
   return (
-    <div className="min-h-screen bg-gray-50 flex flex-col">
+    <div className="min-h-screen bg-background flex flex-col">
       <Header />
       <main className="flex-1 pt-20 px-4">
         <div className="container mx-auto max-w-md py-12">
-          <div className="bg-white rounded-xl shadow-lg p-8">
+          <div className="bg-card rounded-xl shadow-lg p-8">
             <div className="space-y-6">
               <div className="text-center">
-                <h1 className="text-2xl font-semibold">Login to Your Account</h1>
-                <p className="text-sm text-gray-600 mt-2">Welcome back! Please enter your details</p>
+                <h1 className="text-2xl font-semibold text-foreground">Login to Your Account</h1>
+                <p className="text-sm text-muted-foreground mt-2">Welcome back! Please enter your details</p>
               </div>
 
               <form onSubmit={handleSubmit} className="space-y-4">
@@ -125,7 +125,7 @@ const Login = () => {
                 <div className="flex justify-end">
                   <button
                     onClick={handleForgotPassword}
-                    className="text-sm text-[#4BA0F4] hover:underline"
+                    className="text-sm text-primary hover:underline"
                     type="button"
                     disabled={isLoading}
                   >
@@ -135,7 +135,7 @@ const Login = () => {
 
                 <Button
                   type="submit"
-                  className="w-full bg-[#008000] hover:bg-[#008000]/90"
+                  className="w-full bg-green-600 hover:bg-green-700 text-white"
                   disabled={isLoading}
                 >
                   <LogIn className="w-4 h-4 mr-2" />
@@ -148,7 +148,7 @@ const Login = () => {
                   <Separator className="w-full" />
                 </div>
                 <div className="relative flex justify-center text-sm">
-                  <span className="px-2 bg-white text-gray-500">
+                  <span className="px-2 bg-card text-muted-foreground">
                     Or continue with
                   </span>
                 </div>
@@ -211,9 +211,9 @@ const Login = () => {
                 </Button>
               </div>
 
-              <p className="text-center text-sm text-gray-600">
+              <p className="text-center text-sm text-muted-foreground">
                 Don't have an account?{" "}
-                <Link to="/company-signup" className="text-[#4BA0F4] hover:underline">
+                <Link to="/company-signup" className="text-primary hover:underline">
                   Sign up
                 </Link>
               </p>
