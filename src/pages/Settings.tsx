@@ -16,6 +16,7 @@ import { Avatar, AvatarImage, AvatarFallback } from "@/components/ui/avatar";
 import { User, ImagePlus } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { CompanyForm } from "@/components/settings/CompanyForm";
+import { DepartmentManagement } from "@/components/settings/DepartmentManagement";
 import { useAuth } from "@/contexts/AuthContext";
 import { useToast } from "@/hooks/use-toast";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
@@ -243,13 +244,18 @@ const Settings = () => {
           <h1 className="text-2xl font-bold text-gray-800 mb-8">Settings</h1>
 
           <Tabs defaultValue="company" className="space-y-6">
-            <TabsList className="grid w-full grid-cols-2">
+            <TabsList className="grid w-full grid-cols-3">
               <TabsTrigger value="company">Company</TabsTrigger>
+              <TabsTrigger value="departments">Departments</TabsTrigger>
               <TabsTrigger value="profile">Profile</TabsTrigger>
             </TabsList>
 
             <TabsContent value="company">
               <CompanyForm />
+            </TabsContent>
+
+            <TabsContent value="departments">
+              <DepartmentManagement />
             </TabsContent>
 
             <TabsContent value="profile">
