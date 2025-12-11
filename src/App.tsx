@@ -28,6 +28,7 @@ import Contact from "./pages/Contact";
 import Privacy from "./pages/Privacy";
 import NotFound from "./pages/NotFound";
 import AdminTimeTracking from "./pages/AdminTimeTracking";
+import TaskQrCodes from "./pages/TaskQrCodes";
 
 const queryClient = new QueryClient();
 
@@ -64,6 +65,7 @@ const App = () => (
                 <Route path="/settings" element={<ProtectedRoute><Settings /></ProtectedRoute>} />
                 <Route path="/badge-designer" element={<ProtectedRoute><BadgeDesigner /></ProtectedRoute>} />
                 <Route path="/time-tracking/admin" element={<ProtectedRoute><AdminTimeTracking /></ProtectedRoute>} />
+                <Route path="/task-qr-codes" element={<ProtectedRoute><TaskQrCodes /></ProtectedRoute>} />
 
                 <Route path="*" element={<NotFound />} />
               </Routes>
