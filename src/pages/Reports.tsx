@@ -5,6 +5,7 @@ import { StandardHeader } from "@/components/layout/StandardHeader";
 import { useAuth } from "@/contexts/AuthContext";
 import { useCompany } from "@/contexts/CompanyContext";
 import { supabase } from "@/integrations/supabase/client";
+import { ScheduledReportsList } from "@/components/reports/ScheduledReportsList";
 
 const Reports = () => {
   const { signOut } = useAuth();
@@ -239,9 +240,7 @@ const Reports = () => {
             </TabsContent>
 
             <TabsContent value="scheduled">
-              <div className="bg-white rounded-xl p-8 text-center">
-                <p className="text-gray-500">Scheduled reports coming soon</p>
-              </div>
+              <ScheduledReportsList />
             </TabsContent>
           </Tabs>
         </section>
