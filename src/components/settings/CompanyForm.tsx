@@ -1,18 +1,20 @@
 import React, { useState, useEffect } from 'react';
-import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
+import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from '@/components/ui/card';
 import { Switch } from '@/components/ui/switch';
-import { supabase } from '@/integrations/supabase/client';
 import { useCompany } from '@/contexts/CompanyContext';
+import { supabase } from '@/integrations/supabase/client';
 import { useToast } from '@/hooks/use-toast';
+import { Upload } from 'lucide-react';
 
-export const CompanyForm = () => {
+export const CompanyForm: React.FC = () => {
   const { company, companyFeatures, refetchCompany } = useCompany();
   const { toast } = useToast();
   const [loading, setLoading] = useState(false);
-  
+  const [logoUploading, setLogoUploading] = useState(false);
+
   const [formData, setFormData] = useState({
     company_name: '',
     industry: '',
@@ -23,6 +25,7 @@ export const CompanyForm = () => {
     state_province: '',
     postal_code: '',
     country: '',
+    company_logo_url: ''
   });
 
   const [features, setFeatures] = useState({
@@ -43,6 +46,7 @@ export const CompanyForm = () => {
         state_province: company.state_province || '',
         postal_code: company.postal_code || '',
         country: company.country || '',
+        company_logo_url: company.company_logo_url || ''
       });
     }
     if (companyFeatures) {
@@ -54,8 +58,49 @@ export const CompanyForm = () => {
     }
   }, [company, companyFeatures]);
 
-  const handleSaveCompany = async () => {
-    if (!company?.id) return;
+  const handleInputChange = (field: string, value: string) => {
+    setFormData(prev => ({ ...prev, [field]: value }));
+  };
+
+  const handleLogoUpload = async (event: React.ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    if (!file || !company) return;
+
+    setLogoUploading(true);
+    try {
+      const fileExt = file.name.split('.').pop();
+      const fileName = `${company.id}/logo.${fileExt}`;
+
+      const { error: uploadError } = await supabase.storage
+        .from('avatars')
+        .upload(fileName, file, { upsert: true });
+
+      if (uploadError) throw uploadError;
+
+      const { data } = supabase.storage
+        .from('avatars')
+        .getPublicUrl(fileName);
+
+      setFormData(prev => ({ ...prev, company_logo_url: data.publicUrl }));
+
+      toast({
+        title: "Logo Uploaded",
+        description: "Company logo has been uploaded successfully."
+      });
+    } catch (error) {
+      toast({
+        title: "Upload Failed",
+        description: "There was an error uploading the logo.",
+        variant: "destructive"
+      });
+    } finally {
+      setLogoUploading(false);
+    }
+  };
+
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!company) return;
 
     setLoading(true);
     try {
@@ -66,17 +111,17 @@ export const CompanyForm = () => {
 
       if (error) throw error;
 
+      await refetchCompany();
+
       toast({
-        title: 'Success',
-        description: 'Company settings updated successfully',
+        title: "Settings Saved",
+        description: "Company information has been updated successfully."
       });
-      refetchCompany();
     } catch (error) {
-      console.error('Error updating company:', error);
       toast({
-        title: 'Error',
-        description: 'Failed to update company settings',
-        variant: 'destructive',
+        title: "Save Failed",
+        description: "There was an error updating the company information.",
+        variant: "destructive"
       });
     } finally {
       setLoading(false);
@@ -114,6 +159,19 @@ export const CompanyForm = () => {
     }
   };
 
+  if (!company) {
+    return (
+      <Card>
+        <CardHeader>
+          <CardTitle>Company Information</CardTitle>
+        </CardHeader>
+        <CardContent>
+          <p className="text-muted-foreground">Loading company information...</p>
+        </CardContent>
+      </Card>
+    );
+  }
+
   return (
     <div className="space-y-6">
       <Card>
@@ -121,93 +179,136 @@ export const CompanyForm = () => {
           <CardTitle>Company Information</CardTitle>
           <CardDescription>Update your company details</CardDescription>
         </CardHeader>
-        <CardContent className="space-y-4">
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            <div>
-              <Label htmlFor="company_name">Company Name</Label>
-              <Input
-                id="company_name"
-                value={formData.company_name}
-                onChange={(e) => setFormData({ ...formData, company_name: e.target.value })}
-              />
+        <CardContent>
+          <form onSubmit={handleSubmit} className="space-y-6">
+            {/* Logo Upload */}
+            <div className="space-y-2">
+              <Label>Company Logo</Label>
+              <div className="flex items-center space-x-4">
+                {formData.company_logo_url && (
+                  <img
+                    src={formData.company_logo_url}
+                    alt="Company Logo"
+                    className="w-16 h-16 object-cover rounded-lg border"
+                  />
+                )}
+                <div>
+                  <input
+                    type="file"
+                    id="logo-upload"
+                    accept="image/*"
+                    onChange={handleLogoUpload}
+                    className="hidden"
+                  />
+                  <Button
+                    type="button"
+                    variant="outline"
+                    onClick={() => document.getElementById('logo-upload')?.click()}
+                    disabled={logoUploading}
+                  >
+                    <Upload className="w-4 h-4 mr-2" />
+                    {logoUploading ? 'Uploading...' : 'Upload Logo'}
+                  </Button>
+                </div>
+              </div>
             </div>
-            <div>
-              <Label htmlFor="industry">Industry</Label>
-              <Input
-                id="industry"
-                value={formData.industry}
-                onChange={(e) => setFormData({ ...formData, industry: e.target.value })}
-              />
-            </div>
-            <div>
-              <Label htmlFor="website">Website</Label>
-              <Input
-                id="website"
-                value={formData.website}
-                onChange={(e) => setFormData({ ...formData, website: e.target.value })}
-              />
-            </div>
-            <div>
-              <Label htmlFor="phone">Phone</Label>
-              <Input
-                id="phone"
-                value={formData.phone}
-                onChange={(e) => setFormData({ ...formData, phone: e.target.value })}
-              />
-            </div>
-          </div>
 
-          <div className="space-y-4">
-            <h3 className="text-lg font-medium">Address</h3>
-            <div>
-              <Label htmlFor="street_address">Street Address</Label>
-              <Input
-                id="street_address"
-                value={formData.street_address}
-                onChange={(e) => setFormData({ ...formData, street_address: e.target.value })}
-              />
-            </div>
+            {/* Company Details */}
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               <div>
-                <Label htmlFor="city">City</Label>
+                <Label htmlFor="company_name">Company Name *</Label>
                 <Input
-                  id="city"
-                  value={formData.city}
-                  onChange={(e) => setFormData({ ...formData, city: e.target.value })}
+                  id="company_name"
+                  value={formData.company_name}
+                  onChange={(e) => handleInputChange('company_name', e.target.value)}
+                  required
                 />
               </div>
               <div>
-                <Label htmlFor="state_province">State/Province</Label>
+                <Label htmlFor="industry">Industry</Label>
                 <Input
-                  id="state_province"
-                  value={formData.state_province}
-                  onChange={(e) => setFormData({ ...formData, state_province: e.target.value })}
+                  id="industry"
+                  value={formData.industry}
+                  onChange={(e) => handleInputChange('industry', e.target.value)}
                 />
               </div>
               <div>
-                <Label htmlFor="postal_code">Postal Code</Label>
+                <Label htmlFor="website">Website</Label>
                 <Input
-                  id="postal_code"
-                  value={formData.postal_code}
-                  onChange={(e) => setFormData({ ...formData, postal_code: e.target.value })}
+                  id="website"
+                  type="url"
+                  value={formData.website}
+                  onChange={(e) => handleInputChange('website', e.target.value)}
+                  placeholder="https://example.com"
                 />
               </div>
               <div>
-                <Label htmlFor="country">Country</Label>
+                <Label htmlFor="phone">Phone</Label>
                 <Input
-                  id="country"
-                  value={formData.country}
-                  onChange={(e) => setFormData({ ...formData, country: e.target.value })}
+                  id="phone"
+                  type="tel"
+                  value={formData.phone}
+                  onChange={(e) => handleInputChange('phone', e.target.value)}
                 />
               </div>
             </div>
-          </div>
+
+            {/* Address */}
+            <div className="space-y-4">
+              <h3 className="text-lg font-medium">Business Address</h3>
+              <div className="space-y-4">
+                <div>
+                  <Label htmlFor="street_address">Street Address</Label>
+                  <Input
+                    id="street_address"
+                    value={formData.street_address}
+                    onChange={(e) => handleInputChange('street_address', e.target.value)}
+                  />
+                </div>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <div>
+                    <Label htmlFor="city">City</Label>
+                    <Input
+                      id="city"
+                      value={formData.city}
+                      onChange={(e) => handleInputChange('city', e.target.value)}
+                    />
+                  </div>
+                  <div>
+                    <Label htmlFor="state_province">State/Province</Label>
+                    <Input
+                      id="state_province"
+                      value={formData.state_province}
+                      onChange={(e) => handleInputChange('state_province', e.target.value)}
+                    />
+                  </div>
+                </div>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <div>
+                    <Label htmlFor="postal_code">Postal Code</Label>
+                    <Input
+                      id="postal_code"
+                      value={formData.postal_code}
+                      onChange={(e) => handleInputChange('postal_code', e.target.value)}
+                    />
+                  </div>
+                  <div>
+                    <Label htmlFor="country">Country</Label>
+                    <Input
+                      id="country"
+                      value={formData.country}
+                      onChange={(e) => handleInputChange('country', e.target.value)}
+                    />
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <Button type="submit" disabled={loading}>
+              {loading ? 'Saving...' : 'Save Company Information'}
+            </Button>
+          </form>
         </CardContent>
-        <CardFooter>
-          <Button onClick={handleSaveCompany} disabled={loading}>
-            {loading ? 'Saving...' : 'Save Company Info'}
-          </Button>
-        </CardFooter>
       </Card>
 
       <Card>

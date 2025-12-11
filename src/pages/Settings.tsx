@@ -403,31 +403,21 @@ const Settings = () => {
             </TabsContent>
 
             <TabsContent value="badges">
-              <BadgeTemplateDesigner />
+              <Card>
+                <CardHeader>
+                  <CardTitle>Badge Template Designer</CardTitle>
+                  <CardDescription>Design and customize employee badge layouts</CardDescription>
+                </CardHeader>
+                <CardContent>
+                  <BadgeTemplateDesigner />
+                </CardContent>
+              </Card>
             </TabsContent>
 
             <TabsContent value="system">
               <div className="space-y-6">
+                <h2 className="text-xl font-semibold">System Administration</h2>
                 <PhotoMigrationPanel />
-                
-                <Card>
-                  <CardHeader>
-                    <CardTitle>System Information</CardTitle>
-                    <CardDescription>Technical details about your system</CardDescription>
-                  </CardHeader>
-                  <CardContent className="space-y-4">
-                    <div className="grid grid-cols-2 gap-4 text-sm">
-                      <div>
-                        <span className="text-muted-foreground">Version</span>
-                        <p className="font-medium">1.0.0</p>
-                      </div>
-                      <div>
-                        <span className="text-muted-foreground">Environment</span>
-                        <p className="font-medium">Production</p>
-                      </div>
-                    </div>
-                  </CardContent>
-                </Card>
               </div>
             </TabsContent>
           </Tabs>
@@ -438,10 +428,19 @@ const Settings = () => {
         <div className="container mx-auto px-4 py-4">
           <div className="flex justify-between items-center">
             <div className="flex space-x-4 text-sm text-gray-500">
-              <Link to="/support" className="hover:text-gray-700">Support</Link>
-              <Link to="/privacy" className="hover:text-gray-700">Privacy Policy</Link>
+              <Link to="/support" className="hover:text-gray-700">
+                Support
+              </Link>
+              <Link to="/privacy" className="hover:text-gray-700">
+                Privacy Policy
+              </Link>
+              <Link to="/terms" className="hover:text-gray-700">
+                Terms
+              </Link>
             </div>
-            <div className="text-sm text-gray-500">© 2025 CICO Timeclock</div>
+            <div className="text-sm text-gray-500">
+              © 2025 CICO Timeclock
+            </div>
           </div>
         </div>
       </footer>
