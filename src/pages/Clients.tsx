@@ -201,7 +201,8 @@ export default function Clients() {
           <div className="flex items-center justify-between text-sm text-muted-foreground">
             <div className="flex space-x-6">
               <a href="#" className="hover:text-primary">Support</a>
-              <a href="#" className="hover:text-primary">Privacy Policy</a>
+              <a href="/privacy" className="hover:text-primary">Privacy Policy</a>
+              <a href="#" className="hover:text-primary">Terms</a>
             </div>
             <button onClick={signOut} className="text-destructive hover:text-destructive/80">Logout</button>
           </div>
