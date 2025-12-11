@@ -27,6 +27,7 @@ import About from "./pages/About";
 import Contact from "./pages/Contact";
 import Privacy from "./pages/Privacy";
 import NotFound from "./pages/NotFound";
+import AdminTimeTracking from "./pages/AdminTimeTracking";
 
 const queryClient = new QueryClient();
 
@@ -62,6 +63,7 @@ const App = () => (
                 <Route path="/reports" element={<ProtectedRoute><Reports /></ProtectedRoute>} />
                 <Route path="/settings" element={<ProtectedRoute><Settings /></ProtectedRoute>} />
                 <Route path="/badge-designer" element={<ProtectedRoute><BadgeDesigner /></ProtectedRoute>} />
+                <Route path="/time-tracking/admin" element={<ProtectedRoute><AdminTimeTracking /></ProtectedRoute>} />
 
                 <Route path="*" element={<NotFound />} />
               </Routes>
