@@ -35,18 +35,18 @@ const MobileTimeclock = () => {
 
   useEffect(() => {
     const checkActiveTimeEntry = async () => {
-      if (!authenticatedEmployee) return;
-      const { data, error } = await supabase
-        .from('time_entries')
-        .select('*')
-        .eq('user_id', authenticatedEmployee.user_id)
-        .is('end_time', null)
-        .order('start_time', { ascending: false })
-        .limit(1)
-        .single();
+      if (!authenticatedEmployee || !company) return;
       
-      if (data && !error) {
-        setActiveTimeEntry(data);
+      // Use edge function to check status (bypasses RLS)
+      const { data, error } = await supabase.functions.invoke('check-clock-status', {
+        body: { 
+          profile_id: authenticatedEmployee.id,
+          company_id: company.id 
+        }
+      });
+      
+      if (data?.clocked_in && data?.time_entry) {
+        setActiveTimeEntry(data.time_entry);
         setClockStatus('in');
       } else {
         setActiveTimeEntry(null);
@@ -54,7 +54,7 @@ const MobileTimeclock = () => {
       }
     };
     checkActiveTimeEntry();
-  }, [authenticatedEmployee]);
+  }, [authenticatedEmployee, company]);
 
   const handleBadgeScan = async (scannedValue: string) => {
     setScanningBadge(true);
@@ -93,30 +93,29 @@ const MobileTimeclock = () => {
     }
   };
 
-  const uploadPhoto = async (photoBlob: Blob, action: 'clock_in' | 'clock_out'): Promise<string> => {
-    if (!company || !authenticatedEmployee) throw new Error('Company or employee not found');
-    const timestamp = new Date().toISOString().replace(/:/g, '-').replace(/\./g, '-');
-    const userId = authenticatedEmployee.user_id.toUpperCase();
-    const actionPath = action === 'clock_in' ? 'clock-in' : 'clock-out';
-    const filePath = `${company.id}/${actionPath}/${timestamp}_${userId}.jpg`;
-    const { error } = await supabase.storage
-      .from('timeclock-photos')
-      .upload(filePath, photoBlob, { contentType: 'image/jpeg', upsert: false });
-    if (error) throw error;
-    return filePath;
+  const uploadPhoto = async (photoBlob: Blob, action: 'clock_in' | 'clock_out'): Promise<string | null> => {
+    if (!company || !authenticatedEmployee) return null;
+    try {
+      const timestamp = new Date().toISOString().replace(/:/g, '-').replace(/\./g, '-');
+      const identifier = authenticatedEmployee.user_id || authenticatedEmployee.id;
+      const actionPath = action === 'clock_in' ? 'clock-in' : 'clock-out';
+      const filePath = `${company.id}/${actionPath}/${timestamp}_${identifier}.jpg`;
+      const { error } = await supabase.storage
+        .from('timeclock-photos')
+        .upload(filePath, photoBlob, { contentType: 'image/jpeg', upsert: false });
+      if (error) throw error;
+      return filePath;
+    } catch (err) {
+      console.error('Photo upload error:', err);
+      return null;
+    }
   };
 
   const handlePhotoCapture = async (photoBlob: Blob) => {
-    try {
-      const photoUrl = await uploadPhoto(photoBlob, photoAction!);
-      setShowPhotoCapture(false);
-      if (photoAction === 'clock_in') await performClockIn(photoUrl);
-      else if (photoAction === 'clock_out') await performClockOut(photoUrl);
-    } catch {
-      toast({ title: "Photo Upload Failed", description: "Continuing without photo.", variant: "destructive" });
-      if (photoAction === 'clock_in') await performClockIn();
-      else if (photoAction === 'clock_out') await performClockOut();
-    }
+    const photoUrl = await uploadPhoto(photoBlob, photoAction!);
+    setShowPhotoCapture(false);
+    if (photoAction === 'clock_in') await performClockIn(photoUrl || undefined);
+    else if (photoAction === 'clock_out') await performClockOut(photoUrl || undefined);
     setPhotoAction(null);
   };
 
@@ -124,22 +123,26 @@ const MobileTimeclock = () => {
     if (!authenticatedEmployee || !company) return;
     setIsProcessing(true);
     try {
-      const { data, error } = await supabase
-        .from('time_entries')
-        .insert({
-          user_id: authenticatedEmployee.user_id,
+      const { data, error } = await supabase.functions.invoke('clock-in-out', {
+        body: {
+          action: 'clock_in',
+          profile_id: authenticatedEmployee.id,
           company_id: company.id,
-          start_time: new Date().toISOString(),
-          clock_in_photo_url: photoUrl
-        })
-        .select()
-        .single();
-      
-      if (error) {
-        toast({ title: "Clock In Failed", description: "Please try again.", variant: "destructive" });
+          photo_url: photoUrl
+        }
+      });
+
+      if (error || !data?.success) {
+        console.error('Clock in error:', error || data?.error);
+        toast({ 
+          title: "Clock In Failed", 
+          description: data?.error || "Please try again.", 
+          variant: "destructive" 
+        });
         return;
       }
-      setActiveTimeEntry(data);
+
+      setActiveTimeEntry(data.data);
       setClockStatus('in');
       toast({ title: "Clocked In", description: "You have successfully clocked in." });
       // Auto-reset to badge scan after delay
@@ -159,26 +162,29 @@ const MobileTimeclock = () => {
   };
 
   const performClockOut = async (photoUrl?: string) => {
-    if (!activeTimeEntry) return;
+    if (!authenticatedEmployee || !company) return;
     setIsProcessing(true);
     try {
-      const endTime = new Date();
-      const startTime = new Date(activeTimeEntry.start_time);
-      const durationMinutes = Math.floor((endTime.getTime() - startTime.getTime()) / 60000);
-      
-      const { error } = await supabase
-        .from('time_entries')
-        .update({
-          end_time: endTime.toISOString(),
-          duration_minutes: durationMinutes,
-          clock_out_photo_url: photoUrl
-        })
-        .eq('id', activeTimeEntry.id);
-      
-      if (error) {
-        toast({ title: "Clock Out Failed", description: "Please try again.", variant: "destructive" });
+      const { data, error } = await supabase.functions.invoke('clock-in-out', {
+        body: {
+          action: 'clock_out',
+          profile_id: authenticatedEmployee.id,
+          company_id: company.id,
+          photo_url: photoUrl,
+          time_entry_id: activeTimeEntry?.id
+        }
+      });
+
+      if (error || !data?.success) {
+        console.error('Clock out error:', error || data?.error);
+        toast({ 
+          title: "Clock Out Failed", 
+          description: data?.error || "Please try again.", 
+          variant: "destructive" 
+        });
         return;
       }
+
       setActiveTimeEntry(null);
       setClockStatus('out');
       toast({ title: "Clocked Out", description: "You have successfully clocked out." });
@@ -202,15 +208,18 @@ const MobileTimeclock = () => {
     if (!authenticatedEmployee || !company) return;
     setIsProcessing(true);
     try {
-      const now = new Date().toISOString();
-      await supabase.from('time_entries').insert({
-        user_id: authenticatedEmployee.user_id,
-        company_id: company.id,
-        start_time: now,
-        end_time: now,
-        duration_minutes: 0,
-        is_break: true
+      const { data, error } = await supabase.functions.invoke('clock-in-out', {
+        body: {
+          action: 'break',
+          profile_id: authenticatedEmployee.id,
+          company_id: company.id
+        }
       });
+
+      if (error || !data?.success) {
+        toast({ title: "Break Failed", description: data?.error || "Please try again.", variant: "destructive" });
+        return;
+      }
       toast({ title: "Break Started", description: "Break time recorded." });
     } finally {
       setIsProcessing(false);
