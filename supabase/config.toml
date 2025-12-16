@@ -47,3 +47,6 @@ verify_jwt = true
 
 [functions.migrate-timeclock-photos]
 verify_jwt = true
+
+[functions.clock-in-out]
+verify_jwt = false
