@@ -12,6 +12,7 @@ import { PlatformRoute } from "@/components/routing/PlatformRoute";
 
 import Index from "./pages/Index";
 import Login from "./pages/Login";
+import MobileLogin from "./pages/mobile/MobileLogin";
 import CompanySignup from "./pages/CompanySignup";
 import Dashboard from "./pages/Dashboard";
 import Timeclock from "./pages/Timeclock";
@@ -47,7 +48,7 @@ const App = () => (
                 {/* Public Routes */}
                 <Route path="/" element={<Index />} />
                 <Route path="/signup" element={<CompanySignup />} />
-                <Route path="/login" element={<Login />} />
+                <Route path="/login" element={<PlatformRoute web={<Login />} mobile={<MobileLogin />} />} />
                 <Route path="/company-signup" element={<CompanySignup />} />
                 <Route path="/features" element={<Features />} />
                 <Route path="/pricing" element={<Pricing />} />
