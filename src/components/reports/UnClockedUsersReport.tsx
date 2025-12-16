@@ -31,6 +31,8 @@ export const UnClockedUsersReport: React.FC<UnClockedUsersReportProps> = ({
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
+    let isMounted = true;
+    
     const fetchUnclockedUsers = async () => {
       if (!company?.id) return;
 
@@ -40,7 +42,7 @@ export const UnClockedUsersReport: React.FC<UnClockedUsersReportProps> = ({
       const endOfDay = new Date(date);
       endOfDay.setHours(23, 59, 59, 999);
 
-      // Get all active profiles for the company
+      // Get all active profiles for the company (include ALL employees, not just those with user_id)
       const { data: allProfiles } = await supabase
         .from('profiles')
         .select(`
@@ -54,26 +56,39 @@ export const UnClockedUsersReport: React.FC<UnClockedUsersReportProps> = ({
         .eq('company_id', company.id)
         .eq('status', 'active');
 
-      // Get all users who have clocked in today
+      // Get all time entries for today - check both profile_id and user_id
       const { data: timeEntries } = await supabase
         .from('time_entries')
-        .select('user_id')
+        .select('user_id, profile_id')
         .eq('company_id', company.id)
         .gte('start_time', startOfDay.toISOString())
         .lte('start_time', endOfDay.toISOString());
 
-      const clockedInUserIds = new Set(timeEntries?.map(e => e.user_id) || []);
+      // Build sets for both profile_id and user_id matches
+      const clockedInProfileIds = new Set(timeEntries?.map(e => e.profile_id).filter(Boolean) || []);
+      const clockedInUserIds = new Set(timeEntries?.map(e => e.user_id).filter(Boolean) || []);
 
-      // Filter out users who have clocked in
-      const unclocked = (allProfiles || []).filter(
-        profile => profile.user_id && !clockedInUserIds.has(profile.user_id)
-      );
+      // Filter out employees who have clocked in (check by profile_id OR user_id)
+      const unclocked = (allProfiles || []).filter(profile => {
+        // Check if this profile has clocked in via profile_id match
+        if (clockedInProfileIds.has(profile.id)) return false;
+        // Check if this profile has clocked in via user_id match (for legacy entries)
+        if (profile.user_id && clockedInUserIds.has(profile.user_id)) return false;
+        // Employee hasn't clocked in
+        return true;
+      });
 
-      setUnclockedUsers(unclocked as any);
-      setLoading(false);
+      if (isMounted) {
+        setUnclockedUsers(unclocked as any);
+        setLoading(false);
+      }
     };
 
     fetchUnclockedUsers();
+    
+    return () => {
+      isMounted = false;
+    };
   }, [company?.id, date]);
 
   const getEmployeeName = (profile: Profile) => {
