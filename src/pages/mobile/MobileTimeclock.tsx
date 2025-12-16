@@ -72,14 +72,29 @@ const MobileTimeclock = () => {
   }, [authenticatedEmployee, company]);
 
   const handleBadgeScan = async (scannedValue: string) => {
+    // Guard: ensure company is loaded before processing
+    if (!company?.id) {
+      toast({ 
+        title: "Loading", 
+        description: "Please wait for company data to load", 
+        variant: "destructive" 
+      });
+      return;
+    }
+
     setScanningBadge(true);
     try {
       const profileId = scannedValue.includes('/badge/') 
         ? scannedValue.split('/badge/')[1].split('?')[0] 
         : scannedValue;
 
+      if (!profileId) {
+        toast({ title: "Invalid Badge", description: "Could not read badge ID", variant: "destructive" });
+        return;
+      }
+
       const { data, error } = await supabase.functions.invoke('verify-badge', {
-        body: { profile_id: profileId, company_id: company?.id }
+        body: { profile_id: profileId, company_id: company.id }
       });
 
       if (error || !data?.valid) {
