@@ -122,18 +122,30 @@ const MobileTimeclock = () => {
   const performClockIn = async (photoUrl?: string) => {
     if (!authenticatedEmployee || !company) return;
     setIsProcessing(true);
+    
+    console.log('=== CLOCK IN START ===');
+    console.log('Employee:', authenticatedEmployee.id, authenticatedEmployee.display_name);
+    console.log('Company:', company.id);
+    console.log('Photo URL:', photoUrl);
+    
     try {
+      const requestBody = {
+        action: 'clock_in',
+        profile_id: authenticatedEmployee.id,
+        company_id: company.id,
+        photo_url: photoUrl
+      };
+      console.log('Request body:', requestBody);
+      
       const { data, error } = await supabase.functions.invoke('clock-in-out', {
-        body: {
-          action: 'clock_in',
-          profile_id: authenticatedEmployee.id,
-          company_id: company.id,
-          photo_url: photoUrl
-        }
+        body: requestBody
       });
 
+      console.log('Response data:', data);
+      console.log('Response error:', error);
+
       if (error || !data?.success) {
-        console.error('Clock in error:', error || data?.error);
+        console.error('Clock in failed:', error || data?.error);
         toast({ 
           title: "Clock In Failed", 
           description: data?.error || "Please try again.", 
@@ -142,13 +154,22 @@ const MobileTimeclock = () => {
         return;
       }
 
+      console.log('Clock in successful, time entry:', data.data);
       setActiveTimeEntry(data.data);
       setClockStatus('in');
       toast({ title: "Clocked In", description: "You have successfully clocked in." });
       // Auto-reset to badge scan after delay
       setTimeout(() => handleSignOut(), 1500);
+    } catch (err) {
+      console.error('Clock in exception:', err);
+      toast({ 
+        title: "Clock In Failed", 
+        description: "An unexpected error occurred.", 
+        variant: "destructive" 
+      });
     } finally {
       setIsProcessing(false);
+      console.log('=== CLOCK IN END ===');
     }
   };
 
@@ -164,19 +185,32 @@ const MobileTimeclock = () => {
   const performClockOut = async (photoUrl?: string) => {
     if (!authenticatedEmployee || !company) return;
     setIsProcessing(true);
+    
+    console.log('=== CLOCK OUT START ===');
+    console.log('Employee:', authenticatedEmployee.id, authenticatedEmployee.display_name);
+    console.log('Company:', company.id);
+    console.log('Time Entry ID:', activeTimeEntry?.id);
+    console.log('Photo URL:', photoUrl);
+    
     try {
+      const requestBody = {
+        action: 'clock_out',
+        profile_id: authenticatedEmployee.id,
+        company_id: company.id,
+        photo_url: photoUrl,
+        time_entry_id: activeTimeEntry?.id
+      };
+      console.log('Request body:', requestBody);
+      
       const { data, error } = await supabase.functions.invoke('clock-in-out', {
-        body: {
-          action: 'clock_out',
-          profile_id: authenticatedEmployee.id,
-          company_id: company.id,
-          photo_url: photoUrl,
-          time_entry_id: activeTimeEntry?.id
-        }
+        body: requestBody
       });
 
+      console.log('Response data:', data);
+      console.log('Response error:', error);
+
       if (error || !data?.success) {
-        console.error('Clock out error:', error || data?.error);
+        console.error('Clock out failed:', error || data?.error);
         toast({ 
           title: "Clock Out Failed", 
           description: data?.error || "Please try again.", 
@@ -185,13 +219,22 @@ const MobileTimeclock = () => {
         return;
       }
 
+      console.log('Clock out successful');
       setActiveTimeEntry(null);
       setClockStatus('out');
       toast({ title: "Clocked Out", description: "You have successfully clocked out." });
       // Auto-reset to badge scan after delay
       setTimeout(() => handleSignOut(), 1500);
+    } catch (err) {
+      console.error('Clock out exception:', err);
+      toast({ 
+        title: "Clock Out Failed", 
+        description: "An unexpected error occurred.", 
+        variant: "destructive" 
+      });
     } finally {
       setIsProcessing(false);
+      console.log('=== CLOCK OUT END ===');
     }
   };
 
@@ -227,10 +270,11 @@ const MobileTimeclock = () => {
   };
 
   const handleSignOut = () => {
+    console.log('=== RESETTING FOR NEXT EMPLOYEE ===');
     setAuthenticatedEmployee(null);
     setActiveTimeEntry(null);
     setClockStatus('out');
-    setShowBadgeScanner(false);
+    setShowBadgeScanner(true); // Show scanner immediately for next employee
   };
 
   return (
