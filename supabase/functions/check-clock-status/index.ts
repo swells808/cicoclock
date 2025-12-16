@@ -12,11 +12,12 @@ serve(async (req) => {
   }
 
   try {
-    const { user_id, company_id } = await req.json();
+    const { user_id, profile_id, company_id } = await req.json();
 
-    if (!user_id || !company_id) {
+    // Support both user_id and profile_id for employees without auth accounts
+    if ((!user_id && !profile_id) || !company_id) {
       return new Response(
-        JSON.stringify({ error: 'user_id and company_id are required' }),
+        JSON.stringify({ error: 'user_id or profile_id and company_id are required' }),
         { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
       );
     }
@@ -25,15 +26,23 @@ serve(async (req) => {
     const supabaseServiceKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
     const supabase = createClient(supabaseUrl, supabaseServiceKey);
 
-    const { data: activeEntry, error } = await supabase
+    // Build query based on what identifier we have
+    let query = supabase
       .from('time_entries')
       .select('*, projects(name)')
-      .eq('user_id', user_id)
       .eq('company_id', company_id)
       .is('end_time', null)
       .order('start_time', { ascending: false })
-      .limit(1)
-      .maybeSingle();
+      .limit(1);
+
+    // Query by profile_id if provided, otherwise by user_id
+    if (profile_id) {
+      query = query.eq('profile_id', profile_id);
+    } else {
+      query = query.eq('user_id', user_id);
+    }
+
+    const { data: activeEntry, error } = await query.maybeSingle();
 
     if (error) {
       console.error('Error checking clock status:', error);
@@ -43,10 +52,20 @@ serve(async (req) => {
       );
     }
 
+    console.log('Clock status check:', { 
+      user_id, 
+      profile_id, 
+      company_id, 
+      clocked_in: !!activeEntry,
+      entry_id: activeEntry?.id 
+    });
+
     return new Response(
       JSON.stringify({
         is_clocked_in: !!activeEntry,
-        active_entry: activeEntry
+        clocked_in: !!activeEntry,
+        active_entry: activeEntry,
+        time_entry: activeEntry
       }),
       { status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
     );
