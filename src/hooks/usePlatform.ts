@@ -9,15 +9,37 @@ interface PlatformInfo {
 }
 
 export const usePlatform = (): PlatformInfo => {
-  const [platformInfo, setPlatformInfo] = useState<PlatformInfo>({
-    isNative: false,
-    isIOS: false,
-    isAndroid: false,
-    isWeb: true,
-    platform: 'web',
+  const [platformInfo, setPlatformInfo] = useState<PlatformInfo>(() => {
+    // Check for ?mobile=true URL parameter for dev testing
+    const urlParams = new URLSearchParams(window.location.search);
+    const forceMobile = urlParams.get('mobile') === 'true';
+    
+    if (forceMobile) {
+      return {
+        isNative: true,
+        isIOS: false,
+        isAndroid: true, // Simulate Android for testing
+        isWeb: false,
+        platform: 'android',
+      };
+    }
+    
+    return {
+      isNative: false,
+      isIOS: false,
+      isAndroid: false,
+      isWeb: true,
+      platform: 'web',
+    };
   });
 
   useEffect(() => {
+    // Skip Capacitor detection if mobile preview mode is active
+    const urlParams = new URLSearchParams(window.location.search);
+    if (urlParams.get('mobile') === 'true') {
+      return;
+    }
+
     const detectPlatform = async () => {
       try {
         const { Capacitor } = await import('@capacitor/core');
