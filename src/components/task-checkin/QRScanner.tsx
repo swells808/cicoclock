@@ -72,9 +72,14 @@ export const QRScanner = ({
   };
 
   const stopScanning = () => {
-    if (qrScannerRef.current) {
-      qrScannerRef.current.stop();
-      qrScannerRef.current.destroy();
+    const scanner = qrScannerRef.current;
+    if (scanner) {
+      try {
+        scanner.stop();
+        scanner.destroy();
+      } catch (e) {
+        console.warn('Error stopping QR scanner:', e);
+      }
       qrScannerRef.current = null;
     }
     setIsScanning(false);
@@ -89,10 +94,20 @@ export const QRScanner = ({
     }
   };
 
-  // Cleanup on unmount
+  // Cleanup on unmount - use ref directly to avoid closure issues
   useEffect(() => {
+    const scannerRef = qrScannerRef;
     return () => {
-      stopScanning();
+      const scanner = scannerRef.current;
+      if (scanner) {
+        try {
+          scanner.stop();
+          scanner.destroy();
+        } catch (e) {
+          console.warn('Error cleaning up QR scanner on unmount:', e);
+        }
+        scannerRef.current = null;
+      }
     };
   }, []);
 
