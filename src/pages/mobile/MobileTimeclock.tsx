@@ -142,6 +142,8 @@ const MobileTimeclock = () => {
       setActiveTimeEntry(data);
       setClockStatus('in');
       toast({ title: "Clocked In", description: "You have successfully clocked in." });
+      // Auto-reset to badge scan after delay
+      setTimeout(() => handleSignOut(), 1500);
     } finally {
       setIsProcessing(false);
     }
@@ -180,6 +182,8 @@ const MobileTimeclock = () => {
       setActiveTimeEntry(null);
       setClockStatus('out');
       toast({ title: "Clocked Out", description: "You have successfully clocked out." });
+      // Auto-reset to badge scan after delay
+      setTimeout(() => handleSignOut(), 1500);
     } finally {
       setIsProcessing(false);
     }
