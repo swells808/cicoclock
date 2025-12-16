@@ -94,28 +94,67 @@ const MobileTimeclock = () => {
   };
 
   const uploadPhoto = async (photoBlob: Blob, action: 'clock_in' | 'clock_out'): Promise<string | null> => {
-    if (!company || !authenticatedEmployee) return null;
+    console.log('=== UPLOAD PHOTO START ===');
+    console.log('Action:', action);
+    console.log('Blob size:', photoBlob.size);
+    
+    if (!company || !authenticatedEmployee) {
+      console.error('Upload photo: Missing company or employee');
+      return null;
+    }
     try {
       const timestamp = new Date().toISOString().replace(/:/g, '-').replace(/\./g, '-');
       const identifier = authenticatedEmployee.user_id || authenticatedEmployee.id;
       const actionPath = action === 'clock_in' ? 'clock-in' : 'clock-out';
       const filePath = `${company.id}/${actionPath}/${timestamp}_${identifier}.jpg`;
+      console.log('Uploading to path:', filePath);
+      
       const { error } = await supabase.storage
         .from('timeclock-photos')
         .upload(filePath, photoBlob, { contentType: 'image/jpeg', upsert: false });
-      if (error) throw error;
+      
+      if (error) {
+        console.error('Storage upload error:', error);
+        throw error;
+      }
+      console.log('Upload successful:', filePath);
       return filePath;
     } catch (err) {
-      console.error('Photo upload error:', err);
+      console.error('Photo upload exception:', err);
       return null;
     }
   };
 
   const handlePhotoCapture = async (photoBlob: Blob) => {
+    console.log('=== HANDLE PHOTO CAPTURE ===');
+    console.log('Photo blob received:', photoBlob);
+    console.log('Photo action:', photoAction);
+    
     const photoUrl = await uploadPhoto(photoBlob, photoAction!);
+    console.log('Photo URL after upload:', photoUrl);
+    
     setShowPhotoCapture(false);
-    if (photoAction === 'clock_in') await performClockIn(photoUrl || undefined);
-    else if (photoAction === 'clock_out') await performClockOut(photoUrl || undefined);
+    if (photoAction === 'clock_in') {
+      console.log('Calling performClockIn with photo');
+      await performClockIn(photoUrl || undefined);
+    } else if (photoAction === 'clock_out') {
+      console.log('Calling performClockOut with photo');
+      await performClockOut(photoUrl || undefined);
+    }
+    setPhotoAction(null);
+  };
+
+  // Bypass photo and clock in/out directly (for debugging)
+  const handleSkipPhoto = async () => {
+    console.log('=== SKIP PHOTO PRESSED ===');
+    setShowPhotoCapture(false);
+    if (photoAction === 'clock_in') {
+      console.log('Skipping photo, calling performClockIn directly');
+      await performClockIn();
+    } else if (photoAction === 'clock_out') {
+      console.log('Skipping photo, calling performClockOut directly');
+      await performClockOut();
+    }
     setPhotoAction(null);
   };
 
@@ -174,10 +213,15 @@ const MobileTimeclock = () => {
   };
 
   const handleClockIn = async () => {
+    console.log('=== HANDLE CLOCK IN ===');
+    console.log('Photo capture enabled:', companyFeatures?.photo_capture);
+    
     if (companyFeatures?.photo_capture) {
+      console.log('Opening photo capture modal for clock_in');
       setPhotoAction('clock_in');
       setShowPhotoCapture(true);
     } else {
+      console.log('No photo required, calling performClockIn directly');
       await performClockIn();
     }
   };
@@ -239,10 +283,15 @@ const MobileTimeclock = () => {
   };
 
   const handleClockOut = async () => {
+    console.log('=== HANDLE CLOCK OUT ===');
+    console.log('Photo capture enabled:', companyFeatures?.photo_capture);
+    
     if (companyFeatures?.photo_capture) {
+      console.log('Opening photo capture modal for clock_out');
       setPhotoAction('clock_out');
       setShowPhotoCapture(true);
     } else {
+      console.log('No photo required, calling performClockOut directly');
       await performClockOut();
     }
   };
@@ -409,6 +458,7 @@ const MobileTimeclock = () => {
         open={showPhotoCapture}
         onCapture={handlePhotoCapture}
         onCancel={() => { setShowPhotoCapture(false); setPhotoAction(null); }}
+        onSkip={handleSkipPhoto}
         title={photoAction === 'clock_in' ? "Clock In Photo" : "Clock Out Photo"}
         description={photoAction === 'clock_in' 
           ? "Please take a photo to verify your clock in" 
