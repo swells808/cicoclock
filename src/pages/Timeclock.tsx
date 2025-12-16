@@ -77,38 +77,55 @@ const Timeclock = () => {
   const handlePinCancel = () => { setShowPinInput(false); setSelectedEmployee(""); setPinError(null); };
 
   const handleBadgeScan = async (scannedValue: string) => {
+    console.log('[Timeclock] handleBadgeScan called with:', scannedValue);
+    
     // Guard: ensure company is loaded
     if (!company?.id) {
+      console.log('[Timeclock] Company not loaded yet');
       toast({ title: "Loading", description: "Please wait for company data to load", variant: "destructive" });
       return;
     }
 
     setScanningBadge(true);
     try {
+      // Extract profileId from badge URL or use raw value
       const profileId = scannedValue.includes('/badge/') 
-        ? scannedValue.split('/badge/')[1].split('?')[0] 
-        : scannedValue;
+        ? scannedValue.split('/badge/')[1].split('?')[0].trim()
+        : scannedValue.trim();
+
+      console.log('[Timeclock] Extracted profileId:', profileId);
+      console.log('[Timeclock] Company ID:', company.id);
 
       if (!profileId) {
         toast({ title: "Invalid Badge", description: "Could not read badge ID", variant: "destructive" });
         return;
       }
 
+      console.log('[Timeclock] Calling verify-badge with:', { profile_id: profileId, company_id: company.id });
+      
       const { data, error } = await supabase.functions.invoke('verify-badge', { 
         body: { profile_id: profileId, company_id: company.id } 
       });
+      
+      console.log('[Timeclock] verify-badge response:', { data, error });
 
       if (error || !data?.valid) { 
+        console.log('[Timeclock] Badge validation failed:', { error, valid: data?.valid, dataError: data?.error });
         toast({ title: "Invalid Badge", description: data?.error || "Badge not found or inactive", variant: "destructive" }); 
         return; 
       }
 
+      console.log('[Timeclock] Badge verified, looking for employee with id:', profileId);
+      console.log('[Timeclock] Available employees:', employees.map(e => ({ id: e.id, name: e.display_name })));
+      
       const employee = employees.find(emp => emp.id === profileId);
       if (!employee) { 
+        console.log('[Timeclock] Employee not found in local list');
         toast({ title: "Employee Not Found", description: "This badge is not associated with an active employee", variant: "destructive" }); 
         return; 
       }
 
+      console.log('[Timeclock] Found employee:', employee);
       setSelectedEmployee(employee.id); 
       setShowBadgeScanner(false);
       toast({ title: "Badge Verified", description: `Welcome, ${employee.display_name}!` });
@@ -118,6 +135,7 @@ const Timeclock = () => {
         setAuthenticatedEmployee(employee); 
       }
     } catch (error) { 
+      console.error('[Timeclock] Badge scan error:', error);
       toast({ title: "Scan Error", description: "Failed to verify badge. Please try again.", variant: "destructive" }); 
     } finally { 
       setScanningBadge(false); 
