@@ -76,18 +76,52 @@ const Timeclock = () => {
 
   const handlePinCancel = () => { setShowPinInput(false); setSelectedEmployee(""); setPinError(null); };
 
-  const handleBadgeScan = async (badgeId: string) => {
+  const handleBadgeScan = async (scannedValue: string) => {
+    // Guard: ensure company is loaded
+    if (!company?.id) {
+      toast({ title: "Loading", description: "Please wait for company data to load", variant: "destructive" });
+      return;
+    }
+
     setScanningBadge(true);
     try {
-      const { data, error } = await supabase.functions.invoke('verify-badge', { body: { badgeId } });
-      if (error || !data.success) { toast({ title: "Invalid Badge", description: "Badge not found or inactive", variant: "destructive" }); return; }
-      const employee = employees.find(emp => emp.id === data.user.profileId);
-      if (!employee) { toast({ title: "Employee Not Found", description: "This badge is not associated with an active employee", variant: "destructive" }); return; }
-      setSelectedEmployee(employee.id); setShowBadgeScanner(false);
+      const profileId = scannedValue.includes('/badge/') 
+        ? scannedValue.split('/badge/')[1].split('?')[0] 
+        : scannedValue;
+
+      if (!profileId) {
+        toast({ title: "Invalid Badge", description: "Could not read badge ID", variant: "destructive" });
+        return;
+      }
+
+      const { data, error } = await supabase.functions.invoke('verify-badge', { 
+        body: { profile_id: profileId, company_id: company.id } 
+      });
+
+      if (error || !data?.valid) { 
+        toast({ title: "Invalid Badge", description: data?.error || "Badge not found or inactive", variant: "destructive" }); 
+        return; 
+      }
+
+      const employee = employees.find(emp => emp.id === profileId);
+      if (!employee) { 
+        toast({ title: "Employee Not Found", description: "This badge is not associated with an active employee", variant: "destructive" }); 
+        return; 
+      }
+
+      setSelectedEmployee(employee.id); 
+      setShowBadgeScanner(false);
       toast({ title: "Badge Verified", description: `Welcome, ${employee.display_name}!` });
-      if (employee.pin && isPinRequired) { setShowPinInput(true); } else { setAuthenticatedEmployee(employee); }
-    } catch (error) { toast({ title: "Scan Error", description: "Failed to verify badge. Please try again.", variant: "destructive" }); }
-    finally { setScanningBadge(false); }
+      if (employee.pin && isPinRequired) { 
+        setShowPinInput(true); 
+      } else { 
+        setAuthenticatedEmployee(employee); 
+      }
+    } catch (error) { 
+      toast({ title: "Scan Error", description: "Failed to verify badge. Please try again.", variant: "destructive" }); 
+    } finally { 
+      setScanningBadge(false); 
+    }
   };
 
   const uploadPhoto = async (photoBlob: Blob, action: 'clock_in' | 'clock_out'): Promise<string> => {
