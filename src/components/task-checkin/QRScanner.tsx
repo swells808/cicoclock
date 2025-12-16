@@ -11,6 +11,7 @@ interface QRScannerProps {
   onScan: (value: string) => void;
   isLoading?: boolean;
   placeholder?: string;
+  autoStart?: boolean; // Auto-start camera scanning
 }
 
 export const QRScanner = ({
@@ -18,13 +19,15 @@ export const QRScanner = ({
   description,
   onScan,
   isLoading = false,
-  placeholder = "Enter ID or scan QR code"
+  placeholder = "Enter ID or scan QR code",
+  autoStart = false
 }: QRScannerProps) => {
   const [inputValue, setInputValue] = useState('');
   const [isScanning, setIsScanning] = useState(false);
   const [scanError, setScanError] = useState<string | null>(null);
   const videoRef = useRef<HTMLVideoElement>(null);
   const qrScannerRef = useRef<any>(null);
+  const hasAutoStarted = useRef(false);
 
   const handleSubmit = () => {
     if (inputValue.trim()) {
@@ -44,7 +47,6 @@ export const QRScanner = ({
 
     try {
       setScanError(null);
-      // Dynamically import QrScanner to avoid SSR issues
       const QrScanner = (await import('qr-scanner')).default;
       
       const qrScanner = new QrScanner(
@@ -84,16 +86,25 @@ export const QRScanner = ({
       stopScanning();
     } else {
       setIsScanning(true);
-      startScanning();
     }
   };
 
+  // Cleanup on unmount
   useEffect(() => {
     return () => {
       stopScanning();
     };
   }, []);
 
+  // Auto-start scanning on mount if enabled
+  useEffect(() => {
+    if (autoStart && !hasAutoStarted.current && !isScanning) {
+      hasAutoStarted.current = true;
+      setIsScanning(true);
+    }
+  }, [autoStart]);
+
+  // Start scanning when isScanning becomes true
   useEffect(() => {
     if (isScanning && videoRef.current && !qrScannerRef.current) {
       startScanning();
@@ -107,48 +118,9 @@ export const QRScanner = ({
         <p className="text-muted-foreground">{description}</p>
       </CardHeader>
       <CardContent className="space-y-4">
-        <div className="space-y-2">
-          <Label htmlFor="qr-input">ID or QR Code</Label>
-          <Input
-            id="qr-input"
-            type="text"
-            placeholder={placeholder}
-            value={inputValue}
-            onChange={(e) => setInputValue(e.target.value)}
-            onKeyPress={handleKeyPress}
-            disabled={isLoading}
-            className="text-center"
-          />
-        </div>
-
-        <div className="flex flex-col gap-2">
-          <Button
-            onClick={handleSubmit}
-            disabled={!inputValue.trim() || isLoading}
-            className="w-full"
-          >
-            {isLoading ? 'Processing...' : 'Submit'}
-          </Button>
-
-          <Button
-            variant="outline"
-            onClick={toggleScanning}
-            disabled={isLoading}
-            className="w-full"
-          >
-            <QrCode className="w-4 h-4 mr-2" />
-            {isScanning ? 'Cancel Scan' : 'Scan QR Code'}
-          </Button>
-        </div>
-
-        {scanError && (
-          <div className="mt-4 p-3 bg-destructive/10 border border-destructive/20 rounded-lg">
-            <p className="text-sm text-destructive text-center">{scanError}</p>
-          </div>
-        )}
-
+        {/* Show video first when scanning for better UX */}
         {isScanning && (
-          <div className="mt-4 relative">
+          <div className="relative">
             <div className="relative overflow-hidden rounded-lg bg-black">
               <video
                 ref={videoRef}
@@ -179,6 +151,48 @@ export const QRScanner = ({
             </div>
           </div>
         )}
+
+        {scanError && (
+          <div className="p-3 bg-destructive/10 border border-destructive/20 rounded-lg">
+            <p className="text-sm text-destructive text-center">{scanError}</p>
+          </div>
+        )}
+
+        <div className="space-y-2">
+          <Label htmlFor="qr-input">ID or QR Code</Label>
+          <Input
+            id="qr-input"
+            type="text"
+            placeholder={placeholder}
+            value={inputValue}
+            onChange={(e) => setInputValue(e.target.value)}
+            onKeyPress={handleKeyPress}
+            disabled={isLoading}
+            className="text-center"
+          />
+        </div>
+
+        <div className="flex flex-col gap-2">
+          <Button
+            onClick={handleSubmit}
+            disabled={!inputValue.trim() || isLoading}
+            className="w-full"
+          >
+            {isLoading ? 'Processing...' : 'Submit'}
+          </Button>
+
+          {!isScanning && (
+            <Button
+              variant="outline"
+              onClick={toggleScanning}
+              disabled={isLoading}
+              className="w-full"
+            >
+              <QrCode className="w-4 h-4 mr-2" />
+              Scan QR Code
+            </Button>
+          )}
+        </div>
       </CardContent>
     </Card>
   );
