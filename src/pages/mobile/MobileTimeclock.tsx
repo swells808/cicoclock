@@ -34,10 +34,10 @@ const MobileTimeclock = () => {
     return () => clearInterval(timer);
   }, []);
 
-  // Check clock status when employee is authenticated
+  // Check clock status when employee is authenticated and auto-trigger action
   useEffect(() => {
-    const checkActiveTimeEntry = async () => {
-      if (!authenticatedEmployee || !company) return;
+    const checkAndTriggerAction = async () => {
+      if (!authenticatedEmployee || !company || hasTriggeredAction.current) return;
       
       setClockStatus('checking');
       
@@ -48,36 +48,28 @@ const MobileTimeclock = () => {
         }
       });
       
+      // Prevent double-trigger
+      if (hasTriggeredAction.current) return;
+      hasTriggeredAction.current = true;
+      
       if (data?.clocked_in && data?.time_entry) {
         setActiveTimeEntry(data.time_entry);
         setClockStatus('in');
+        // Auto-trigger clock out
+        handleClockOut();
       } else {
         setActiveTimeEntry(null);
         setClockStatus('out');
+        // Auto-trigger clock in
+        handleClockIn();
       }
     };
     
     if (authenticatedEmployee) {
       hasTriggeredAction.current = false;
-      checkActiveTimeEntry();
+      checkAndTriggerAction();
     }
   }, [authenticatedEmployee, company]);
-
-  // Auto-trigger clock action once status is determined
-  useEffect(() => {
-    if (!authenticatedEmployee || clockStatus === 'checking' || hasTriggeredAction.current) {
-      return;
-    }
-
-    // Auto-trigger the appropriate action
-    hasTriggeredAction.current = true;
-    
-    if (clockStatus === 'out') {
-      handleClockIn();
-    } else {
-      handleClockOut();
-    }
-  }, [authenticatedEmployee, clockStatus]);
 
   const handleBadgeScan = async (scannedValue: string) => {
     setScanningBadge(true);
