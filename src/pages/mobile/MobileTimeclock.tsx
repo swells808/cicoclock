@@ -7,30 +7,21 @@ import { useToast } from "@/hooks/use-toast";
 import { MobileLayout } from "./MobileLayout";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
-import { 
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
-import { Clock, LogIn, LogOut, Coffee, User, CheckCircle } from "lucide-react";
+import { Clock, LogIn, LogOut, Coffee, User, CheckCircle, QrCode } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { PhotoCapture } from "@/components/timeclock/PhotoCapture";
-import { PinInput } from "@/components/timeclock/PinInput";
+import { QRScanner } from "@/components/task-checkin/QRScanner";
 
 const MobileTimeclock = () => {
   const { t } = useLanguage();
   const { company, companyFeatures } = useCompany();
-  const { employees, loading: employeesLoading, authenticatePin } = useEmployees();
+  const { employees, loading: employeesLoading } = useEmployees();
   const { toast } = useToast();
 
   const [currentTime, setCurrentTime] = useState(new Date());
-  const [selectedEmployee, setSelectedEmployee] = useState("");
   const [authenticatedEmployee, setAuthenticatedEmployee] = useState<any>(null);
-  const [showPinInput, setShowPinInput] = useState(false);
-  const [checkingPin, setCheckingPin] = useState(false);
-  const [pinError, setPinError] = useState<string | null>(null);
+  const [showBadgeScanner, setShowBadgeScanner] = useState(false);
+  const [scanningBadge, setScanningBadge] = useState(false);
   const [activeTimeEntry, setActiveTimeEntry] = useState<any>(null);
   const [clockStatus, setClockStatus] = useState<'out' | 'in'>('out');
   const [showPhotoCapture, setShowPhotoCapture] = useState(false);
@@ -65,47 +56,41 @@ const MobileTimeclock = () => {
     checkActiveTimeEntry();
   }, [authenticatedEmployee]);
 
-  const isPinRequired = companyFeatures?.employee_pin;
-
-  const handleEmployeeSelect = (employeeId: string) => {
-    setSelectedEmployee(employeeId);
-    setAuthenticatedEmployee(null);
-    setPinError(null);
-    const employee = employees.find(emp => emp.id === employeeId);
-    if (employee && employee.pin && isPinRequired) {
-      setShowPinInput(true);
-    } else {
-      setAuthenticatedEmployee(employee);
-    }
-  };
-
-  const handlePinEntered = async (pin: string): Promise<boolean> => {
-    if (!selectedEmployee) return false;
-    setCheckingPin(true);
-    setPinError(null);
+  const handleBadgeScan = async (scannedValue: string) => {
+    setScanningBadge(true);
     try {
-      const success = await authenticatePin(selectedEmployee, pin);
-      if (success) {
-        const employee = employees.find(emp => emp.id === selectedEmployee);
-        setAuthenticatedEmployee(employee);
-        setShowPinInput(false);
-        return true;
-      } else {
-        setPinError("Invalid PIN. Please try again.");
-        return false;
-      }
-    } catch {
-      setPinError("Authentication failed. Please try again.");
-      return false;
-    } finally {
-      setCheckingPin(false);
-    }
-  };
+      // Extract profile_id from badge URL (format: .../badge/{profile_id})
+      const profileId = scannedValue.includes('/badge/') 
+        ? scannedValue.split('/badge/')[1].split('?')[0] 
+        : scannedValue;
 
-  const handlePinCancel = () => {
-    setShowPinInput(false);
-    setSelectedEmployee("");
-    setPinError(null);
+      const { data, error } = await supabase.functions.invoke('verify-badge', {
+        body: { profile_id: profileId, company_id: company?.id }
+      });
+
+      if (error || !data?.valid) {
+        toast({ 
+          title: "Invalid Badge", 
+          description: data?.error || "Badge verification failed", 
+          variant: "destructive" 
+        });
+        return;
+      }
+
+      // Find matching employee and authenticate directly
+      const employee = employees.find(emp => emp.id === profileId);
+      if (employee) {
+        setAuthenticatedEmployee(employee);
+        setShowBadgeScanner(false);
+        toast({ title: "Badge Verified", description: `Welcome, ${data.employee.name}!` });
+      } else {
+        toast({ title: "Employee Not Found", description: "Please try again", variant: "destructive" });
+      }
+    } catch (err) {
+      toast({ title: "Scan Error", description: "Failed to verify badge", variant: "destructive" });
+    } finally {
+      setScanningBadge(false);
+    }
   };
 
   const uploadPhoto = async (photoBlob: Blob, action: 'clock_in' | 'clock_out'): Promise<string> => {
@@ -230,55 +215,46 @@ const MobileTimeclock = () => {
 
   const handleSignOut = () => {
     setAuthenticatedEmployee(null);
-    setSelectedEmployee("");
     setActiveTimeEntry(null);
     setClockStatus('out');
+    setShowBadgeScanner(false);
   };
-
-  // PIN Input View
-  if (showPinInput) {
-    return (
-      <MobileLayout title="Enter PIN" currentTime={currentTime} showBottomNav={false}>
-        <div className="p-4">
-          <PinInput
-            onPinEntered={handlePinEntered}
-            employeeName={employees.find(emp => emp.id === selectedEmployee)?.display_name || "Employee"}
-            loading={checkingPin}
-            error={pinError}
-            onCancel={handlePinCancel}
-          />
-        </div>
-      </MobileLayout>
-    );
-  }
 
   return (
     <MobileLayout title="Time Clock" currentTime={currentTime}>
       <div className="p-4 space-y-4">
         {/* Employee Selection / Status */}
         {!authenticatedEmployee ? (
-          <Card className="p-4">
-            <div className="flex items-center gap-3 mb-4">
-              <User className="h-5 w-5 text-muted-foreground" />
-              <span className="font-medium">Select Employee</span>
-            </div>
-            <Select
-              value={selectedEmployee}
-              onValueChange={handleEmployeeSelect}
-              disabled={employeesLoading}
-            >
-              <SelectTrigger className="h-14 text-lg">
-                <SelectValue placeholder="Choose your name..." />
-              </SelectTrigger>
-              <SelectContent>
-                {employees.map((emp) => (
-                  <SelectItem key={emp.id} value={emp.id} className="py-3">
-                    {emp.display_name || `${emp.first_name} ${emp.last_name}`}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-          </Card>
+          <div className="space-y-4">
+            {showBadgeScanner ? (
+              <>
+                <QRScanner
+                  title="Scan Your Badge"
+                  description="Point camera at your employee badge QR code"
+                  onScan={handleBadgeScan}
+                  isLoading={scanningBadge}
+                  placeholder="Enter badge ID manually"
+                />
+                <Button
+                  variant="ghost"
+                  onClick={() => setShowBadgeScanner(false)}
+                  className="w-full"
+                >
+                  Cancel
+                </Button>
+              </>
+            ) : (
+              <Button
+                onClick={() => setShowBadgeScanner(true)}
+                className="w-full h-20 text-xl"
+                variant="outline"
+                disabled={employeesLoading}
+              >
+                <QrCode className="h-8 w-8 mr-3" />
+                Scan Badge to Clock In
+              </Button>
+            )}
+          </div>
         ) : (
           <>
             {/* Authenticated Employee Card */}
