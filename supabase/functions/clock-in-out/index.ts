@@ -52,25 +52,19 @@ serve(async (req) => {
       );
     }
 
-    // For time_entries, we need user_id - check if profile has one
-    if (!profile.user_id) {
-      console.error('Profile has no user_id:', profile_id);
-      return new Response(
-        JSON.stringify({ success: false, error: 'Employee does not have a linked user account. Please contact admin.' }),
-        { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
-      );
-    }
+    // For employees without user_id, we'll use profile_id as the user_id fallback
+    const effectiveUserId = profile.user_id || profile_id;
 
     if (action === 'clock_in') {
-      // Check if already clocked in
+      // Check if already clocked in using profile_id (more reliable)
       const { data: existingEntry } = await supabase
         .from('time_entries')
         .select('id')
-        .eq('user_id', profile.user_id)
+        .eq('profile_id', profile_id)
         .eq('company_id', company_id)
         .is('end_time', null)
         .limit(1)
-        .single();
+        .maybeSingle();
 
       if (existingEntry) {
         return new Response(
@@ -79,11 +73,12 @@ serve(async (req) => {
         );
       }
 
-      // Create new time entry
+      // Create new time entry with both user_id and profile_id
       const { data: newEntry, error: insertError } = await supabase
         .from('time_entries')
         .insert({
-          user_id: profile.user_id,
+          user_id: effectiveUserId,
+          profile_id: profile_id,
           company_id: company_id,
           start_time: new Date().toISOString(),
           clock_in_photo_url: photo_url || null,
@@ -104,22 +99,22 @@ serve(async (req) => {
         JSON.stringify({ success: true, data: newEntry, message: 'Clocked in successfully' }),
         { status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
       );
-    } 
+    }
     
     else if (action === 'clock_out') {
-      // Find the active time entry
+      // Find the active time entry using profile_id (more reliable)
       let entryId = time_entry_id;
       
       if (!entryId) {
         const { data: activeEntry, error: findError } = await supabase
           .from('time_entries')
           .select('id, start_time')
-          .eq('user_id', profile.user_id)
+          .eq('profile_id', profile_id)
           .eq('company_id', company_id)
           .is('end_time', null)
           .order('start_time', { ascending: false })
           .limit(1)
-          .single();
+          .maybeSingle();
 
         if (findError || !activeEntry) {
           console.error('No active time entry found:', findError);
@@ -174,7 +169,8 @@ serve(async (req) => {
       const { data: breakEntry, error: breakError } = await supabase
         .from('time_entries')
         .insert({
-          user_id: profile.user_id,
+          user_id: effectiveUserId,
+          profile_id: profile_id,
           company_id: company_id,
           start_time: now,
           end_time: now,

@@ -90,18 +90,11 @@ const AdminTimeTracking: React.FC = () => {
         .select(`
           id,
           user_id,
+          profile_id,
           start_time,
           end_time,
           duration_minutes,
-          project_id,
-          profiles:user_id (
-            id,
-            user_id,
-            display_name,
-            first_name,
-            last_name,
-            email
-          )
+          project_id
         `)
         .eq("company_id", company.id)
         .gte("start_time", dayStart)
@@ -109,7 +102,24 @@ const AdminTimeTracking: React.FC = () => {
         .order("start_time", { ascending: false });
 
       if (error) throw error;
-      return data || [];
+      
+      // Manually fetch profiles to avoid ambiguous foreign key issue
+      const profileIds = [...new Set((data || []).map(e => e.profile_id || e.user_id).filter(Boolean))];
+      const { data: profiles } = await supabase
+        .from("profiles")
+        .select("id, user_id, display_name, first_name, last_name, email")
+        .or(`id.in.(${profileIds.join(',')}),user_id.in.(${profileIds.join(',')})`);
+      
+      const profileMap = new Map();
+      (profiles || []).forEach(p => {
+        profileMap.set(p.id, p);
+        if (p.user_id) profileMap.set(p.user_id, p);
+      });
+      
+      return (data || []).map(entry => ({
+        ...entry,
+        profiles: profileMap.get(entry.profile_id) || profileMap.get(entry.user_id) || null
+      }));
     },
     enabled: !!company?.id,
   });
