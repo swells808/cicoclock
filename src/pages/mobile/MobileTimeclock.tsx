@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useRef } from "react";
 import { useLanguage } from "@/contexts/LanguageContext";
 import { supabase } from "@/integrations/supabase/client";
 import { useEmployees } from "@/hooks/useEmployees";
@@ -7,7 +7,7 @@ import { useToast } from "@/hooks/use-toast";
 import { MobileLayout } from "./MobileLayout";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
-import { Clock, LogIn, LogOut, Coffee, User, CheckCircle, QrCode } from "lucide-react";
+import { Clock, LogIn, LogOut, Coffee, User, CheckCircle, QrCode, Loader2 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { PhotoCapture } from "@/components/timeclock/PhotoCapture";
 import { QRScanner } from "@/components/task-checkin/QRScanner";
@@ -20,24 +20,27 @@ const MobileTimeclock = () => {
 
   const [currentTime, setCurrentTime] = useState(new Date());
   const [authenticatedEmployee, setAuthenticatedEmployee] = useState<any>(null);
-  const [showBadgeScanner, setShowBadgeScanner] = useState(false);
+  const [scannerKey, setScannerKey] = useState(0); // Key to force remount scanner
   const [scanningBadge, setScanningBadge] = useState(false);
   const [activeTimeEntry, setActiveTimeEntry] = useState<any>(null);
-  const [clockStatus, setClockStatus] = useState<'out' | 'in'>('out');
+  const [clockStatus, setClockStatus] = useState<'out' | 'in' | 'checking'>('out');
   const [showPhotoCapture, setShowPhotoCapture] = useState(false);
   const [photoAction, setPhotoAction] = useState<'clock_in' | 'clock_out' | null>(null);
   const [isProcessing, setIsProcessing] = useState(false);
+  const hasTriggeredAction = useRef(false);
 
   useEffect(() => {
     const timer = setInterval(() => setCurrentTime(new Date()), 1000);
     return () => clearInterval(timer);
   }, []);
 
+  // Check clock status when employee is authenticated
   useEffect(() => {
     const checkActiveTimeEntry = async () => {
       if (!authenticatedEmployee || !company) return;
       
-      // Use edge function to check status (bypasses RLS)
+      setClockStatus('checking');
+      
       const { data, error } = await supabase.functions.invoke('check-clock-status', {
         body: { 
           profile_id: authenticatedEmployee.id,
@@ -53,13 +56,32 @@ const MobileTimeclock = () => {
         setClockStatus('out');
       }
     };
-    checkActiveTimeEntry();
+    
+    if (authenticatedEmployee) {
+      hasTriggeredAction.current = false;
+      checkActiveTimeEntry();
+    }
   }, [authenticatedEmployee, company]);
+
+  // Auto-trigger clock action once status is determined
+  useEffect(() => {
+    if (!authenticatedEmployee || clockStatus === 'checking' || hasTriggeredAction.current) {
+      return;
+    }
+
+    // Auto-trigger the appropriate action
+    hasTriggeredAction.current = true;
+    
+    if (clockStatus === 'out') {
+      handleClockIn();
+    } else {
+      handleClockOut();
+    }
+  }, [authenticatedEmployee, clockStatus]);
 
   const handleBadgeScan = async (scannedValue: string) => {
     setScanningBadge(true);
     try {
-      // Extract profile_id from badge URL (format: .../badge/{profile_id})
       const profileId = scannedValue.includes('/badge/') 
         ? scannedValue.split('/badge/')[1].split('?')[0] 
         : scannedValue;
@@ -77,11 +99,9 @@ const MobileTimeclock = () => {
         return;
       }
 
-      // Find matching employee and authenticate directly
       const employee = employees.find(emp => emp.id === profileId);
       if (employee) {
         setAuthenticatedEmployee(employee);
-        setShowBadgeScanner(false);
         toast({ title: "Badge Verified", description: `Welcome, ${data.employee.name}!` });
       } else {
         toast({ title: "Employee Not Found", description: "Please try again", variant: "destructive" });
@@ -94,65 +114,43 @@ const MobileTimeclock = () => {
   };
 
   const uploadPhoto = async (photoBlob: Blob, action: 'clock_in' | 'clock_out'): Promise<string | null> => {
-    console.log('=== UPLOAD PHOTO START ===');
-    console.log('Action:', action);
-    console.log('Blob size:', photoBlob.size);
+    if (!company || !authenticatedEmployee) return null;
     
-    if (!company || !authenticatedEmployee) {
-      console.error('Upload photo: Missing company or employee');
-      return null;
-    }
     try {
       const timestamp = new Date().toISOString().replace(/:/g, '-').replace(/\./g, '-');
       const identifier = authenticatedEmployee.user_id || authenticatedEmployee.id;
       const actionPath = action === 'clock_in' ? 'clock-in' : 'clock-out';
       const filePath = `${company.id}/${actionPath}/${timestamp}_${identifier}.jpg`;
-      console.log('Uploading to path:', filePath);
       
       const { error } = await supabase.storage
         .from('timeclock-photos')
         .upload(filePath, photoBlob, { contentType: 'image/jpeg', upsert: false });
       
-      if (error) {
-        console.error('Storage upload error:', error);
-        throw error;
-      }
-      console.log('Upload successful:', filePath);
+      if (error) throw error;
       return filePath;
     } catch (err) {
-      console.error('Photo upload exception:', err);
+      console.error('Photo upload error:', err);
       return null;
     }
   };
 
   const handlePhotoCapture = async (photoBlob: Blob) => {
-    console.log('=== HANDLE PHOTO CAPTURE ===');
-    console.log('Photo blob received:', photoBlob);
-    console.log('Photo action:', photoAction);
-    
     const photoUrl = await uploadPhoto(photoBlob, photoAction!);
-    console.log('Photo URL after upload:', photoUrl);
-    
     setShowPhotoCapture(false);
+    
     if (photoAction === 'clock_in') {
-      console.log('Calling performClockIn with photo');
       await performClockIn(photoUrl || undefined);
     } else if (photoAction === 'clock_out') {
-      console.log('Calling performClockOut with photo');
       await performClockOut(photoUrl || undefined);
     }
     setPhotoAction(null);
   };
 
-  // Bypass photo and clock in/out directly (for debugging)
   const handleSkipPhoto = async () => {
-    console.log('=== SKIP PHOTO PRESSED ===');
     setShowPhotoCapture(false);
     if (photoAction === 'clock_in') {
-      console.log('Skipping photo, calling performClockIn directly');
       await performClockIn();
     } else if (photoAction === 'clock_out') {
-      console.log('Skipping photo, calling performClockOut directly');
       await performClockOut();
     }
     setPhotoAction(null);
@@ -162,29 +160,17 @@ const MobileTimeclock = () => {
     if (!authenticatedEmployee || !company) return;
     setIsProcessing(true);
     
-    console.log('=== CLOCK IN START ===');
-    console.log('Employee:', authenticatedEmployee.id, authenticatedEmployee.display_name);
-    console.log('Company:', company.id);
-    console.log('Photo URL:', photoUrl);
-    
     try {
-      const requestBody = {
-        action: 'clock_in',
-        profile_id: authenticatedEmployee.id,
-        company_id: company.id,
-        photo_url: photoUrl
-      };
-      console.log('Request body:', requestBody);
-      
       const { data, error } = await supabase.functions.invoke('clock-in-out', {
-        body: requestBody
+        body: {
+          action: 'clock_in',
+          profile_id: authenticatedEmployee.id,
+          company_id: company.id,
+          photo_url: photoUrl
+        }
       });
 
-      console.log('Response data:', data);
-      console.log('Response error:', error);
-
       if (error || !data?.success) {
-        console.error('Clock in failed:', error || data?.error);
         toast({ 
           title: "Clock In Failed", 
           description: data?.error || "Please try again.", 
@@ -193,14 +179,11 @@ const MobileTimeclock = () => {
         return;
       }
 
-      console.log('Clock in successful, time entry:', data.data);
       setActiveTimeEntry(data.data);
       setClockStatus('in');
       toast({ title: "Clocked In", description: "You have successfully clocked in." });
-      // Auto-reset to badge scan after delay
-      setTimeout(() => handleSignOut(), 1500);
+      setTimeout(() => handleReset(), 1500);
     } catch (err) {
-      console.error('Clock in exception:', err);
       toast({ 
         title: "Clock In Failed", 
         description: "An unexpected error occurred.", 
@@ -208,20 +191,14 @@ const MobileTimeclock = () => {
       });
     } finally {
       setIsProcessing(false);
-      console.log('=== CLOCK IN END ===');
     }
   };
 
   const handleClockIn = async () => {
-    console.log('=== HANDLE CLOCK IN ===');
-    console.log('Photo capture enabled:', companyFeatures?.photo_capture);
-    
     if (companyFeatures?.photo_capture) {
-      console.log('Opening photo capture modal for clock_in');
       setPhotoAction('clock_in');
       setShowPhotoCapture(true);
     } else {
-      console.log('No photo required, calling performClockIn directly');
       await performClockIn();
     }
   };
@@ -230,31 +207,18 @@ const MobileTimeclock = () => {
     if (!authenticatedEmployee || !company) return;
     setIsProcessing(true);
     
-    console.log('=== CLOCK OUT START ===');
-    console.log('Employee:', authenticatedEmployee.id, authenticatedEmployee.display_name);
-    console.log('Company:', company.id);
-    console.log('Time Entry ID:', activeTimeEntry?.id);
-    console.log('Photo URL:', photoUrl);
-    
     try {
-      const requestBody = {
-        action: 'clock_out',
-        profile_id: authenticatedEmployee.id,
-        company_id: company.id,
-        photo_url: photoUrl,
-        time_entry_id: activeTimeEntry?.id
-      };
-      console.log('Request body:', requestBody);
-      
       const { data, error } = await supabase.functions.invoke('clock-in-out', {
-        body: requestBody
+        body: {
+          action: 'clock_out',
+          profile_id: authenticatedEmployee.id,
+          company_id: company.id,
+          photo_url: photoUrl,
+          time_entry_id: activeTimeEntry?.id
+        }
       });
 
-      console.log('Response data:', data);
-      console.log('Response error:', error);
-
       if (error || !data?.success) {
-        console.error('Clock out failed:', error || data?.error);
         toast({ 
           title: "Clock Out Failed", 
           description: data?.error || "Please try again.", 
@@ -263,14 +227,11 @@ const MobileTimeclock = () => {
         return;
       }
 
-      console.log('Clock out successful');
       setActiveTimeEntry(null);
       setClockStatus('out');
       toast({ title: "Clocked Out", description: "You have successfully clocked out." });
-      // Auto-reset to badge scan after delay
-      setTimeout(() => handleSignOut(), 1500);
+      setTimeout(() => handleReset(), 1500);
     } catch (err) {
-      console.error('Clock out exception:', err);
       toast({ 
         title: "Clock Out Failed", 
         description: "An unexpected error occurred.", 
@@ -278,20 +239,14 @@ const MobileTimeclock = () => {
       });
     } finally {
       setIsProcessing(false);
-      console.log('=== CLOCK OUT END ===');
     }
   };
 
   const handleClockOut = async () => {
-    console.log('=== HANDLE CLOCK OUT ===');
-    console.log('Photo capture enabled:', companyFeatures?.photo_capture);
-    
     if (companyFeatures?.photo_capture) {
-      console.log('Opening photo capture modal for clock_out');
       setPhotoAction('clock_out');
       setShowPhotoCapture(true);
     } else {
-      console.log('No photo required, calling performClockOut directly');
       await performClockOut();
     }
   };
@@ -318,49 +273,28 @@ const MobileTimeclock = () => {
     }
   };
 
-  const handleSignOut = () => {
-    console.log('=== RESETTING FOR NEXT EMPLOYEE ===');
+  const handleReset = () => {
     setAuthenticatedEmployee(null);
     setActiveTimeEntry(null);
     setClockStatus('out');
-    setShowBadgeScanner(true); // Show scanner immediately for next employee
+    hasTriggeredAction.current = false;
+    // Increment key to force QRScanner remount with fresh state
+    setScannerKey(prev => prev + 1);
   };
 
   return (
     <MobileLayout title="Time Clock" currentTime={currentTime}>
       <div className="p-4 space-y-4">
-        {/* Employee Selection / Status */}
         {!authenticatedEmployee ? (
-          <div className="space-y-4">
-            {showBadgeScanner ? (
-              <>
-                <QRScanner
-                  title="Scan Your Badge"
-                  description="Point camera at your employee badge QR code"
-                  onScan={handleBadgeScan}
-                  isLoading={scanningBadge}
-                  placeholder="Enter badge ID manually"
-                />
-                <Button
-                  variant="ghost"
-                  onClick={() => setShowBadgeScanner(false)}
-                  className="w-full"
-                >
-                  Cancel
-                </Button>
-              </>
-            ) : (
-              <Button
-                onClick={() => setShowBadgeScanner(true)}
-                className="w-full h-20 text-xl"
-                variant="outline"
-                disabled={employeesLoading}
-              >
-                <QrCode className="h-8 w-8 mr-3" />
-                Scan Badge to Clock In
-              </Button>
-            )}
-          </div>
+          <QRScanner
+            key={scannerKey}
+            title="Scan Your Badge"
+            description="Point camera at your employee badge QR code"
+            onScan={handleBadgeScan}
+            isLoading={scanningBadge}
+            placeholder="Enter badge ID manually"
+            autoStart={true}
+          />
         ) : (
           <>
             {/* Authenticated Employee Card */}
@@ -376,33 +310,52 @@ const MobileTimeclock = () => {
                        `${authenticatedEmployee.first_name} ${authenticatedEmployee.last_name}`}
                     </p>
                     <div className="flex items-center gap-2">
-                      <span className={cn(
-                        "inline-flex items-center gap-1 text-sm",
-                        clockStatus === 'in' ? "text-green-600" : "text-muted-foreground"
-                      )}>
-                        {clockStatus === 'in' ? (
-                          <>
-                            <CheckCircle className="h-4 w-4" />
-                            Clocked In
-                          </>
-                        ) : (
-                          <>
-                            <Clock className="h-4 w-4" />
-                            Clocked Out
-                          </>
-                        )}
-                      </span>
+                      {clockStatus === 'checking' ? (
+                        <span className="inline-flex items-center gap-1 text-sm text-muted-foreground">
+                          <Loader2 className="h-4 w-4 animate-spin" />
+                          Checking status...
+                        </span>
+                      ) : (
+                        <span className={cn(
+                          "inline-flex items-center gap-1 text-sm",
+                          clockStatus === 'in' ? "text-green-600" : "text-muted-foreground"
+                        )}>
+                          {clockStatus === 'in' ? (
+                            <>
+                              <CheckCircle className="h-4 w-4" />
+                              Clocked In
+                            </>
+                          ) : (
+                            <>
+                              <Clock className="h-4 w-4" />
+                              Clocked Out
+                            </>
+                          )}
+                        </span>
+                      )}
                     </div>
                   </div>
                 </div>
-                <Button variant="ghost" size="sm" onClick={handleSignOut}>
-                  Change
+                <Button variant="ghost" size="sm" onClick={handleReset}>
+                  Cancel
                 </Button>
               </div>
             </Card>
 
-            {/* Clock Duration */}
-            {clockStatus === 'in' && activeTimeEntry && (
+            {/* Processing indicator */}
+            {(isProcessing || clockStatus === 'checking') && (
+              <Card className="p-6">
+                <div className="flex flex-col items-center justify-center gap-3">
+                  <Loader2 className="h-10 w-10 animate-spin text-primary" />
+                  <p className="text-muted-foreground">
+                    {clockStatus === 'checking' ? 'Checking your status...' : 'Processing...'}
+                  </p>
+                </div>
+              </Card>
+            )}
+
+            {/* Clock Duration - only show when clocked in and not processing */}
+            {clockStatus === 'in' && activeTimeEntry && !isProcessing && (
               <Card className="p-4 bg-green-50 dark:bg-green-950 border-green-200 dark:border-green-800">
                 <div className="text-center">
                   <p className="text-sm text-green-600 dark:text-green-400 mb-1">Working Since</p>
@@ -415,54 +368,20 @@ const MobileTimeclock = () => {
                 </div>
               </Card>
             )}
-
-            {/* Action Buttons */}
-            <div className="space-y-3">
-              {clockStatus === 'out' ? (
-                <Button
-                  onClick={handleClockIn}
-                  disabled={isProcessing}
-                  className="w-full h-20 text-xl bg-green-600 hover:bg-green-700"
-                >
-                  <LogIn className="h-8 w-8 mr-3" />
-                  Clock In
-                </Button>
-              ) : (
-                <>
-                  <Button
-                    onClick={handleClockOut}
-                    disabled={isProcessing}
-                    className="w-full h-20 text-xl bg-red-600 hover:bg-red-700"
-                  >
-                    <LogOut className="h-8 w-8 mr-3" />
-                    Clock Out
-                  </Button>
-                  <Button
-                    onClick={handleBreak}
-                    disabled={isProcessing}
-                    variant="outline"
-                    className="w-full h-14 text-lg"
-                  >
-                    <Coffee className="h-6 w-6 mr-2" />
-                    Start Break
-                  </Button>
-                </>
-              )}
-            </div>
           </>
         )}
       </div>
 
-      {/* Photo Capture Modal */}
+      {/* Photo Capture Modal with auto-capture */}
       <PhotoCapture
         open={showPhotoCapture}
         onCapture={handlePhotoCapture}
-        onCancel={() => { setShowPhotoCapture(false); setPhotoAction(null); }}
+        onCancel={() => { setShowPhotoCapture(false); setPhotoAction(null); handleReset(); }}
         onSkip={handleSkipPhoto}
         title={photoAction === 'clock_in' ? "Clock In Photo" : "Clock Out Photo"}
-        description={photoAction === 'clock_in' 
-          ? "Please take a photo to verify your clock in" 
-          : "Please take a photo to verify your clock out"}
+        description="Hold still - photo will be captured automatically"
+        autoCapture={true}
+        autoCaptureDelay={3}
       />
     </MobileLayout>
   );

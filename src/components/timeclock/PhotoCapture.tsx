@@ -1,8 +1,6 @@
 import React, { useRef, useState, useEffect } from "react";
-import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog";
-import { Camera, X, RotateCw } from "lucide-react";
-import { useToast } from "@/hooks/use-toast";
+import { Camera } from "lucide-react";
 
 interface PhotoCaptureProps {
   open: boolean;
@@ -11,6 +9,8 @@ interface PhotoCaptureProps {
   onSkip?: () => void;
   title?: string;
   description?: string;
+  autoCapture?: boolean;
+  autoCaptureDelay?: number; // seconds before auto-capture
 }
 
 export const PhotoCapture: React.FC<PhotoCaptureProps> = ({
@@ -19,33 +19,54 @@ export const PhotoCapture: React.FC<PhotoCaptureProps> = ({
   onCancel,
   onSkip,
   title = "Take Photo",
-  description = "Please take a photo for verification"
+  description = "Please take a photo for verification",
+  autoCapture = false,
+  autoCaptureDelay = 3
 }) => {
   const videoRef = useRef<HTMLVideoElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const streamRef = useRef<MediaStream | null>(null);
   const [isStreaming, setIsStreaming] = useState(false);
-  const [capturedImage, setCapturedImage] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
-  const { toast } = useToast();
+  const [countdown, setCountdown] = useState<number | null>(null);
 
   useEffect(() => {
-    console.log('PhotoCapture useEffect - open:', open, 'isStreaming:', isStreaming);
     if (open && !isStreaming) {
-      console.log('Starting camera...');
       startCamera();
     }
 
     return () => {
       stopCamera();
+      setCountdown(null);
     };
   }, [open]);
 
+  // Auto-capture countdown effect
+  useEffect(() => {
+    if (!autoCapture || !isStreaming || countdown === null) return;
+
+    if (countdown === 0) {
+      captureAndConfirm();
+      return;
+    }
+
+    const timer = setTimeout(() => {
+      setCountdown(countdown - 1);
+    }, 1000);
+
+    return () => clearTimeout(timer);
+  }, [countdown, autoCapture, isStreaming]);
+
+  // Start countdown when streaming begins in auto mode
+  useEffect(() => {
+    if (autoCapture && isStreaming && countdown === null) {
+      setCountdown(autoCaptureDelay);
+    }
+  }, [autoCapture, isStreaming, autoCaptureDelay]);
+
   const startCamera = async () => {
-    console.log('=== START CAMERA ===');
     try {
       setError(null);
-      console.log('Requesting camera access...');
       const stream = await navigator.mediaDevices.getUserMedia({
         video: {
           facingMode: "user",
@@ -54,24 +75,19 @@ export const PhotoCapture: React.FC<PhotoCaptureProps> = ({
         },
         audio: false
       });
-      console.log('Camera stream obtained:', stream);
 
       if (videoRef.current) {
         videoRef.current.srcObject = stream;
         streamRef.current = stream;
         setIsStreaming(true);
-        console.log('Camera streaming started');
-      } else {
-        console.error('videoRef.current is null');
       }
     } catch (err) {
       console.error("Error accessing camera:", err);
       setError("Unable to access camera. Please check permissions.");
-      toast({
-        title: "Camera Error",
-        description: "Unable to access camera. Please check your permissions.",
-        variant: "destructive"
-      });
+      // If camera fails in auto mode, skip after delay
+      if (autoCapture && onSkip) {
+        setTimeout(() => onSkip(), 2000);
+      }
     }
   };
 
@@ -83,10 +99,10 @@ export const PhotoCapture: React.FC<PhotoCaptureProps> = ({
     setIsStreaming(false);
   };
 
-  const capturePhoto = () => {
-    console.log('=== CAPTURE PHOTO ===');
+  const captureAndConfirm = () => {
     if (!videoRef.current || !canvasRef.current) {
-      console.error('capturePhoto: videoRef or canvasRef is null');
+      // If refs not available, skip photo
+      if (onSkip) onSkip();
       return;
     }
 
@@ -95,63 +111,33 @@ export const PhotoCapture: React.FC<PhotoCaptureProps> = ({
     const context = canvas.getContext("2d");
 
     if (!context) {
-      console.error('capturePhoto: Could not get canvas context');
+      if (onSkip) onSkip();
       return;
     }
 
-    console.log('Video dimensions:', video.videoWidth, 'x', video.videoHeight);
-    canvas.width = video.videoWidth;
-    canvas.height = video.videoHeight;
+    canvas.width = video.videoWidth || 640;
+    canvas.height = video.videoHeight || 480;
     context.drawImage(video, 0, 0, canvas.width, canvas.height);
 
-    console.log('Drawing to canvas and converting to blob...');
     canvas.toBlob((blob) => {
-      console.log('toBlob callback - blob:', blob);
       if (blob) {
-        const imageUrl = URL.createObjectURL(blob);
-        setCapturedImage(imageUrl);
         stopCamera();
-        console.log('Photo captured successfully, size:', blob.size);
-      } else {
-        console.error('toBlob returned null');
-      }
-    }, "image/jpeg", 0.85);
-  };
-
-  const retakePhoto = () => {
-    setCapturedImage(null);
-    startCamera();
-  };
-
-  const confirmPhoto = () => {
-    console.log('=== CONFIRM PHOTO ===');
-    if (!canvasRef.current) {
-      console.error('confirmPhoto: canvasRef is null');
-      return;
-    }
-
-    console.log('Converting canvas to blob for confirmation...');
-    canvasRef.current.toBlob((blob) => {
-      console.log('confirmPhoto toBlob callback - blob:', blob);
-      if (blob) {
-        console.log('Calling onCapture with blob size:', blob.size);
         onCapture(blob);
-        setCapturedImage(null);
-      } else {
-        console.error('confirmPhoto: toBlob returned null');
+      } else if (onSkip) {
+        onSkip();
       }
     }, "image/jpeg", 0.85);
   };
 
   const handleCancel = () => {
     stopCamera();
-    setCapturedImage(null);
+    setCountdown(null);
     onCancel();
   };
 
   return (
     <Dialog open={open} onOpenChange={handleCancel}>
-      <DialogContent className="sm:max-w-[600px]">
+      <DialogContent className="sm:max-w-[500px]">
         <DialogHeader>
           <DialogTitle>{title}</DialogTitle>
           <DialogDescription>{description}</DialogDescription>
@@ -165,66 +151,41 @@ export const PhotoCapture: React.FC<PhotoCaptureProps> = ({
           )}
 
           <div className="relative bg-black rounded-lg overflow-hidden aspect-video">
-            {!capturedImage ? (
-              <video
-                ref={videoRef}
-                autoPlay
-                playsInline
-                className="w-full h-full object-cover"
-              />
-            ) : (
-              <img
-                src={capturedImage}
-                alt="Captured"
-                className="w-full h-full object-cover"
-              />
+            <video
+              ref={videoRef}
+              autoPlay
+              playsInline
+              muted
+              className="w-full h-full object-cover"
+            />
+            
+            {/* Countdown overlay */}
+            {autoCapture && countdown !== null && countdown > 0 && (
+              <div className="absolute inset-0 flex items-center justify-center bg-black/30">
+                <div className="text-center">
+                  <div className="text-7xl font-bold text-white drop-shadow-lg animate-pulse">
+                    {countdown}
+                  </div>
+                  <p className="text-white text-lg mt-2">Hold still...</p>
+                </div>
+              </div>
+            )}
+            
+            {/* Camera icon when not streaming */}
+            {!isStreaming && !error && (
+              <div className="absolute inset-0 flex items-center justify-center">
+                <Camera className="h-16 w-16 text-muted-foreground animate-pulse" />
+              </div>
             )}
           </div>
 
           <canvas ref={canvasRef} className="hidden" />
 
-          <div className="flex flex-col gap-3">
-            <div className="flex justify-center gap-3">
-              {!capturedImage ? (
-                <>
-                  <Button
-                    onClick={capturePhoto}
-                    disabled={!isStreaming}
-                    size="lg"
-                    className="bg-primary hover:bg-primary/90"
-                  >
-                    <Camera className="mr-2 h-5 w-5" />
-                    Capture Photo
-                  </Button>
-                  <Button onClick={handleCancel} variant="outline" size="lg">
-                    <X className="mr-2 h-5 w-5" />
-                    Cancel
-                  </Button>
-                </>
-              ) : (
-                <>
-                  <Button onClick={confirmPhoto} size="lg" className="bg-green-600 hover:bg-green-700">
-                    Confirm & Continue
-                  </Button>
-                  <Button onClick={retakePhoto} variant="outline" size="lg">
-                    <RotateCw className="mr-2 h-5 w-5" />
-                    Retake
-                  </Button>
-                </>
-              )}
-            </div>
-            {/* Skip photo button for debugging/bypass */}
-            {onSkip && (
-              <Button 
-                onClick={onSkip} 
-                variant="ghost" 
-                size="sm"
-                className="text-muted-foreground"
-              >
-                Skip Photo (Debug)
-              </Button>
-            )}
-          </div>
+          {autoCapture && (
+            <p className="text-center text-muted-foreground text-sm">
+              Photo will be captured automatically
+            </p>
+          )}
         </div>
       </DialogContent>
     </Dialog>
