@@ -15,6 +15,7 @@ import Login from "./pages/Login";
 import MobileLogin from "./pages/mobile/MobileLogin";
 import CompanySignup from "./pages/CompanySignup";
 import Dashboard from "./pages/Dashboard";
+import MobileDashboard from "./pages/mobile/MobileDashboard";
 import Timeclock from "./pages/Timeclock";
 import MobileTimeclock from "./pages/mobile/MobileTimeclock";
 import TaskCheckin from "./pages/TaskCheckin";
@@ -58,7 +59,11 @@ const App = () => (
                 <Route path="/badge/:profileId" element={<PublicBadge />} />
 
                 {/* Protected Routes */}
-                <Route path="/dashboard" element={<ProtectedRoute><Dashboard /></ProtectedRoute>} />
+                <Route path="/dashboard" element={
+                  <ProtectedRoute>
+                    <PlatformRoute web={<Dashboard />} mobile={<MobileDashboard />} />
+                  </ProtectedRoute>
+                } />
                 <Route path="/timeclock" element={
                   <ProtectedRoute>
                     <PlatformRoute web={<Timeclock />} mobile={<MobileTimeclock />} />
