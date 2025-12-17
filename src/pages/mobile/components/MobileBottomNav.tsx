@@ -1,6 +1,6 @@
 import React from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
-import { Clock, ClipboardCheck, LayoutDashboard } from 'lucide-react';
+import { Clock, ClipboardCheck, LayoutDashboard, User } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
 interface NavItem {
@@ -10,9 +10,10 @@ interface NavItem {
 }
 
 const navItems: NavItem[] = [
-  { icon: <Clock className="h-6 w-6" />, label: 'Clock', path: '/timeclock' },
-  { icon: <ClipboardCheck className="h-6 w-6" />, label: 'Tasks', path: '/task-checkin?mobile=true' },
-  { icon: <LayoutDashboard className="h-6 w-6" />, label: 'Dashboard', path: '/dashboard?mobile=true' },
+  { icon: <Clock className="h-5 w-5" />, label: 'Clock', path: '/timeclock' },
+  { icon: <ClipboardCheck className="h-5 w-5" />, label: 'Tasks', path: '/task-checkin?mobile=true' },
+  { icon: <LayoutDashboard className="h-5 w-5" />, label: 'Home', path: '/dashboard?mobile=true' },
+  { icon: <User className="h-5 w-5" />, label: 'Profile', path: '/profile?mobile=true' },
 ];
 
 export const MobileBottomNav: React.FC = () => {
