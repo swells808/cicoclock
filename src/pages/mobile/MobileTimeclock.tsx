@@ -301,6 +301,7 @@ const MobileTimeclock = () => {
             isLoading={scanningBadge}
             placeholder="Enter badge ID manually"
             autoStart={true}
+            preferredCamera="user"
           />
         ) : (
           <>
