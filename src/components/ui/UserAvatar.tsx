@@ -1,4 +1,4 @@
-import React from 'react';
+import * as React from 'react';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 
 interface UserAvatarProps {
@@ -14,10 +14,8 @@ interface UserAvatarProps {
   className?: string;
 }
 
-export const UserAvatar = React.forwardRef<
-  React.ElementRef<typeof Avatar>,
-  UserAvatarProps
->(({ user, size = 'md', className = '' }, ref) => {
+export const UserAvatar = React.forwardRef<HTMLSpanElement, UserAvatarProps>(
+  ({ user, size = 'md', className = '' }, ref) => {
   const getInitials = () => {
     const fullName = user.raw_user_meta_data?.full_name || user.raw_user_meta_data?.display_name;
 
