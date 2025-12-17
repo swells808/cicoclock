@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import { useTaskTypes } from '@/hooks/useTaskTypes';
+import { useCompany } from '@/contexts/CompanyContext';
 import { QRScanner } from '@/components/task-checkin/QRScanner';
 import { TaskActionForm } from '@/components/task-checkin/TaskActionForm';
 import { Button } from '@/components/ui/button';
@@ -42,6 +43,7 @@ type Step = 'badge' | 'task' | 'action' | 'success' | 'error';
 
 export default function MobileTaskCheckin() {
   const { toast } = useToast();
+  const { company } = useCompany();
   const [currentStep, setCurrentStep] = useState<Step>('badge');
   const [user, setUser] = useState<User | null>(null);
   const [task, setTask] = useState<Task | null>(null);
@@ -50,15 +52,32 @@ export default function MobileTaskCheckin() {
   const [errorMessage, setErrorMessage] = useState<string>('');
   const [successMessage, setSuccessMessage] = useState<string>('');
 
-  const { taskTypes } = useTaskTypes(user?.companyId);
+  const { taskTypes } = useTaskTypes(user?.companyId || company?.id);
 
-  const handleBadgeScan = async (badgeId: string) => {
+  const handleBadgeScan = async (scannedValue: string) => {
+    if (!company?.id) {
+      setErrorMessage('Company data not loaded. Please try again.');
+      setCurrentStep('error');
+      return;
+    }
+
     setIsLoading(true);
     setErrorMessage('');
 
     try {
+      // Parse profile_id from badge URL (format: /badge/{profile_id})
+      const profileId = scannedValue.includes('/badge/') 
+        ? scannedValue.split('/badge/')[1].split('?')[0] 
+        : scannedValue;
+
+      if (!profileId) {
+        setErrorMessage('Invalid badge format. Could not read badge ID.');
+        setCurrentStep('error');
+        return;
+      }
+
       const { data, error } = await supabase.functions.invoke('verify-badge', {
-        body: { badgeId }
+        body: { profile_id: profileId, company_id: company.id }
       });
 
       if (error) {
@@ -67,32 +86,46 @@ export default function MobileTaskCheckin() {
         return;
       }
 
-      if (!data.success) {
+      if (!data.valid) {
         setErrorMessage(data.error || 'Invalid badge');
         setCurrentStep('error');
         return;
       }
 
-      setUser(data.user);
+      // Map verify-badge response to expected user format
+      setUser({
+        id: profileId,
+        profileId: profileId,
+        companyId: company.id,
+        firstName: data.employee?.name?.split(' ')[0] || '',
+        lastName: data.employee?.name?.split(' ').slice(1).join(' ') || '',
+        displayName: data.employee?.name || '',
+        employeeId: data.employee?.employee_id || '',
+        companyName: data.company || company.company_name || ''
+      });
 
       // Check clock status
       const clockResponse = await supabase.functions.invoke('check-clock-status', {
-        body: { userId: data.user.id }
+        body: { profile_id: profileId, company_id: company.id }
       });
 
-      if (clockResponse.error || !clockResponse.data.success) {
+      if (clockResponse.error) {
         setErrorMessage('Failed to check clock status. Please try again.');
         setCurrentStep('error');
         return;
       }
 
-      if (!clockResponse.data.isClockedIn) {
+      if (!clockResponse.data.clocked_in) {
         setErrorMessage('You must be clocked in to check in/out of tasks. Please clock in first.');
         setCurrentStep('error');
         return;
       }
 
-      setClockStatus(clockResponse.data);
+      setClockStatus({
+        isClockedIn: clockResponse.data.clocked_in,
+        timeEntryId: clockResponse.data.time_entry?.id || null,
+        startTime: clockResponse.data.time_entry?.start_time || null
+      });
       setCurrentStep('task');
 
     } catch (error) {
@@ -104,13 +137,18 @@ export default function MobileTaskCheckin() {
     }
   };
 
-  const handleTaskScan = async (taskId: string) => {
+  const handleTaskScan = async (scannedValue: string) => {
+    if (!user || !company?.id) return;
+    
     setIsLoading(true);
     setErrorMessage('');
 
     try {
+      // The task QR code contains the task ID (UUID)
+      const taskId = scannedValue.trim();
+
       const { data, error } = await supabase.functions.invoke('verify-task', {
-        body: { taskId }
+        body: { task_id: taskId, company_id: company.id }
       });
 
       if (error) {
@@ -119,20 +157,24 @@ export default function MobileTaskCheckin() {
         return;
       }
 
-      if (!data.success) {
+      if (!data.valid) {
         setErrorMessage(data.error || 'Invalid task');
         setCurrentStep('error');
         return;
       }
 
-      // Check if task belongs to same company
-      if (data.task.companyId !== user?.companyId) {
-        setErrorMessage('This task does not belong to your company.');
-        setCurrentStep('error');
-        return;
-      }
-
-      setTask(data.task);
+      // Map verify-task response to expected task format
+      setTask({
+        id: data.task.id,
+        name: data.task.name,
+        status: data.task.status || 'pending',
+        assigneeId: data.task.assignee_id || '',
+        dueDate: data.task.due_date || '',
+        projectId: data.task.project_id,
+        projectName: data.task.project_name || '',
+        companyId: data.task.company_id,
+        companyName: ''
+      });
       setCurrentStep('action');
 
     } catch (error) {
@@ -153,14 +195,14 @@ export default function MobileTaskCheckin() {
     try {
       const { data, error } = await supabase.functions.invoke('record-task-activity', {
         body: {
-          userId: user.id,
-          profileId: user.profileId,
-          taskId: task.id,
-          projectId: task.projectId,
-          companyId: user.companyId,
-          timeEntryId: clockStatus.timeEntryId,
-          taskTypeId,
-          actionType
+          user_id: user.id,
+          profile_id: user.profileId,
+          task_id: task.id,
+          project_id: task.projectId,
+          company_id: user.companyId,
+          time_entry_id: clockStatus.timeEntryId,
+          task_type_id: taskTypeId,
+          action_type: actionType
         }
       });
 

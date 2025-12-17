@@ -16,26 +16,35 @@ serve(async (req) => {
     const supabaseServiceKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
     const supabase = createClient(supabaseUrl, supabaseServiceKey);
 
-    const { task_code, company_id } = await req.json();
+    const { task_id, company_id } = await req.json();
 
-    if (!task_code || !company_id) {
+    if (!task_id || !company_id) {
       return new Response(
-        JSON.stringify({ error: 'task_code and company_id are required' }),
+        JSON.stringify({ error: 'task_id and company_id are required' }),
         { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
       );
     }
 
-    const { data: taskType, error } = await supabase
-      .from('task_types')
-      .select('*')
-      .eq('code', task_code)
-      .eq('company_id', company_id)
-      .eq('is_active', true)
+    // Look up project_task with its project
+    const { data: projectTask, error: taskError } = await supabase
+      .from('project_tasks')
+      .select('*, projects(id, name, company_id)')
+      .eq('id', task_id)
       .single();
 
-    if (error || !taskType) {
+    if (taskError || !projectTask) {
+      console.log('Project task not found:', task_id, taskError);
       return new Response(
-        JSON.stringify({ valid: false, error: 'Task type not found' }),
+        JSON.stringify({ valid: false, error: 'Task not found' }),
+        { status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      );
+    }
+
+    // Verify task belongs to the company
+    const project = projectTask.projects as { id: string; name: string; company_id: string } | null;
+    if (!project || project.company_id !== company_id) {
+      return new Response(
+        JSON.stringify({ valid: false, error: 'Task does not belong to your company' }),
         { status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
       );
     }
@@ -43,10 +52,15 @@ serve(async (req) => {
     return new Response(
       JSON.stringify({
         valid: true,
-        task_type: {
-          id: taskType.id,
-          name: taskType.name,
-          code: taskType.code
+        task: {
+          id: projectTask.id,
+          name: projectTask.name,
+          status: projectTask.status,
+          assignee_id: projectTask.assignee_id,
+          due_date: projectTask.due_date,
+          project_id: project.id,
+          project_name: project.name,
+          company_id: project.company_id
         }
       }),
       { status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
