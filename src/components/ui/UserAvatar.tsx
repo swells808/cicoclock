@@ -14,11 +14,10 @@ interface UserAvatarProps {
   className?: string;
 }
 
-export const UserAvatar: React.FC<UserAvatarProps> = ({
-  user,
-  size = 'md',
-  className = ''
-}) => {
+export const UserAvatar = React.forwardRef<
+  React.ElementRef<typeof Avatar>,
+  UserAvatarProps
+>(({ user, size = 'md', className = '' }, ref) => {
   const getInitials = () => {
     const fullName = user.raw_user_meta_data?.full_name || user.raw_user_meta_data?.display_name;
 
@@ -44,7 +43,7 @@ export const UserAvatar: React.FC<UserAvatarProps> = ({
   };
 
   return (
-    <Avatar className={`${sizeClasses[size]} ${className}`}>
+    <Avatar ref={ref} className={`${sizeClasses[size]} ${className}`}>
       <AvatarImage
         src={user.raw_user_meta_data?.avatar_url}
         alt={user.raw_user_meta_data?.full_name || user.email || 'User'}
@@ -54,4 +53,6 @@ export const UserAvatar: React.FC<UserAvatarProps> = ({
       </AvatarFallback>
     </Avatar>
   );
-};
+});
+
+UserAvatar.displayName = "UserAvatar";
