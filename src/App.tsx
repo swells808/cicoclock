@@ -16,6 +16,7 @@ import MobileLogin from "./pages/mobile/MobileLogin";
 import CompanySignup from "./pages/CompanySignup";
 import Dashboard from "./pages/Dashboard";
 import MobileDashboard from "./pages/mobile/MobileDashboard";
+import MobileProfile from "./pages/mobile/MobileProfile";
 import Timeclock from "./pages/Timeclock";
 import MobileTimeclock from "./pages/mobile/MobileTimeclock";
 import TaskCheckin from "./pages/TaskCheckin";
@@ -77,6 +78,11 @@ const App = () => (
                 <Route path="/clients" element={<ProtectedRoute><Clients /></ProtectedRoute>} />
                 <Route path="/reports" element={<ProtectedRoute><Reports /></ProtectedRoute>} />
                 <Route path="/settings" element={<ProtectedRoute><Settings /></ProtectedRoute>} />
+                <Route path="/profile" element={
+                  <ProtectedRoute>
+                    <PlatformRoute web={<Settings />} mobile={<MobileProfile />} />
+                  </ProtectedRoute>
+                } />
                 <Route path="/badge-designer" element={<ProtectedRoute><BadgeDesigner /></ProtectedRoute>} />
                 <Route path="/time-tracking/admin" element={<ProtectedRoute><AdminTimeTracking /></ProtectedRoute>} />
                 <Route path="/task-qr-codes" element={<ProtectedRoute><TaskQrCodes /></ProtectedRoute>} />
