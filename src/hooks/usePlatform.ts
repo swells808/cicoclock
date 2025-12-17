@@ -24,13 +24,9 @@ export const usePlatform = (): PlatformInfo => {
       };
     }
     
-    return {
-      isNative: false,
-      isIOS: false,
-      isAndroid: false,
-      isWeb: true,
-      platform: 'web',
-    };
+    // Use synchronous Capacitor detection for initial render
+    // This prevents flash of web content before async detection completes
+    return getPlatformSync();
   });
 
   useEffect(() => {
