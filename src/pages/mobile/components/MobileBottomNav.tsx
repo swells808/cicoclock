@@ -11,9 +11,9 @@ interface NavItem {
 
 const navItems: NavItem[] = [
   { icon: <Clock className="h-5 w-5" />, label: 'Clock', path: '/timeclock' },
-  { icon: <ClipboardCheck className="h-5 w-5" />, label: 'Tasks', path: '/task-checkin?mobile=true' },
-  { icon: <LayoutDashboard className="h-5 w-5" />, label: 'Home', path: '/dashboard?mobile=true' },
-  { icon: <User className="h-5 w-5" />, label: 'Profile', path: '/profile?mobile=true' },
+  { icon: <ClipboardCheck className="h-5 w-5" />, label: 'Tasks', path: '/task-checkin' },
+  { icon: <LayoutDashboard className="h-5 w-5" />, label: 'Home', path: '/dashboard' },
+  { icon: <User className="h-5 w-5" />, label: 'Profile', path: '/profile' },
 ];
 
 export const MobileBottomNav: React.FC = () => {

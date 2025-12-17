@@ -20,6 +20,7 @@ import MobileProfile from "./pages/mobile/MobileProfile";
 import Timeclock from "./pages/Timeclock";
 import MobileTimeclock from "./pages/mobile/MobileTimeclock";
 import TaskCheckin from "./pages/TaskCheckin";
+import MobileTaskCheckin from "./pages/mobile/MobileTaskCheckin";
 import Users from "./pages/Users";
 import Projects from "./pages/Projects";
 import Clients from "./pages/Clients";
@@ -72,7 +73,11 @@ const App = () => (
                     <PlatformRoute web={<Timeclock />} mobile={<MobileTimeclock />} />
                   </ProtectedRoute>
                 } />
-                <Route path="/task-checkin" element={<ProtectedRoute><TaskCheckin /></ProtectedRoute>} />
+                <Route path="/task-checkin" element={
+                  <ProtectedRoute>
+                    <PlatformRoute web={<TaskCheckin />} mobile={<MobileTaskCheckin />} />
+                  </ProtectedRoute>
+                } />
                 <Route path="/users" element={<ProtectedRoute><Users /></ProtectedRoute>} />
                 <Route path="/projects" element={<ProtectedRoute><Projects /></ProtectedRoute>} />
                 <Route path="/clients" element={<ProtectedRoute><Clients /></ProtectedRoute>} />
