@@ -1,4 +1,4 @@
-import * as React from 'react';
+import React from 'react';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 
 interface UserAvatarProps {
@@ -14,8 +14,11 @@ interface UserAvatarProps {
   className?: string;
 }
 
-export const UserAvatar = React.forwardRef<HTMLSpanElement, UserAvatarProps>(
-  ({ user, size = 'md', className = '' }, ref) => {
+export const UserAvatar: React.FC<UserAvatarProps> = ({
+  user,
+  size = 'md',
+  className = ''
+}) => {
   const getInitials = () => {
     const fullName = user.raw_user_meta_data?.full_name || user.raw_user_meta_data?.display_name;
 
@@ -41,7 +44,7 @@ export const UserAvatar = React.forwardRef<HTMLSpanElement, UserAvatarProps>(
   };
 
   return (
-    <Avatar ref={ref} className={`${sizeClasses[size]} ${className}`}>
+    <Avatar className={`${sizeClasses[size]} ${className}`}>
       <AvatarImage
         src={user.raw_user_meta_data?.avatar_url}
         alt={user.raw_user_meta_data?.full_name || user.email || 'User'}
@@ -51,6 +54,4 @@ export const UserAvatar = React.forwardRef<HTMLSpanElement, UserAvatarProps>(
       </AvatarFallback>
     </Avatar>
   );
-});
-
-UserAvatar.displayName = "UserAvatar";
+};
