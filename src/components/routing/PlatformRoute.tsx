@@ -6,8 +6,12 @@ interface PlatformRouteProps {
   mobile: React.ReactNode;
 }
 
-export const PlatformRoute: React.FC<PlatformRouteProps> = ({ web, mobile }) => {
-  const { isNative } = usePlatform();
+export const PlatformRoute = React.forwardRef<HTMLDivElement, PlatformRouteProps>(
+  ({ web, mobile }, ref) => {
+    const { isNative } = usePlatform();
 
-  return <>{isNative ? mobile : web}</>;
-};
+    return <div ref={ref}>{isNative ? mobile : web}</div>;
+  }
+);
+
+PlatformRoute.displayName = "PlatformRoute";
