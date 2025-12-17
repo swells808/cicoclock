@@ -1,5 +1,9 @@
 import React from 'react';
+import { useNavigate } from 'react-router-dom';
+import { LogOut } from 'lucide-react';
 import { useCompany } from '@/contexts/CompanyContext';
+import { useAuth } from '@/contexts/AuthContext';
+import { Button } from '@/components/ui/button';
 
 interface MobileHeaderProps {
   title?: string;
@@ -11,6 +15,8 @@ export const MobileHeader: React.FC<MobileHeaderProps> = ({
   currentTime 
 }) => {
   const { company } = useCompany();
+  const { signOut } = useAuth();
+  const navigate = useNavigate();
 
   const formatTime = (date: Date) => {
     return date.toLocaleTimeString([], { 
@@ -26,6 +32,11 @@ export const MobileHeader: React.FC<MobileHeaderProps> = ({
       month: 'long', 
       day: 'numeric' 
     });
+  };
+
+  const handleLogout = async () => {
+    await signOut();
+    navigate('/login');
   };
 
   return (
@@ -49,13 +60,23 @@ export const MobileHeader: React.FC<MobileHeaderProps> = ({
               )}
             </div>
           </div>
-          {currentTime && (
-            <div className="text-right">
-              <p className="text-2xl font-bold tabular-nums">
-                {formatTime(currentTime)}
-              </p>
-            </div>
-          )}
+          <div className="flex items-center gap-3">
+            {currentTime && (
+              <div className="text-right">
+                <p className="text-2xl font-bold tabular-nums">
+                  {formatTime(currentTime)}
+                </p>
+              </div>
+            )}
+            <Button 
+              variant="ghost" 
+              size="icon" 
+              onClick={handleLogout}
+              className="text-primary-foreground hover:bg-primary-foreground/10"
+            >
+              <LogOut className="h-5 w-5" />
+            </Button>
+          </div>
         </div>
       </div>
     </header>
