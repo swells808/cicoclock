@@ -12,6 +12,7 @@ interface QRScannerProps {
   isLoading?: boolean;
   placeholder?: string;
   autoStart?: boolean; // Auto-start camera scanning
+  preferredCamera?: 'environment' | 'user'; // 'environment' = back, 'user' = front
 }
 
 export const QRScanner = ({
@@ -20,7 +21,8 @@ export const QRScanner = ({
   onScan,
   isLoading = false,
   placeholder = "Enter ID or scan QR code",
-  autoStart = false
+  autoStart = false,
+  preferredCamera = 'environment'
 }: QRScannerProps) => {
   const [inputValue, setInputValue] = useState('');
   const [isScanning, setIsScanning] = useState(false);
@@ -59,6 +61,7 @@ export const QRScanner = ({
           returnDetailedScanResult: true,
           highlightScanRegion: true,
           highlightCodeOutline: true,
+          preferredCamera: preferredCamera,
         }
       );
 
