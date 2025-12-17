@@ -68,14 +68,13 @@ const DropdownMenuContentInner = React.forwardRef<
 ));
 DropdownMenuContentInner.displayName = "DropdownMenuContentInner";
 
-const DropdownMenuContent = React.forwardRef<
-  React.ElementRef<typeof DropdownMenuPrimitive.Content>,
-  React.ComponentPropsWithoutRef<typeof DropdownMenuPrimitive.Content>
->(({ ...props }, ref) => (
+const DropdownMenuContent = ({
+  ...props
+}: React.ComponentPropsWithoutRef<typeof DropdownMenuPrimitive.Content>) => (
   <DropdownMenuPrimitive.Portal>
-    <DropdownMenuContentInner ref={ref} {...props} />
+    <DropdownMenuContentInner {...props} />
   </DropdownMenuPrimitive.Portal>
-));
+);
 DropdownMenuContent.displayName = DropdownMenuPrimitive.Content.displayName;
 
 const DropdownMenuItem = React.forwardRef<
