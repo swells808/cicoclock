@@ -1,5 +1,5 @@
 import React, { useState } from "react";
-import { StandardHeader } from "@/components/layout/StandardHeader";
+import { DashboardLayout } from "@/components/layout/DashboardLayout";
 import { UserStats } from "@/components/users/UserStats";
 import { UserTable } from "@/components/users/UserTable";
 import { UserFilters } from "@/components/users/UserFilters";
@@ -14,7 +14,6 @@ import { Pagination, PaginationContent, PaginationItem, PaginationLink, Paginati
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { Upload, UserPlus, Award, Shield, UserCog, X, Download } from "lucide-react";
-import { useAuth } from "@/contexts/AuthContext";
 import { useUsers, User } from "@/hooks/useUsers";
 import { useDepartments } from "@/hooks/useDepartments";
 import { useUserRole } from "@/hooks/useUserRole";
@@ -22,7 +21,6 @@ import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
 
 const Users = () => {
-  const { signOut } = useAuth();
   const { users, loading, refetch, updateUserStatus } = useUsers();
   const { departments } = useDepartments();
   const { isAdmin } = useUserRole();
@@ -73,7 +71,7 @@ const Users = () => {
   // Stats
   const activeUsers = users.filter(user => user.status === "Active").length;
   const pendingApprovals = users.filter(user => user.status === "Pending" || user.status === "Inactive").length;
-  const newUsersThisMonth = users.length > 0 ? Math.min(5, users.length) : 0; // Placeholder - original repo tracked creation dates
+  const newUsersThisMonth = users.length > 0 ? Math.min(5, users.length) : 0;
 
   // Handlers
   const handleUserClick = (user: User) => {
@@ -193,196 +191,172 @@ const Users = () => {
 
   if (loading) {
     return (
-      <div className="min-h-screen bg-background">
-        <StandardHeader />
-        <main className="pt-20 pb-20 px-4">
-          <div className="container mx-auto">
-            <div className="text-center py-10">Loading users...</div>
-          </div>
-        </main>
-      </div>
+      <DashboardLayout>
+        <div className="text-center py-10">Loading users...</div>
+      </DashboardLayout>
     );
   }
 
   return (
-    <div className="min-h-screen bg-background">
-      <StandardHeader />
-      <main className="pt-20 pb-20 px-4">
-        <div className="container mx-auto">
-          {/* Page Header */}
-          <div className="flex flex-col md:flex-row justify-between items-start md:items-center mb-6 gap-4">
-            <div>
-              <h1 className="text-2xl font-bold text-foreground">User Management</h1>
-              <p className="text-muted-foreground">Manage employees, roles, and permissions</p>
-            </div>
-            <div className="flex gap-2 flex-wrap">
-              <Button variant="outline" onClick={() => setIsCSVImportOpen(true)} className="gap-2">
-                <Upload className="h-4 w-4" />
-                Import CSV
+    <DashboardLayout>
+      {/* Page Header */}
+      <div className="flex flex-col lg:flex-row justify-between items-start lg:items-center mb-6 gap-4">
+        <div>
+          <h1 className="text-2xl font-bold text-foreground">User Management</h1>
+          <p className="text-muted-foreground">Manage employees, roles, and permissions</p>
+        </div>
+        <div className="flex gap-2 flex-wrap">
+          <Button variant="outline" onClick={() => setIsCSVImportOpen(true)} className="gap-2">
+            <Upload className="h-4 w-4" />
+            Import CSV
+          </Button>
+          <ExportUsersDropdown users={filteredUsers} selectedUsers={selectedUsers} />
+          {isAdmin && (
+            <Button onClick={handleAddUser} className="gap-2">
+              <UserPlus className="h-4 w-4" />
+              Add Employee
+            </Button>
+          )}
+        </div>
+      </div>
+
+      {/* Bulk Actions Bar */}
+      {selectedUsers.length > 0 && (
+        <Card className="p-4 mb-6 bg-primary/5 border-primary/20">
+          <div className="flex flex-col lg:flex-row items-start lg:items-center justify-between gap-4">
+            <div className="flex items-center gap-2">
+              <Badge variant="secondary" className="text-sm">
+                {selectedUsers.length} selected
+              </Badge>
+              <Button variant="ghost" size="sm" onClick={handleClearSelection}>
+                <X className="h-4 w-4 mr-1" />
+                Clear
               </Button>
-              <ExportUsersDropdown users={filteredUsers} selectedUsers={selectedUsers} />
+            </div>
+
+            <div className="flex flex-wrap items-center gap-2">
               {isAdmin && (
-                <Button onClick={handleAddUser} className="gap-2">
-                  <UserPlus className="h-4 w-4" />
-                  Add Employee
-                </Button>
+                <>
+                  <DropdownMenu>
+                    <DropdownMenuTrigger asChild>
+                      <Button variant="outline" size="sm" disabled={bulkActionLoading} className="gap-2">
+                        <UserCog className="h-4 w-4" />
+                        Change Status
+                      </Button>
+                    </DropdownMenuTrigger>
+                    <DropdownMenuContent>
+                      <DropdownMenuItem onClick={() => handleBulkStatusChange('active')}>Set Active</DropdownMenuItem>
+                      <DropdownMenuItem onClick={() => handleBulkStatusChange('inactive')}>Set Inactive</DropdownMenuItem>
+                      <DropdownMenuSeparator />
+                      <DropdownMenuItem onClick={() => handleBulkStatusChange('deactivated')} className="text-destructive">
+                        Deactivate
+                      </DropdownMenuItem>
+                    </DropdownMenuContent>
+                  </DropdownMenu>
+
+                  <DropdownMenu>
+                    <DropdownMenuTrigger asChild>
+                      <Button variant="outline" size="sm" disabled={bulkActionLoading} className="gap-2">
+                        <Shield className="h-4 w-4" />
+                        Change Role
+                      </Button>
+                    </DropdownMenuTrigger>
+                    <DropdownMenuContent>
+                      <DropdownMenuItem onClick={() => handleBulkRoleChange('employee')}>Set as Employee</DropdownMenuItem>
+                      <DropdownMenuItem onClick={() => handleBulkRoleChange('supervisor')}>Set as Manager</DropdownMenuItem>
+                      <DropdownMenuItem onClick={() => handleBulkRoleChange('admin')}>Set as Admin</DropdownMenuItem>
+                    </DropdownMenuContent>
+                  </DropdownMenu>
+                </>
               )}
             </div>
           </div>
+        </Card>
+      )}
 
-          {/* Bulk Actions Bar */}
-          {selectedUsers.length > 0 && (
-            <Card className="p-4 mb-6 bg-primary/5 border-primary/20">
-              <div className="flex flex-col md:flex-row items-start md:items-center justify-between gap-4">
-                <div className="flex items-center gap-2">
-                  <Badge variant="secondary" className="text-sm">
-                    {selectedUsers.length} selected
-                  </Badge>
-                  <Button variant="ghost" size="sm" onClick={handleClearSelection}>
-                    <X className="h-4 w-4 mr-1" />
-                    Clear
-                  </Button>
-                </div>
+      {/* User Stats */}
+      <UserStats
+        activeUsers={activeUsers}
+        pendingApprovals={pendingApprovals}
+        newUsers={newUsersThisMonth}
+        activeUsersChange={newUsersThisMonth}
+      />
 
-                <div className="flex flex-wrap items-center gap-2">
-                  {isAdmin && (
-                    <>
-                      <DropdownMenu>
-                        <DropdownMenuTrigger asChild>
-                          <Button variant="outline" size="sm" disabled={bulkActionLoading} className="gap-2">
-                            <UserCog className="h-4 w-4" />
-                            Change Status
-                          </Button>
-                        </DropdownMenuTrigger>
-                        <DropdownMenuContent>
-                          <DropdownMenuItem onClick={() => handleBulkStatusChange('active')}>Set Active</DropdownMenuItem>
-                          <DropdownMenuItem onClick={() => handleBulkStatusChange('inactive')}>Set Inactive</DropdownMenuItem>
-                          <DropdownMenuSeparator />
-                          <DropdownMenuItem onClick={() => handleBulkStatusChange('deactivated')} className="text-destructive">
-                            Deactivate
-                          </DropdownMenuItem>
-                        </DropdownMenuContent>
-                      </DropdownMenu>
+      {/* Filters */}
+      <UserFilters
+        searchQuery={searchQuery}
+        selectedRole={selectedRole}
+        selectedStatus={selectedStatus}
+        selectedDepartment={selectedDepartment}
+        departments={departments}
+        onSearch={setSearchQuery}
+        onRoleFilter={setSelectedRole}
+        onStatusFilter={setSelectedStatus}
+        onDepartmentFilter={setSelectedDepartment}
+      />
 
-                      <DropdownMenu>
-                        <DropdownMenuTrigger asChild>
-                          <Button variant="outline" size="sm" disabled={bulkActionLoading} className="gap-2">
-                            <Shield className="h-4 w-4" />
-                            Change Role
-                          </Button>
-                        </DropdownMenuTrigger>
-                        <DropdownMenuContent>
-                          <DropdownMenuItem onClick={() => handleBulkRoleChange('employee')}>Set as Employee</DropdownMenuItem>
-                          <DropdownMenuItem onClick={() => handleBulkRoleChange('supervisor')}>Set as Manager</DropdownMenuItem>
-                          <DropdownMenuItem onClick={() => handleBulkRoleChange('admin')}>Set as Admin</DropdownMenuItem>
-                        </DropdownMenuContent>
-                      </DropdownMenu>
-                    </>
-                  )}
-                </div>
-              </div>
-            </Card>
-          )}
+      {/* User Table */}
+      <UserTable
+        users={paginatedUsers}
+        selectedUsers={selectedUsers}
+        onUserClick={handleUserClick}
+        onEditUser={handleEditUser}
+        onDeleteUser={handleDeleteClick}
+        onUserSelect={handleUserSelect}
+        onSelectAll={handleSelectAll}
+      />
 
-          {/* User Stats */}
-          <UserStats
-            activeUsers={activeUsers}
-            pendingApprovals={pendingApprovals}
-            newUsers={newUsersThisMonth}
-            activeUsersChange={newUsersThisMonth}
-          />
-
-          {/* Filters */}
-          <UserFilters
-            searchQuery={searchQuery}
-            selectedRole={selectedRole}
-            selectedStatus={selectedStatus}
-            selectedDepartment={selectedDepartment}
-            departments={departments}
-            onSearch={setSearchQuery}
-            onRoleFilter={setSelectedRole}
-            onStatusFilter={setSelectedStatus}
-            onDepartmentFilter={setSelectedDepartment}
-          />
-
-          {/* User Table */}
-          <UserTable
-            users={paginatedUsers}
-            selectedUsers={selectedUsers}
-            onUserClick={handleUserClick}
-            onEditUser={handleEditUser}
-            onDeleteUser={handleDeleteClick}
-            onUserSelect={handleUserSelect}
-            onSelectAll={handleSelectAll}
-          />
-
-          {/* Pagination */}
-          {totalPages > 1 && (
-            <div className="flex flex-col md:flex-row justify-between items-center mt-6 gap-4">
-              <div className="flex items-center gap-2 text-sm text-muted-foreground">
-                <span>Showing {startIndex + 1}-{Math.min(startIndex + itemsPerPage, filteredUsers.length)} of {filteredUsers.length}</span>
-                <Select value={String(itemsPerPage)} onValueChange={(v) => setItemsPerPage(Number(v))}>
-                  <SelectTrigger className="w-[80px]">
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="10">10</SelectItem>
-                    <SelectItem value="20">20</SelectItem>
-                    <SelectItem value="50">50</SelectItem>
-                    <SelectItem value="100">100</SelectItem>
-                  </SelectContent>
-                </Select>
-                <span>per page</span>
-              </div>
-
-              <Pagination>
-                <PaginationContent>
-                  <PaginationItem>
-                    <PaginationPrevious
-                      onClick={() => setCurrentPage(Math.max(1, currentPage - 1))}
-                      className={currentPage === 1 ? 'pointer-events-none opacity-50' : 'cursor-pointer'}
-                    />
-                  </PaginationItem>
-                  {Array.from({ length: Math.min(5, totalPages) }, (_, i) => {
-                    const page = i + 1;
-                    return (
-                      <PaginationItem key={page}>
-                        <PaginationLink
-                          onClick={() => setCurrentPage(page)}
-                          isActive={currentPage === page}
-                          className="cursor-pointer"
-                        >
-                          {page}
-                        </PaginationLink>
-                      </PaginationItem>
-                    );
-                  })}
-                  <PaginationItem>
-                    <PaginationNext
-                      onClick={() => setCurrentPage(Math.min(totalPages, currentPage + 1))}
-                      className={currentPage === totalPages ? 'pointer-events-none opacity-50' : 'cursor-pointer'}
-                    />
-                  </PaginationItem>
-                </PaginationContent>
-              </Pagination>
-            </div>
-          )}
-        </div>
-      </main>
-
-      {/* Footer */}
-      <footer className="fixed bottom-0 w-full bg-background border-t border-border shadow-sm z-40">
-        <div className="container mx-auto px-4 py-4">
-          <div className="flex items-center justify-between text-sm text-muted-foreground">
-            <div className="flex space-x-6">
-              <a href="#" className="hover:text-primary">Support</a>
-              <a href="/privacy" className="hover:text-primary">Privacy Policy</a>
-              <a href="#" className="hover:text-primary">Terms</a>
-            </div>
-            <button onClick={signOut} className="text-destructive hover:text-destructive/80">Logout</button>
+      {/* Pagination */}
+      {totalPages > 1 && (
+        <div className="flex flex-col lg:flex-row justify-between items-center mt-6 gap-4">
+          <div className="flex items-center gap-2 text-sm text-muted-foreground">
+            <span>Showing {startIndex + 1}-{Math.min(startIndex + itemsPerPage, filteredUsers.length)} of {filteredUsers.length}</span>
+            <Select value={String(itemsPerPage)} onValueChange={(v) => setItemsPerPage(Number(v))}>
+              <SelectTrigger className="w-[80px]">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="10">10</SelectItem>
+                <SelectItem value="20">20</SelectItem>
+                <SelectItem value="50">50</SelectItem>
+                <SelectItem value="100">100</SelectItem>
+              </SelectContent>
+            </Select>
+            <span>per page</span>
           </div>
+
+          <Pagination>
+            <PaginationContent>
+              <PaginationItem>
+                <PaginationPrevious
+                  onClick={() => setCurrentPage(Math.max(1, currentPage - 1))}
+                  className={currentPage === 1 ? 'pointer-events-none opacity-50' : 'cursor-pointer'}
+                />
+              </PaginationItem>
+              {Array.from({ length: Math.min(5, totalPages) }, (_, i) => {
+                const page = i + 1;
+                return (
+                  <PaginationItem key={page}>
+                    <PaginationLink
+                      onClick={() => setCurrentPage(page)}
+                      isActive={currentPage === page}
+                      className="cursor-pointer"
+                    >
+                      {page}
+                    </PaginationLink>
+                  </PaginationItem>
+                );
+              })}
+              <PaginationItem>
+                <PaginationNext
+                  onClick={() => setCurrentPage(Math.min(totalPages, currentPage + 1))}
+                  className={currentPage === totalPages ? 'pointer-events-none opacity-50' : 'cursor-pointer'}
+                />
+              </PaginationItem>
+            </PaginationContent>
+          </Pagination>
         </div>
-      </footer>
+      )}
 
       {/* Dialogs */}
       <UserDialog
@@ -412,7 +386,7 @@ const Users = () => {
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
-    </div>
+    </DashboardLayout>
   );
 };
 

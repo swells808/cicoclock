@@ -19,8 +19,7 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
-import { StandardHeader } from "@/components/layout/StandardHeader";
-import { useAuth } from "@/contexts/AuthContext";
+import { DashboardLayout } from "@/components/layout/DashboardLayout";
 import {
   Select,
   SelectContent,
@@ -41,7 +40,6 @@ import { Textarea } from "@/components/ui/textarea";
 import { useProjects, useCreateProject } from "@/hooks/useProjects";
 
 const Projects = () => {
-  const { signOut } = useAuth();
   const { data: projects = [], isLoading, error } = useProjects();
   const createProject = useCreateProject();
   
@@ -97,234 +95,218 @@ const Projects = () => {
 
   if (isLoading) {
     return (
-      <div className="min-h-screen bg-background">
-        <StandardHeader />
-        <main className="pt-20 pb-20">
-          <div className="container mx-auto px-4">
-            <div className="text-center py-10">Loading projects...</div>
-          </div>
-        </main>
-      </div>
+      <DashboardLayout>
+        <div className="text-center py-10">Loading projects...</div>
+      </DashboardLayout>
     );
   }
 
   if (error) {
     return (
-      <div className="min-h-screen bg-background">
-        <StandardHeader />
-        <main className="pt-20 pb-20">
-          <div className="container mx-auto px-4">
-            <div className="text-center py-10 text-destructive">Error: {error.message}</div>
-          </div>
-        </main>
-      </div>
+      <DashboardLayout>
+        <div className="text-center py-10 text-destructive">Error: {error.message}</div>
+      </DashboardLayout>
     );
   }
 
   return (
-    <div className="min-h-screen bg-background">
-      <StandardHeader />
-
-      <main className="pt-20 pb-20">
-        <div className="container mx-auto px-4">
-          {/* Project Overview */}
-          <section className="mb-8">
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-              <div className="bg-card p-6 rounded-lg shadow-sm border border-border">
-                <div className="flex items-center justify-between">
-                  <h3 className="text-lg font-semibold text-foreground">Active Projects</h3>
-                  <span className="text-2xl font-bold text-green-600">
-                    {projects.filter(p => p.is_active).length}
-                  </span>
-                </div>
-              </div>
-              <div className="bg-card p-6 rounded-lg shadow-sm border border-border">
-                <div className="flex items-center justify-between">
-                  <h3 className="text-lg font-semibold text-foreground">Total Projects</h3>
-                  <span className="text-2xl font-bold text-primary">{projects.length}</span>
-                </div>
-              </div>
-              <div className="bg-card p-6 rounded-lg shadow-sm border border-border">
-                <div className="flex items-center justify-between">
-                  <h3 className="text-lg font-semibold text-foreground">Inactive Projects</h3>
-                  <span className="text-2xl font-bold text-orange-500">
-                    {projects.filter(p => !p.is_active).length}
-                  </span>
-                </div>
-              </div>
+    <DashboardLayout>
+      {/* Project Overview */}
+      <section className="mb-8">
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+          <div className="bg-card p-6 rounded-lg shadow-sm border border-border">
+            <div className="flex items-center justify-between">
+              <h3 className="text-lg font-semibold text-foreground">Active Projects</h3>
+              <span className="text-2xl font-bold text-green-600">
+                {projects.filter(p => p.is_active).length}
+              </span>
             </div>
-          </section>
+          </div>
+          <div className="bg-card p-6 rounded-lg shadow-sm border border-border">
+            <div className="flex items-center justify-between">
+              <h3 className="text-lg font-semibold text-foreground">Total Projects</h3>
+              <span className="text-2xl font-bold text-primary">{projects.length}</span>
+            </div>
+          </div>
+          <div className="bg-card p-6 rounded-lg shadow-sm border border-border">
+            <div className="flex items-center justify-between">
+              <h3 className="text-lg font-semibold text-foreground">Inactive Projects</h3>
+              <span className="text-2xl font-bold text-orange-500">
+                {projects.filter(p => !p.is_active).length}
+              </span>
+            </div>
+          </div>
+        </div>
+      </section>
 
-          {/* Project List */}
-          <section className="bg-card rounded-lg shadow-sm border border-border">
-            <div className="p-6">
-              <div className="flex flex-col md:flex-row md:items-center md:justify-between mb-6">
-                <h2 className="text-xl font-semibold mb-4 md:mb-0">Projects</h2>
-                <div className="flex flex-col md:flex-row gap-4">
-                  <Select value={statusFilter} onValueChange={setStatusFilter}>
-                    <SelectTrigger className="w-[180px]">
-                      <SelectValue placeholder="Filter by status" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="all">All Status</SelectItem>
-                      <SelectItem value="Active">Active</SelectItem>
-                      <SelectItem value="Inactive">Inactive</SelectItem>
-                    </SelectContent>
-                  </Select>
+      {/* Project List */}
+      <section className="bg-card rounded-lg shadow-sm border border-border">
+        <div className="p-6">
+          <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between mb-6 gap-4">
+            <h2 className="text-xl font-semibold">Projects</h2>
+            <div className="flex flex-col lg:flex-row gap-4">
+              <Select value={statusFilter} onValueChange={setStatusFilter}>
+                <SelectTrigger className="w-[180px]">
+                  <SelectValue placeholder="Filter by status" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">All Status</SelectItem>
+                  <SelectItem value="Active">Active</SelectItem>
+                  <SelectItem value="Inactive">Inactive</SelectItem>
+                </SelectContent>
+              </Select>
 
-                  <Button
-                    variant="outline"
-                    size="icon"
-                    onClick={() => setSortOrder(prev => prev === "asc" ? "desc" : "asc")}
-                    className="w-10 h-10"
-                  >
-                    {sortOrder === "asc" ? <ArrowDownAZ className="h-4 w-4" /> : <ArrowUpZA className="h-4 w-4" />}
-                  </Button>
+              <Button
+                variant="outline"
+                size="icon"
+                onClick={() => setSortOrder(prev => prev === "asc" ? "desc" : "asc")}
+                className="w-10 h-10"
+              >
+                {sortOrder === "asc" ? <ArrowDownAZ className="h-4 w-4" /> : <ArrowUpZA className="h-4 w-4" />}
+              </Button>
 
-                  <div className="relative">
-                    <Input
-                      type="text"
-                      placeholder="Search projects..."
-                      className="w-full md:w-64 pl-10"
-                      value={searchQuery}
-                      onChange={(e) => setSearchQuery(e.target.value)}
-                    />
-                    <Search className="absolute left-3 top-3 h-4 w-4 text-gray-400" />
-                  </div>
-                  <div className="flex gap-2">
-                    <Button
-                      variant="outline"
-                      size="icon"
-                      className={viewMode === "list" ? "bg-gray-100" : ""}
-                      onClick={() => setViewMode("list")}
-                    >
-                      <List className="h-4 w-4" />
-                    </Button>
-                    <Button
-                      variant="outline"
-                      size="icon"
-                      className={viewMode === "grid" ? "bg-gray-100" : ""}
-                      onClick={() => setViewMode("grid")}
-                    >
-                      <LayoutGrid className="h-4 w-4" />
-                    </Button>
-                  </div>
-                  <Button
-                    className="bg-green-600 hover:bg-green-700 text-white"
-                    onClick={() => setShowNewProjectDialog(true)}
-                  >
-                    <Plus className="h-4 w-4 mr-2" />
-                    New Project
-                  </Button>
-                </div>
+              <div className="relative">
+                <Input
+                  type="text"
+                  placeholder="Search projects..."
+                  className="w-full lg:w-64 pl-10"
+                  value={searchQuery}
+                  onChange={(e) => setSearchQuery(e.target.value)}
+                />
+                <Search className="absolute left-3 top-3 h-4 w-4 text-gray-400" />
               </div>
+              <div className="flex gap-2">
+                <Button
+                  variant="outline"
+                  size="icon"
+                  className={viewMode === "list" ? "bg-gray-100" : ""}
+                  onClick={() => setViewMode("list")}
+                >
+                  <List className="h-4 w-4" />
+                </Button>
+                <Button
+                  variant="outline"
+                  size="icon"
+                  className={viewMode === "grid" ? "bg-gray-100" : ""}
+                  onClick={() => setViewMode("grid")}
+                >
+                  <LayoutGrid className="h-4 w-4" />
+                </Button>
+              </div>
+              <Button
+                className="bg-green-600 hover:bg-green-700 text-white"
+                onClick={() => setShowNewProjectDialog(true)}
+              >
+                <Plus className="h-4 w-4 mr-2" />
+                New Project
+              </Button>
+            </div>
+          </div>
 
-              {/* List View */}
-              {viewMode === "list" && (
-                <div className="overflow-x-auto">
-                  <table className="w-full">
-                    <thead>
-                      <tr className="border-b border-border">
-                        <th className="text-left py-4 px-4 cursor-pointer group" onClick={() => handleSort("name")}>
-                          <div className="flex items-center gap-1">
-                            Project Name
-                            {sortField === "name" && (sortOrder === "asc" ? <ArrowUpZA className="h-4 w-4 text-gray-500" /> : <ArrowDownAZ className="h-4 w-4 text-gray-500" />)}
-                          </div>
-                        </th>
-                        <th className="text-left py-4 px-4">Client</th>
-                        <th className="text-left py-4 px-4">Status</th>
-                        <th className="text-left py-4 px-4">Hours</th>
-                        <th className="text-left py-4 px-4 cursor-pointer group" onClick={() => handleSort("created_at")}>
-                          <div className="flex items-center gap-1">
-                            Created
-                            {sortField === "created_at" && (sortOrder === "asc" ? <ArrowUpZA className="h-4 w-4 text-gray-500" /> : <ArrowDownAZ className="h-4 w-4 text-gray-500" />)}
-                          </div>
-                        </th>
-                        <th className="text-left py-4 px-4">Actions</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {filteredProjects.map((project) => (
-                        <tr key={project.id} className="border-b border-border hover:bg-muted/50">
-                          <td className="py-4 px-4">
-                            <div className="flex items-center">
-                              <div className={`w-2 h-2 rounded-full mr-2 ${project.is_active ? 'bg-green-500' : 'bg-gray-400'}`}></div>
-                              {project.name}
-                            </div>
-                          </td>
-                          <td className="py-4 px-4">{project.clients?.company_name || 'N/A'}</td>
-                          <td className="py-4 px-4">
-                            <span className={`px-3 py-1 rounded-full text-sm ${project.is_active ? "bg-green-100 text-green-800" : "bg-gray-100 text-gray-800"}`}>
-                              {project.is_active ? 'Active' : 'Inactive'}
-                            </span>
-                          </td>
-                          <td className="py-4 px-4">{project.estimated_hours ? `${project.estimated_hours} hrs` : '0 hrs'}</td>
-                          <td className="py-4 px-4">{new Date(project.created_at).toLocaleDateString()}</td>
-                          <td className="py-4 px-4">
-                            <DropdownMenu>
-                              <DropdownMenuTrigger asChild>
-                                <Button variant="ghost" size="icon">
-                                  <MoreHorizontal className="h-4 w-4 text-gray-400" />
-                                </Button>
-                              </DropdownMenuTrigger>
-                              <DropdownMenuContent align="end">
-                                <DropdownMenuItem>
-                                  <Eye className="h-4 w-4 mr-2" />
-                                  View Details
-                                </DropdownMenuItem>
-                                <DropdownMenuItem>
-                                  <Edit className="h-4 w-4 mr-2" />
-                                  Edit Project
-                                </DropdownMenuItem>
-                                <DropdownMenuSeparator />
-                                <DropdownMenuItem className="text-red-600">Archive</DropdownMenuItem>
-                              </DropdownMenuContent>
-                            </DropdownMenu>
-                          </td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                </div>
-              )}
-
-              {/* Grid View */}
-              {viewMode === "grid" && (
-                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 mt-6">
+          {/* List View */}
+          {viewMode === "list" && (
+            <div className="overflow-x-auto">
+              <table className="w-full">
+                <thead>
+                  <tr className="border-b border-border">
+                    <th className="text-left py-4 px-4 cursor-pointer group" onClick={() => handleSort("name")}>
+                      <div className="flex items-center gap-1">
+                        Project Name
+                        {sortField === "name" && (sortOrder === "asc" ? <ArrowUpZA className="h-4 w-4 text-gray-500" /> : <ArrowDownAZ className="h-4 w-4 text-gray-500" />)}
+                      </div>
+                    </th>
+                    <th className="text-left py-4 px-4">Client</th>
+                    <th className="text-left py-4 px-4">Status</th>
+                    <th className="text-left py-4 px-4">Hours</th>
+                    <th className="text-left py-4 px-4 cursor-pointer group" onClick={() => handleSort("created_at")}>
+                      <div className="flex items-center gap-1">
+                        Created
+                        {sortField === "created_at" && (sortOrder === "asc" ? <ArrowUpZA className="h-4 w-4 text-gray-500" /> : <ArrowDownAZ className="h-4 w-4 text-gray-500" />)}
+                      </div>
+                    </th>
+                    <th className="text-left py-4 px-4">Actions</th>
+                  </tr>
+                </thead>
+                <tbody>
                   {filteredProjects.map((project) => (
-                    <div key={project.id} className="border border-border rounded-lg p-5 shadow-sm hover:shadow transition-shadow bg-card">
-                      <div className="flex justify-between items-start mb-4">
-                        <h3 className="font-semibold">{project.name}</h3>
-                        <span className={`px-3 py-1 rounded-full text-xs ${project.is_active ? "bg-green-100 text-green-800" : "bg-gray-100 text-gray-800"}`}>
+                    <tr key={project.id} className="border-b border-border hover:bg-muted/50">
+                      <td className="py-4 px-4">
+                        <div className="flex items-center">
+                          <div className={`w-2 h-2 rounded-full mr-2 ${project.is_active ? 'bg-green-500' : 'bg-gray-400'}`}></div>
+                          {project.name}
+                        </div>
+                      </td>
+                      <td className="py-4 px-4">{project.clients?.company_name || 'N/A'}</td>
+                      <td className="py-4 px-4">
+                        <span className={`px-3 py-1 rounded-full text-sm ${project.is_active ? "bg-green-100 text-green-800" : "bg-gray-100 text-gray-800"}`}>
                           {project.is_active ? 'Active' : 'Inactive'}
                         </span>
-                      </div>
-                      <p className="text-sm text-muted-foreground mb-4 line-clamp-2">{project.description || 'No description'}</p>
-                      <div className="flex justify-between text-sm mb-4">
-                        <span className="text-muted-foreground">Client: {project.clients?.company_name || 'N/A'}</span>
-                        <span className="text-muted-foreground">Hours: {project.estimated_hours ? `${project.estimated_hours} hrs` : '0 hrs'}</span>
-                      </div>
-                      <div className="flex justify-between items-center">
-                        <span className="text-xs text-muted-foreground">Created: {new Date(project.created_at).toLocaleDateString()}</span>
-                        <Button variant="ghost" size="sm" className="p-0 h-8 w-8">
-                          <Edit className="h-4 w-4" />
-                        </Button>
-                      </div>
-                    </div>
+                      </td>
+                      <td className="py-4 px-4">{project.estimated_hours ? `${project.estimated_hours} hrs` : '0 hrs'}</td>
+                      <td className="py-4 px-4">{new Date(project.created_at).toLocaleDateString()}</td>
+                      <td className="py-4 px-4">
+                        <DropdownMenu>
+                          <DropdownMenuTrigger asChild>
+                            <Button variant="ghost" size="icon">
+                              <MoreHorizontal className="h-4 w-4 text-gray-400" />
+                            </Button>
+                          </DropdownMenuTrigger>
+                          <DropdownMenuContent align="end">
+                            <DropdownMenuItem>
+                              <Eye className="h-4 w-4 mr-2" />
+                              View Details
+                            </DropdownMenuItem>
+                            <DropdownMenuItem>
+                              <Edit className="h-4 w-4 mr-2" />
+                              Edit Project
+                            </DropdownMenuItem>
+                            <DropdownMenuSeparator />
+                            <DropdownMenuItem className="text-red-600">Archive</DropdownMenuItem>
+                          </DropdownMenuContent>
+                        </DropdownMenu>
+                      </td>
+                    </tr>
                   ))}
-                </div>
-              )}
-
-              {filteredProjects.length === 0 && (
-                <div className="text-center py-10">
-                  <p className="text-gray-500 mb-4">No projects found matching your search</p>
-                  <Button onClick={() => setSearchQuery("")} variant="outline">Clear search</Button>
-                </div>
-              )}
+                </tbody>
+              </table>
             </div>
-          </section>
+          )}
+
+          {/* Grid View */}
+          {viewMode === "grid" && (
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 mt-6">
+              {filteredProjects.map((project) => (
+                <div key={project.id} className="border border-border rounded-lg p-5 shadow-sm hover:shadow transition-shadow bg-card">
+                  <div className="flex justify-between items-start mb-4">
+                    <h3 className="font-semibold">{project.name}</h3>
+                    <span className={`px-3 py-1 rounded-full text-xs ${project.is_active ? "bg-green-100 text-green-800" : "bg-gray-100 text-gray-800"}`}>
+                      {project.is_active ? 'Active' : 'Inactive'}
+                    </span>
+                  </div>
+                  <p className="text-sm text-muted-foreground mb-4 line-clamp-2">{project.description || 'No description'}</p>
+                  <div className="flex justify-between text-sm mb-4">
+                    <span className="text-muted-foreground">Client: {project.clients?.company_name || 'N/A'}</span>
+                    <span className="text-muted-foreground">Hours: {project.estimated_hours ? `${project.estimated_hours} hrs` : '0 hrs'}</span>
+                  </div>
+                  <div className="flex justify-between items-center">
+                    <span className="text-xs text-muted-foreground">Created: {new Date(project.created_at).toLocaleDateString()}</span>
+                    <Button variant="ghost" size="sm" className="p-0 h-8 w-8">
+                      <Edit className="h-4 w-4" />
+                    </Button>
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+
+          {filteredProjects.length === 0 && (
+            <div className="text-center py-10">
+              <p className="text-gray-500 mb-4">No projects found matching your search</p>
+              <Button onClick={() => setSearchQuery("")} variant="outline">Clear search</Button>
+            </div>
+          )}
         </div>
-      </main>
+      </section>
 
       {/* New Project Dialog */}
       <Dialog open={showNewProjectDialog} onOpenChange={setShowNewProjectDialog}>
@@ -361,20 +343,7 @@ const Projects = () => {
           </DialogFooter>
         </DialogContent>
       </Dialog>
-
-      <footer className="fixed bottom-0 w-full bg-background border-t border-border shadow-sm z-40">
-        <div className="container mx-auto px-4 py-4">
-          <div className="flex items-center justify-between text-sm text-muted-foreground">
-            <div className="flex space-x-6">
-              <a href="#" className="hover:text-primary">Support</a>
-              <a href="/privacy" className="hover:text-primary">Privacy Policy</a>
-              <a href="#" className="hover:text-primary">Terms</a>
-            </div>
-            <button onClick={signOut} className="text-destructive hover:text-destructive/80">Logout</button>
-          </div>
-        </div>
-      </footer>
-    </div>
+    </DashboardLayout>
   );
 };
 

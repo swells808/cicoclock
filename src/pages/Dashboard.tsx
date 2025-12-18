@@ -5,7 +5,7 @@ import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Select, SelectContent, SelectGroup, SelectItem, SelectLabel, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { format } from "date-fns";
-import { StandardHeader } from "@/components/layout/StandardHeader";
+import { DashboardLayout } from "@/components/layout/DashboardLayout";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/contexts/AuthContext";
 import { useActiveProjects } from "@/hooks/useProjects";
@@ -284,249 +284,227 @@ const Dashboard = () => {
   const todayEntries = timeEntries?.filter(entry => isToday(entry.start_time)) || [];
 
   return (
-    <div className="min-h-screen bg-background">
-      <StandardHeader />
-
-      <main className="pt-20 pb-20">
-        <div className="container mx-auto px-4">
-          {/* Current Status Section */}
-          <Card className="mb-8 p-6">
-            <div className="flex items-center justify-between">
-              <div>
-                <h2 className="text-2xl font-bold text-foreground mb-2">
-                  {isClockedIn ? "Currently Working" : "Not Clocked In"}
-                </h2>
-                <p className="text-muted-foreground">
-                  {isClockedIn && currentTimeEntry
-                    ? `Clocked in at ${format(new Date(timeEntries?.find(e => e.id === currentTimeEntry)?.start_time || new Date()), "h:mm a")}`
-                    : "Ready to start work?"}
-                </p>
-              </div>
-              <div className="flex items-center gap-2">
-                {location && (
-                  <span className="flex items-center text-green-600 text-sm">
-                    <MapPin className="h-4 w-4 mr-1" />
-                    Location Verified
-                  </span>
-                )}
-                {isClockedIn && (
-                  <span className="bg-green-100 dark:bg-green-900/30 text-green-800 dark:text-green-400 px-3 py-1 rounded-full text-sm font-medium">
-                    Active
-                  </span>
-                )}
-              </div>
-            </div>
-          </Card>
-
-          {/* Clock In/Out Section */}
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-8 mb-8">
-            <Card className="md:col-span-1 p-6">
-              <div className="text-center mb-6">
-                <div className="text-3xl font-bold mb-2">{format(currentTime, "h:mm:ss a")}</div>
-                <div className="text-muted-foreground">{format(currentTime, "EEEE, MMMM d, yyyy")}</div>
-              </div>
-
-              <Select value={selectedProject} onValueChange={setSelectedProject}>
-                <SelectTrigger className="w-full mb-4">
-                  <SelectValue placeholder="Select Project (Optional)" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectGroup>
-                    <SelectLabel>Projects</SelectLabel>
-                    {projects?.filter(p => p.is_active).map((project) => (
-                      <SelectItem key={project.id} value={project.id}>
-                        {project.name}
-                      </SelectItem>
-                    ))}
-                  </SelectGroup>
-                </SelectContent>
-              </Select>
-
-              <Select value={selectedTaskType} onValueChange={setSelectedTaskType}>
-                <SelectTrigger className="w-full mb-4">
-                  <SelectValue placeholder="Select Task Type (Optional - defaults to Other)" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectGroup>
-                    <SelectLabel>Task Types</SelectLabel>
-                    {taskTypes.map((taskType) => (
-                      <SelectItem key={taskType.id} value={taskType.id}>
-                        {taskType.name} ({taskType.code})
-                      </SelectItem>
-                    ))}
-                  </SelectGroup>
-                </SelectContent>
-              </Select>
-
-              <Button
-                className={`w-full h-14 text-lg mb-4 ${isClockedIn ? 'bg-red-500 hover:bg-red-600' : 'bg-[#008000] hover:bg-[#008000]/90'}`}
-                onClick={handleClockInOut}
-              >
-                {isClockedIn ? "Clock Out" : "Clock In"}
-              </Button>
-
-              <div className="flex gap-2">
-                <Button
-                  className="flex-1 bg-orange-500 hover:bg-orange-600 text-white"
-                  onClick={() => setIsOnBreak(!isOnBreak)}
-                >
-                  <Coffee className="mr-2 h-4 w-4" />
-                  {isOnBreak ? "End Break" : "Start Break"}
-                </Button>
-                <Button
-                  className="flex-1 bg-[#4BA0F4] hover:bg-[#4BA0F4]/90 text-white"
-                >
-                  <StickyNote className="mr-2 h-4 w-4" />
-                  Add Note
-                </Button>
-              </div>
-            </Card>
-
-            {/* Live Time Log */}
-            <Card className="md:col-span-2 p-6">
-              <div className="flex justify-between items-center mb-6">
-                <h2 className="text-xl font-bold text-foreground">Today's Activity</h2>
-                <div className="flex gap-2">
-                  <Button variant="outline" size="sm">
-                    <FileText className="h-4 w-4 mr-1" />
-                    Export
-                  </Button>
-                  <Button variant="outline" size="sm">
-                    <Edit2 className="h-4 w-4 mr-1" />
-                    Edit
-                  </Button>
-                </div>
-              </div>
-
-              <div className="space-y-4">
-                {/* Current Session */}
-                {isClockedIn && activeEntry && (
-                  <div className="flex items-start space-x-4 p-4 bg-green-50 dark:bg-green-950/30 border border-green-100 dark:border-green-900 rounded-lg">
-                    <PlayCircle className="text-green-600 w-5 h-5 mt-1" />
-                    <div className="flex-1">
-                      <div className="flex justify-between">
-                        <div>
-                          <div className="font-medium">Current Session</div>
-                          <div className="text-sm text-muted-foreground">
-                            {projects?.find(p => p.id === selectedProject)?.name || 'No Project'}
-                          </div>
-                        </div>
-                        <div className="text-sm text-muted-foreground">
-                          Started at {format(new Date(activeEntry.start_time), "h:mm a")}
-                        </div>
-                      </div>
-                    </div>
-                  </div>
-                )}
-
-                {/* Previous Sessions */}
-                {todayEntries
-                  .filter(entry => entry.end_time && entry.id !== currentTimeEntry)
-                  .slice(0, 5)
-                  .map((entry) => (
-                    <div key={entry.id} className="flex items-start space-x-4 p-4 bg-muted/50 rounded-lg">
-                      <CheckCircle className="text-blue-600 w-5 h-5 mt-1" />
-                      <div className="flex-1">
-                        <div className="flex justify-between">
-                          <div>
-                            <div className="font-medium">Work Session</div>
-                            <div className="text-sm text-muted-foreground">{entry.projects?.name || 'No Project'}</div>
-                          </div>
-                          <div className="text-sm text-muted-foreground">
-                            {format(new Date(entry.start_time), 'h:mm a')} - {format(new Date(entry.end_time!), 'h:mm a')} ({entry.duration_minutes ? `${Math.round(entry.duration_minutes / 60 * 10) / 10}h` : '0h'})
-                          </div>
-                        </div>
-                      </div>
-                    </div>
-                  ))}
-
-                {todayEntries.filter(entry => entry.end_time).length === 0 && !isClockedIn && (
-                  <div className="text-center py-4 text-muted-foreground">
-                    No activity yet today. Clock in to start tracking your time.
-                  </div>
-                )}
-              </div>
-            </Card>
+    <DashboardLayout>
+      {/* Current Status Section */}
+      <Card className="mb-8 p-6">
+        <div className="flex items-center justify-between">
+          <div>
+            <h2 className="text-2xl font-bold text-foreground mb-2">
+              {isClockedIn ? "Currently Working" : "Not Clocked In"}
+            </h2>
+            <p className="text-muted-foreground">
+              {isClockedIn && currentTimeEntry
+                ? `Clocked in at ${format(new Date(timeEntries?.find(e => e.id === currentTimeEntry)?.start_time || new Date()), "h:mm a")}`
+                : "Ready to start work?"}
+            </p>
           </div>
-
-          {/* Timesheet History */}
-          <Card className="mb-8 p-6">
-            <div className="flex justify-between items-center mb-6">
-              <h2 className="text-xl font-bold text-foreground">Timesheet History</h2>
-              <Button variant="outline">
-                <Download className="h-4 w-4 mr-2" />
-                Export Timesheet
-              </Button>
-            </div>
-
-            <div className="space-y-4">
-              <div className="grid grid-cols-5 gap-4 text-sm font-medium text-muted-foreground mb-2">
-                <div>Date</div>
-                <div>Project</div>
-                <div>Clock In</div>
-                <div>Clock Out</div>
-                <div>Total Hours</div>
-              </div>
-
-              {timeEntries
-                ?.filter(entry => entry.end_time)
-                .slice(0, 10)
-                .map((entry) => (
-                  <div key={entry.id} className="grid grid-cols-5 gap-4 text-sm border-b border-border pb-4">
-                    <div>{new Date(entry.start_time).toLocaleDateString()}</div>
-                    <div>{entry.projects?.name || 'No Project'}</div>
-                    <div>{format(new Date(entry.start_time), 'h:mm a')}</div>
-                    <div>{entry.end_time ? format(new Date(entry.end_time), 'h:mm a') : 'In Progress'}</div>
-                    <div>{entry.duration_minutes ? `${Math.round(entry.duration_minutes / 60 * 10) / 10}h` : '0h'}</div>
-                  </div>
-                ))}
-
-              {(!timeEntries || timeEntries.filter(entry => entry.end_time).length === 0) && (
-                <div className="text-center py-4 text-muted-foreground">
-                  No time entries yet. Clock in to start tracking your time.
-                </div>
-              )}
-            </div>
-          </Card>
-
-          {/* Task Activities Section */}
-          <div className="mt-6">
-            <RecentTaskActivity />
+          <div className="flex items-center gap-2">
+            {location && (
+              <span className="flex items-center text-green-600 text-sm">
+                <MapPin className="h-4 w-4 mr-1" />
+                Location Verified
+              </span>
+            )}
+            {isClockedIn && (
+              <span className="bg-green-100 dark:bg-green-900/30 text-green-800 dark:text-green-400 px-3 py-1 rounded-full text-sm font-medium">
+                Active
+              </span>
+            )}
           </div>
         </div>
-      </main>
+      </Card>
+
+      {/* Clock In/Out Section */}
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-8 mb-8">
+        <Card className="lg:col-span-1 p-6">
+          <div className="text-center mb-6">
+            <div className="text-3xl font-bold mb-2">{format(currentTime, "h:mm:ss a")}</div>
+            <div className="text-muted-foreground">{format(currentTime, "EEEE, MMMM d, yyyy")}</div>
+          </div>
+
+          <Select value={selectedProject} onValueChange={setSelectedProject}>
+            <SelectTrigger className="w-full mb-4">
+              <SelectValue placeholder="Select Project (Optional)" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectGroup>
+                <SelectLabel>Projects</SelectLabel>
+                {projects?.filter(p => p.is_active).map((project) => (
+                  <SelectItem key={project.id} value={project.id}>
+                    {project.name}
+                  </SelectItem>
+                ))}
+              </SelectGroup>
+            </SelectContent>
+          </Select>
+
+          <Select value={selectedTaskType} onValueChange={setSelectedTaskType}>
+            <SelectTrigger className="w-full mb-4">
+              <SelectValue placeholder="Select Task Type (Optional - defaults to Other)" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectGroup>
+                <SelectLabel>Task Types</SelectLabel>
+                {taskTypes.map((taskType) => (
+                  <SelectItem key={taskType.id} value={taskType.id}>
+                    {taskType.name} ({taskType.code})
+                  </SelectItem>
+                ))}
+              </SelectGroup>
+            </SelectContent>
+          </Select>
+
+          <Button
+            className={`w-full h-14 text-lg mb-4 ${isClockedIn ? 'bg-red-500 hover:bg-red-600' : 'bg-[#008000] hover:bg-[#008000]/90'}`}
+            onClick={handleClockInOut}
+          >
+            {isClockedIn ? "Clock Out" : "Clock In"}
+          </Button>
+
+          <div className="flex gap-2">
+            <Button
+              className="flex-1 bg-orange-500 hover:bg-orange-600 text-white"
+              onClick={() => setIsOnBreak(!isOnBreak)}
+            >
+              <Coffee className="mr-2 h-4 w-4" />
+              {isOnBreak ? "End Break" : "Start Break"}
+            </Button>
+            <Button
+              className="flex-1 bg-[#4BA0F4] hover:bg-[#4BA0F4]/90 text-white"
+            >
+              <StickyNote className="mr-2 h-4 w-4" />
+              Add Note
+            </Button>
+          </div>
+        </Card>
+
+        {/* Live Time Log */}
+        <Card className="lg:col-span-2 p-6">
+          <div className="flex justify-between items-center mb-6">
+            <h2 className="text-xl font-bold text-foreground">Today's Activity</h2>
+            <div className="flex gap-2">
+              <Button variant="outline" size="sm">
+                <FileText className="h-4 w-4 mr-1" />
+                Export
+              </Button>
+              <Button variant="outline" size="sm">
+                <Edit2 className="h-4 w-4 mr-1" />
+                Edit
+              </Button>
+            </div>
+          </div>
+
+          <div className="space-y-4">
+            {/* Current Session */}
+            {isClockedIn && activeEntry && (
+              <div className="flex items-start space-x-4 p-4 bg-green-50 dark:bg-green-950/30 border border-green-100 dark:border-green-900 rounded-lg">
+                <PlayCircle className="text-green-600 w-5 h-5 mt-1" />
+                <div className="flex-1">
+                  <div className="flex justify-between">
+                    <div>
+                      <div className="font-medium">Current Session</div>
+                      <div className="text-sm text-muted-foreground">
+                        {projects?.find(p => p.id === selectedProject)?.name || 'No Project'}
+                      </div>
+                    </div>
+                    <div className="text-sm text-muted-foreground">
+                      Started at {format(new Date(activeEntry.start_time), "h:mm a")}
+                    </div>
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {/* Previous Sessions */}
+            {todayEntries
+              .filter(entry => entry.end_time && entry.id !== currentTimeEntry)
+              .slice(0, 5)
+              .map((entry) => (
+                <div key={entry.id} className="flex items-start space-x-4 p-4 bg-muted/50 rounded-lg">
+                  <CheckCircle className="text-blue-600 w-5 h-5 mt-1" />
+                  <div className="flex-1">
+                    <div className="flex justify-between">
+                      <div>
+                        <div className="font-medium">Work Session</div>
+                        <div className="text-sm text-muted-foreground">{entry.projects?.name || 'No Project'}</div>
+                      </div>
+                      <div className="text-sm text-muted-foreground">
+                        {format(new Date(entry.start_time), 'h:mm a')} - {format(new Date(entry.end_time!), 'h:mm a')} ({entry.duration_minutes ? `${Math.round(entry.duration_minutes / 60 * 10) / 10}h` : '0h'})
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              ))}
+
+            {todayEntries.filter(entry => entry.end_time).length === 0 && !isClockedIn && (
+              <div className="text-center py-4 text-muted-foreground">
+                No activity yet today. Clock in to start tracking your time.
+              </div>
+            )}
+          </div>
+        </Card>
+      </div>
+
+      {/* Timesheet History */}
+      <Card className="mb-8 p-6">
+        <div className="flex justify-between items-center mb-6">
+          <h2 className="text-xl font-bold text-foreground">Timesheet History</h2>
+          <div className="flex gap-2">
+            <Button variant="outline" size="sm">
+              <Download className="h-4 w-4 mr-1" />
+              Export
+            </Button>
+          </div>
+        </div>
+
+        <div className="overflow-x-auto">
+          <table className="w-full">
+            <thead>
+              <tr className="border-b border-border">
+                <th className="text-left py-3 px-4 text-muted-foreground font-medium">Date</th>
+                <th className="text-left py-3 px-4 text-muted-foreground font-medium">Project</th>
+                <th className="text-left py-3 px-4 text-muted-foreground font-medium">Clock In</th>
+                <th className="text-left py-3 px-4 text-muted-foreground font-medium">Clock Out</th>
+                <th className="text-left py-3 px-4 text-muted-foreground font-medium">Duration</th>
+              </tr>
+            </thead>
+            <tbody>
+              {timeEntries?.slice(0, 10).map((entry) => (
+                <tr key={entry.id} className="border-b border-border">
+                  <td className="py-3 px-4">{format(new Date(entry.start_time), 'MMM d, yyyy')}</td>
+                  <td className="py-3 px-4">{entry.projects?.name || 'No Project'}</td>
+                  <td className="py-3 px-4">{format(new Date(entry.start_time), 'h:mm a')}</td>
+                  <td className="py-3 px-4">{entry.end_time ? format(new Date(entry.end_time), 'h:mm a') : 'Active'}</td>
+                  <td className="py-3 px-4">{entry.duration_minutes ? `${Math.round(entry.duration_minutes / 60 * 10) / 10}h` : '-'}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      </Card>
+
+      {/* Recent Task Activity */}
+      <RecentTaskActivity />
 
       {/* Photo Capture Modal */}
-      <PhotoCapture
-        open={showPhotoCapture}
-        onCapture={handlePhotoCapture}
-        onCancel={() => {
-          setShowPhotoCapture(false);
-          setPhotoAction(null);
-        }}
-        title={photoAction === 'clock_in' ? "Clock In Photo" : "Clock Out Photo"}
-        description={photoAction === 'clock_in' ? "Please take a photo to verify your clock in" : "Please take a photo to verify your clock out"}
-      />
-
-      {/* Footer */}
-      <footer className="fixed bottom-0 w-full bg-background border-t border-border shadow-sm z-40">
-        <div className="container mx-auto px-4 py-4">
-          <div className="flex items-center justify-between text-sm text-muted-foreground">
-            <div className="flex space-x-6">
-              <a href="#" className="hover:text-primary">Support</a>
-              <a href="#" className="hover:text-primary">Privacy Policy</a>
-              <a href="#" className="hover:text-primary">Terms</a>
-            </div>
-            <button
-              onClick={signOut}
-              className="text-destructive hover:text-destructive/80"
-            >
-              Logout
-            </button>
+      {showPhotoCapture && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
+          <div className="bg-background p-6 rounded-lg max-w-md w-full mx-4">
+            <h3 className="text-lg font-bold mb-4">
+              {photoAction === 'clock_in' ? 'Clock In Photo' : 'Clock Out Photo'}
+            </h3>
+            <PhotoCapture
+              open={showPhotoCapture}
+              onCapture={handlePhotoCapture}
+              onCancel={() => {
+                setShowPhotoCapture(false);
+                setPhotoAction(null);
+              }}
+            />
           </div>
         </div>
-      </footer>
-    </div>
+      )}
+    </DashboardLayout>
   );
 };
 

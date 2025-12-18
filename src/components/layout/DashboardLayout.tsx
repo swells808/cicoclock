@@ -104,7 +104,7 @@ export const DashboardLayout = ({ children }: DashboardLayoutProps) => {
       {/* Desktop Sidebar */}
       <aside
         className={cn(
-          "hidden md:flex flex-col border-r bg-card transition-all duration-300",
+          "hidden lg:flex flex-col border-r bg-card transition-all duration-300",
           sidebarOpen ? "w-64" : "w-16"
         )}
       >
@@ -158,7 +158,7 @@ export const DashboardLayout = ({ children }: DashboardLayoutProps) => {
       </aside>
 
       {/* Mobile Header */}
-      <div className="md:hidden fixed top-0 left-0 right-0 h-16 border-b bg-background z-50 flex items-center justify-between px-4">
+      <div className="lg:hidden fixed top-0 left-0 right-0 h-16 border-b bg-background z-50 flex items-center justify-between px-4">
         <Link to="/dashboard" className="flex items-center gap-2">
           <Clock className="h-6 w-6 text-primary" />
           <span className="font-bold">CICO</span>
@@ -170,7 +170,7 @@ export const DashboardLayout = ({ children }: DashboardLayoutProps) => {
 
       {/* Mobile Menu */}
       {mobileMenuOpen && (
-        <div className="md:hidden fixed inset-0 top-16 bg-background z-40 p-4">
+        <div className="lg:hidden fixed inset-0 top-16 bg-background z-40 p-4">
           <nav className="space-y-1">
             {navItems.map((item) => (
               <NavItem key={item.path} item={item} />
@@ -187,8 +187,8 @@ export const DashboardLayout = ({ children }: DashboardLayoutProps) => {
 
       {/* Main Content */}
       <main className="flex-1 overflow-auto">
-        <div className="md:hidden h-16" /> {/* Spacer for mobile header */}
-        <div className="p-4 md:p-8">{children}</div>
+        <div className="lg:hidden h-16" /> {/* Spacer for mobile header */}
+        <div className="p-4 lg:p-8">{children}</div>
       </main>
     </div>
   );
