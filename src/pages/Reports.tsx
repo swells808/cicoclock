@@ -1,18 +1,14 @@
 import React, { useState } from "react";
-import { useNavigate } from "react-router-dom";
 import {
   Download,
   Clock,
   FolderOpen,
   ArrowUp,
-  File,
-  File as FileIcon,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { supabase } from "@/integrations/supabase/client";
-import { StandardHeader } from "@/components/layout/StandardHeader";
-import { useAuth } from "@/contexts/AuthContext";
+import { DashboardLayout } from "@/components/layout/DashboardLayout";
 import { useReports } from "@/hooks/useReports";
 import { ReportFilters, ReportFiltersValues } from "@/components/reports/ReportFilters";
 import { buildRealTableHTML } from "@/utils/reportUtils";
@@ -80,8 +76,6 @@ function exportTableAsPDF(type: "employee" | "project") {
 }
 
 const Reports = () => {
-  const navigate = useNavigate();
-  const { signOut } = useAuth();
   const [selectedStartDate, setSelectedStartDate] = useState<Date | undefined>(undefined);
   const [selectedEndDate, setSelectedEndDate] = useState<Date | undefined>(undefined);
   const { metrics, employeeReports, projectReports, loading, error } = useReports(selectedStartDate, selectedEndDate);
@@ -290,172 +284,148 @@ const Reports = () => {
   };
 
   return (
-    <div className="min-h-screen bg-background">
-      <StandardHeader />
-
-      {/* Main Content */}
-      <main className="container mx-auto px-4 py-8">
-        {/* Reports Header */}
-        <section className="mb-8">
-          <div className="flex justify-between items-center mb-6">
-            <h1 className="text-2xl font-bold text-foreground">Reports</h1>
-          </div>
-
-          <Tabs defaultValue="live" className="w-full">
-            <TabsList className="mb-6">
-              <TabsTrigger value="live">Live Reports</TabsTrigger>
-              <TabsTrigger value="scheduled">Automated Reports</TabsTrigger>
-            </TabsList>
-
-            <TabsContent value="live" className="space-y-8">
-              {/* Report Filters */}
-              <ReportFilters onApply={handleGenerateReport} />
-
-              {/* Overview Cards */}
-              <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-                <div className="bg-card p-6 rounded-xl shadow-sm border border-border">
-                  <div className="flex justify-between items-start mb-4">
-                    <div className="text-muted-foreground">Total Hours</div>
-                    <Clock className="text-green-600" />
-                  </div>
-                    <div className="text-2xl font-bold text-foreground">{metrics.totalHours}</div>
-                    <div className="text-sm text-green-600 mt-2 flex items-center">
-                      <ArrowUp className="w-4 h-4 mr-1" /> {metrics.totalHoursChange}% vs last month
-                    </div>
-                </div>
-
-                <div className="bg-card p-6 rounded-xl shadow-sm border border-border">
-                  <div className="flex justify-between items-start mb-4">
-                    <div className="text-muted-foreground">Active Projects</div>
-                    <FolderOpen className="text-primary" />
-                  </div>
-                    <div className="text-2xl font-bold text-foreground">{metrics.activeProjects}</div>
-                    <div className="text-sm text-primary mt-2 flex items-center">
-                      <ArrowUp className="w-4 h-4 mr-1" /> {metrics.activeProjectsChange} new this week
-                    </div>
-                </div>
-
-                <div className="bg-card p-6 rounded-xl shadow-sm border border-border">
-                  <div className="flex justify-between items-start mb-4">
-                    <div className="text-muted-foreground">Overtime Hours</div>
-                    <Clock className="text-orange-500" />
-                  </div>
-                    <div className="text-2xl font-bold text-foreground">{metrics.overtimeHours}</div>
-                    <div className="text-sm text-orange-600 mt-2 flex items-center">
-                      <ArrowUp className="w-4 h-4 mr-1" /> {metrics.overtimeHoursChange} hours vs last month
-                    </div>
-                </div>
-              </div>
-
-              {/* Un-Clocked Users Report */}
-              <UnClockedUsersReport />
-
-              {/* Daily Timecard Report */}
-              <DailyTimecardReport />
-
-              {/* Time Entry Details Report with Photos */}
-              <TimeEntryDetailsReport />
-
-              {/* Report Content */}
-              <section className="bg-card rounded-xl shadow-sm border border-border mb-8">
-                <div className="border-b border-border">
-                  <div className="flex space-x-6 px-6">
-                    <button className="px-4 py-4 text-primary border-b-2 border-primary font-semibold">
-                      Metrics
-                    </button>
-                  </div>
-                </div>
-                <div className="p-6">
-                  <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-                    {/* Work Hours Per Employee Table */}
-                    <div className="bg-muted rounded-lg p-4 h-[300px] overflow-auto">
-                      <div className="font-semibold text-foreground mb-2">Work Hours Per Employee</div>
-                      <table className="min-w-full text-sm rounded-lg overflow-hidden">
-                  <thead>
-                    <tr className="bg-card border-b border-border">
-                      <th className="py-2 px-3 text-left text-muted-foreground">Name</th>
-                      <th className="py-2 px-3 text-left text-muted-foreground">Week</th>
-                      <th className="py-2 px-3 text-left text-muted-foreground">Month</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {employeeReports.slice(0, 5).map((row, i) => (
-                      <tr key={row.name} className={i % 2 === 0 ? "bg-card" : "bg-muted"}>
-                        <td className="py-2 px-3 text-foreground">{row.name}</td>
-                        <td className="py-2 px-3 text-foreground">{row.week}</td>
-                        <td className="py-2 px-3 text-foreground">{row.month}</td>
-                      </tr>
-                    ))}
-                    {employeeReports.length === 0 && (
-                      <tr>
-                        <td colSpan={3} className="py-4 px-3 text-center text-muted-foreground">
-                          No employee data available
-                        </td>
-                      </tr>
-                    )}
-                      </tbody>
-                    </table>
-                  </div>
-                  {/* Project Time Distribution Table */}
-                  <div className="bg-muted rounded-lg p-4 h-[300px] overflow-auto">
-                    <div className="font-semibold text-foreground mb-2">Project Time Distribution</div>
-                    <table className="min-w-full text-sm rounded-lg overflow-auto">
-                  <thead>
-                    <tr className="bg-card border-b border-border">
-                      <th className="py-2 px-3 text-left text-muted-foreground">Project Name</th>
-                      <th className="py-2 px-3 text-left text-muted-foreground">Week</th>
-                      <th className="py-2 px-3 text-left text-muted-foreground">Month</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {projectReports.slice(0, 5).map((row, i) => (
-                      <tr key={row.name} className={i % 2 === 0 ? "bg-card" : "bg-muted"}>
-                        <td className="py-2 px-3 text-foreground">{row.name}</td>
-                        <td className="py-2 px-3 text-foreground">{row.week}</td>
-                        <td className="py-2 px-3 text-foreground">{row.month}</td>
-                      </tr>
-                    ))}
-                    {projectReports.length === 0 && (
-                      <tr>
-                        <td colSpan={3} className="py-4 px-3 text-center text-muted-foreground">
-                          No project data available
-                        </td>
-                      </tr>
-                    )}
-                      </tbody>
-                    </table>
-                  </div>
-                </div>
-              </div>
-            </section>
-            </TabsContent>
-
-            <TabsContent value="scheduled">
-              <ScheduledReportsManager />
-            </TabsContent>
-          </Tabs>
-        </section>
-      </main>
-
-      {/* Footer */}
-      <footer className="fixed bottom-0 w-full bg-background border-t border-border shadow-sm z-40">
-        <div className="container mx-auto px-4 py-4">
-          <div className="flex items-center justify-between text-sm text-muted-foreground">
-            <div className="flex space-x-6">
-              <a href="#" className="hover:text-primary">Support</a>
-              <a href="/privacy" className="hover:text-primary">Privacy Policy</a>
-              <a href="#" className="hover:text-primary">Terms</a>
-            </div>
-            <button
-              onClick={signOut}
-              className="text-destructive hover:text-destructive/80"
-            >
-              Logout
-            </button>
-          </div>
+    <DashboardLayout>
+      {/* Reports Header */}
+      <section className="mb-8">
+        <div className="flex justify-between items-center mb-6">
+          <h1 className="text-2xl font-bold text-foreground">Reports</h1>
         </div>
-      </footer>
-    </div>
+
+        <Tabs defaultValue="live" className="w-full">
+          <TabsList className="mb-6">
+            <TabsTrigger value="live">Live Reports</TabsTrigger>
+            <TabsTrigger value="scheduled">Automated Reports</TabsTrigger>
+          </TabsList>
+
+          <TabsContent value="live" className="space-y-8">
+            {/* Report Filters */}
+            <ReportFilters onApply={handleGenerateReport} />
+
+            {/* Overview Cards */}
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+              <div className="bg-card p-6 rounded-xl shadow-sm border border-border">
+                <div className="flex justify-between items-start mb-4">
+                  <div className="text-muted-foreground">Total Hours</div>
+                  <Clock className="text-green-600" />
+                </div>
+                  <div className="text-2xl font-bold text-foreground">{metrics.totalHours}</div>
+                  <div className="text-sm text-green-600 mt-2 flex items-center">
+                    <ArrowUp className="w-4 h-4 mr-1" /> {metrics.totalHoursChange}% vs last month
+                  </div>
+              </div>
+
+              <div className="bg-card p-6 rounded-xl shadow-sm border border-border">
+                <div className="flex justify-between items-start mb-4">
+                  <div className="text-muted-foreground">Active Projects</div>
+                  <FolderOpen className="text-primary" />
+                </div>
+                  <div className="text-2xl font-bold text-foreground">{metrics.activeProjects}</div>
+                  <div className="text-sm text-primary mt-2 flex items-center">
+                    <ArrowUp className="w-4 h-4 mr-1" /> {metrics.activeProjectsChange} new this week
+                  </div>
+              </div>
+
+              <div className="bg-card p-6 rounded-xl shadow-sm border border-border">
+                <div className="flex justify-between items-start mb-4">
+                  <div className="text-muted-foreground">Overtime Hours</div>
+                  <Clock className="text-orange-500" />
+                </div>
+                  <div className="text-2xl font-bold text-foreground">{metrics.overtimeHours}</div>
+                  <div className="text-sm text-orange-600 mt-2 flex items-center">
+                    <ArrowUp className="w-4 h-4 mr-1" /> {metrics.overtimeHoursChange} hours vs last month
+                  </div>
+              </div>
+            </div>
+
+            {/* Un-Clocked Users Report */}
+            <UnClockedUsersReport />
+
+            {/* Daily Timecard Report */}
+            <DailyTimecardReport />
+
+            {/* Time Entry Details Report with Photos */}
+            <TimeEntryDetailsReport />
+
+            {/* Report Content */}
+            <section className="bg-card rounded-xl shadow-sm border border-border mb-8">
+              <div className="border-b border-border">
+                <div className="flex space-x-6 px-6">
+                  <button className="px-4 py-4 text-primary border-b-2 border-primary font-semibold">
+                    Metrics
+                  </button>
+                </div>
+              </div>
+              <div className="p-6">
+                <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                  {/* Work Hours Per Employee Table */}
+                  <div className="bg-muted rounded-lg p-4 h-[300px] overflow-auto">
+                    <div className="font-semibold text-foreground mb-2">Work Hours Per Employee</div>
+                    <table className="min-w-full text-sm rounded-lg overflow-hidden">
+                <thead>
+                  <tr className="bg-card border-b border-border">
+                    <th className="py-2 px-3 text-left text-muted-foreground">Name</th>
+                    <th className="py-2 px-3 text-left text-muted-foreground">Week</th>
+                    <th className="py-2 px-3 text-left text-muted-foreground">Month</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {employeeReports.slice(0, 5).map((row, i) => (
+                    <tr key={row.name} className={i % 2 === 0 ? "bg-card" : "bg-muted"}>
+                      <td className="py-2 px-3 text-foreground">{row.name}</td>
+                      <td className="py-2 px-3 text-foreground">{row.week}</td>
+                      <td className="py-2 px-3 text-foreground">{row.month}</td>
+                    </tr>
+                  ))}
+                  {employeeReports.length === 0 && (
+                    <tr>
+                      <td colSpan={3} className="py-4 px-3 text-center text-muted-foreground">
+                        No employee data available
+                      </td>
+                    </tr>
+                  )}
+                    </tbody>
+                  </table>
+                </div>
+                {/* Project Time Distribution Table */}
+                <div className="bg-muted rounded-lg p-4 h-[300px] overflow-auto">
+                  <div className="font-semibold text-foreground mb-2">Project Time Distribution</div>
+                  <table className="min-w-full text-sm rounded-lg overflow-auto">
+                <thead>
+                  <tr className="bg-card border-b border-border">
+                    <th className="py-2 px-3 text-left text-muted-foreground">Project Name</th>
+                    <th className="py-2 px-3 text-left text-muted-foreground">Week</th>
+                    <th className="py-2 px-3 text-left text-muted-foreground">Month</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {projectReports.slice(0, 5).map((row, i) => (
+                    <tr key={row.name} className={i % 2 === 0 ? "bg-card" : "bg-muted"}>
+                      <td className="py-2 px-3 text-foreground">{row.name}</td>
+                      <td className="py-2 px-3 text-foreground">{row.week}</td>
+                      <td className="py-2 px-3 text-foreground">{row.month}</td>
+                    </tr>
+                  ))}
+                  {projectReports.length === 0 && (
+                    <tr>
+                      <td colSpan={3} className="py-4 px-3 text-center text-muted-foreground">
+                        No project data available
+                      </td>
+                    </tr>
+                  )}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+            </div>
+          </section>
+        </TabsContent>
+
+        <TabsContent value="scheduled">
+          <ScheduledReportsManager />
+        </TabsContent>
+      </Tabs>
+    </section>
+    </DashboardLayout>
   );
 };
 

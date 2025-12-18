@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from "react";
 import { Link, useNavigate } from "react-router-dom";
-import { StandardHeader } from "@/components/layout/StandardHeader";
+import { DashboardLayout } from "@/components/layout/DashboardLayout";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -238,213 +238,188 @@ const Settings = () => {
   };
 
   return (
-    <div className="bg-background min-h-screen">
-      <StandardHeader />
+    <DashboardLayout>
+      <div className="max-w-4xl mx-auto">
+        <h1 className="text-2xl font-bold text-foreground mb-8">Settings</h1>
 
-      <main className="container mx-auto px-4 pt-24 pb-8">
-        <div className="max-w-4xl mx-auto">
-          <h1 className="text-2xl font-bold text-gray-800 mb-8">Settings</h1>
+        <Tabs defaultValue="company" className="space-y-6">
+          <TabsList className="grid w-full grid-cols-4">
+            <TabsTrigger value="company">Company</TabsTrigger>
+            <TabsTrigger value="profile">Profile</TabsTrigger>
+            <TabsTrigger value="badges">Badge Templates</TabsTrigger>
+            <TabsTrigger value="system">System</TabsTrigger>
+          </TabsList>
 
-          <Tabs defaultValue="company" className="space-y-6">
-            <TabsList className="grid w-full grid-cols-4">
-              <TabsTrigger value="company">Company</TabsTrigger>
-              <TabsTrigger value="profile">Profile</TabsTrigger>
-              <TabsTrigger value="badges">Badge Templates</TabsTrigger>
-              <TabsTrigger value="system">System</TabsTrigger>
-            </TabsList>
+          <TabsContent value="company">
+            <div className="space-y-6">
+              <CompanyForm />
+              <DepartmentManagement />
+            </div>
+          </TabsContent>
 
-            <TabsContent value="company">
-              <div className="space-y-6">
-                <CompanyForm />
-                <DepartmentManagement />
-              </div>
-            </TabsContent>
-
-            <TabsContent value="profile">
-              {/* Profile Settings */}
-              <Card className="mb-6">
-                <CardHeader>
-                  <CardTitle>Profile Settings</CardTitle>
-                  <CardDescription>Update your personal information</CardDescription>
-                </CardHeader>
-                <CardContent>
-                  <div className="space-y-6">
-                    <div className="flex items-center space-x-4">
-                      <Avatar className="h-20 w-20">
-                        <AvatarImage src={avatarUrl} alt="Profile photo" />
-                        <AvatarFallback>
-                          <User className="h-10 w-10 text-gray-400" />
-                        </AvatarFallback>
-                      </Avatar>
-                      <div className="flex items-center">
-                        <input
-                          type="file"
-                          id="avatar-upload"
-                          accept="image/*"
-                          className="hidden"
-                          onChange={handleAvatarUpload}
-                        />
-                        <Button
-                          variant="outline"
-                          onClick={() => document.getElementById('avatar-upload')?.click()}
-                          disabled={loading}
-                          className="flex items-center gap-2"
-                        >
-                          <ImagePlus className="h-4 w-4" />
-                          Change Avatar
-                        </Button>
-                      </div>
+          <TabsContent value="profile">
+            {/* Profile Settings */}
+            <Card className="mb-6">
+              <CardHeader>
+                <CardTitle>Profile Settings</CardTitle>
+                <CardDescription>Update your personal information</CardDescription>
+              </CardHeader>
+              <CardContent>
+                <div className="space-y-6">
+                  <div className="flex items-center space-x-4">
+                    <Avatar className="h-20 w-20">
+                      <AvatarImage src={avatarUrl} alt="Profile photo" />
+                      <AvatarFallback>
+                        <User className="h-10 w-10 text-muted-foreground" />
+                      </AvatarFallback>
+                    </Avatar>
+                    <div className="flex items-center">
+                      <input
+                        type="file"
+                        id="avatar-upload"
+                        accept="image/*"
+                        className="hidden"
+                        onChange={handleAvatarUpload}
+                      />
+                      <Button
+                        variant="outline"
+                        onClick={() => document.getElementById('avatar-upload')?.click()}
+                        disabled={loading}
+                        className="flex items-center gap-2"
+                      >
+                        <ImagePlus className="h-4 w-4" />
+                        Change Avatar
+                      </Button>
                     </div>
+                  </div>
 
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                      <div>
-                        <Label htmlFor="firstName">First Name</Label>
-                        <Input id="firstName" type="text" value={firstName} onChange={(e) => setFirstName(e.target.value)} className="mt-1" placeholder="John" />
-                      </div>
-                      <div>
-                        <Label htmlFor="lastName">Last Name</Label>
-                        <Input id="lastName" type="text" value={lastName} onChange={(e) => setLastName(e.target.value)} className="mt-1" placeholder="Doe" />
-                      </div>
-                      <div>
-                        <Label htmlFor="email">Email</Label>
-                        <Input id="email" type="email" value={email} onChange={(e) => setEmail(e.target.value)} className="mt-1" placeholder="john@example.com" />
-                      </div>
-                      <div>
-                        <Label htmlFor="phone">Phone Number</Label>
-                        <Input id="phone" type="tel" value={phoneNumber} onChange={(e) => setPhoneNumber(e.target.value)} className="mt-1" placeholder="+1 (555) 000-0000" />
-                      </div>
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div>
+                      <Label htmlFor="firstName">First Name</Label>
+                      <Input id="firstName" type="text" value={firstName} onChange={(e) => setFirstName(e.target.value)} className="mt-1" placeholder="John" />
                     </div>
+                    <div>
+                      <Label htmlFor="lastName">Last Name</Label>
+                      <Input id="lastName" type="text" value={lastName} onChange={(e) => setLastName(e.target.value)} className="mt-1" placeholder="Doe" />
+                    </div>
+                    <div>
+                      <Label htmlFor="email">Email</Label>
+                      <Input id="email" type="email" value={email} onChange={(e) => setEmail(e.target.value)} className="mt-1" placeholder="john@example.com" />
+                    </div>
+                    <div>
+                      <Label htmlFor="phone">Phone Number</Label>
+                      <Input id="phone" type="tel" value={phoneNumber} onChange={(e) => setPhoneNumber(e.target.value)} className="mt-1" placeholder="+1 (555) 000-0000" />
+                    </div>
+                  </div>
 
-                    <div className="space-y-4">
-                      <h3 className="text-lg font-medium">Mailing Address</h3>
-                      <div className="grid grid-cols-1 gap-4">
+                  <div className="space-y-4">
+                    <h3 className="text-lg font-medium">Mailing Address</h3>
+                    <div className="grid grid-cols-1 gap-4">
+                      <div>
+                        <Label htmlFor="street">Street Address</Label>
+                        <Input id="street" type="text" value={address.street} onChange={(e) => setAddress({ ...address, street: e.target.value })} className="mt-1" placeholder="123 Main St" />
+                      </div>
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                         <div>
-                          <Label htmlFor="street">Street Address</Label>
-                          <Input id="street" type="text" value={address.street} onChange={(e) => setAddress({ ...address, street: e.target.value })} className="mt-1" placeholder="123 Main St" />
+                          <Label htmlFor="city">City</Label>
+                          <Input id="city" type="text" value={address.city} onChange={(e) => setAddress({ ...address, city: e.target.value })} className="mt-1" placeholder="City" />
                         </div>
-                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                          <div>
-                            <Label htmlFor="city">City</Label>
-                            <Input id="city" type="text" value={address.city} onChange={(e) => setAddress({ ...address, city: e.target.value })} className="mt-1" placeholder="City" />
-                          </div>
-                          <div>
-                            <Label htmlFor="state">State</Label>
-                            <Input id="state" type="text" value={address.state} onChange={(e) => setAddress({ ...address, state: e.target.value })} className="mt-1" placeholder="State" />
-                          </div>
+                        <div>
+                          <Label htmlFor="state">State</Label>
+                          <Input id="state" type="text" value={address.state} onChange={(e) => setAddress({ ...address, state: e.target.value })} className="mt-1" placeholder="State" />
                         </div>
-                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                          <div>
-                            <Label htmlFor="zipCode">ZIP Code</Label>
-                            <Input id="zipCode" type="text" value={address.zipCode} onChange={(e) => setAddress({ ...address, zipCode: e.target.value })} className="mt-1" placeholder="ZIP Code" />
-                          </div>
-                          <div>
-                            <Label htmlFor="country">Country</Label>
-                            <Input id="country" type="text" value={address.country} onChange={(e) => setAddress({ ...address, country: e.target.value })} className="mt-1" placeholder="Country" />
-                          </div>
+                      </div>
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                        <div>
+                          <Label htmlFor="zipCode">ZIP Code</Label>
+                          <Input id="zipCode" type="text" value={address.zipCode} onChange={(e) => setAddress({ ...address, zipCode: e.target.value })} className="mt-1" placeholder="ZIP Code" />
+                        </div>
+                        <div>
+                          <Label htmlFor="country">Country</Label>
+                          <Input id="country" type="text" value={address.country} onChange={(e) => setAddress({ ...address, country: e.target.value })} className="mt-1" placeholder="Country" />
                         </div>
                       </div>
                     </div>
                   </div>
-                </CardContent>
-                <CardFooter>
-                  <Button onClick={handleSaveProfile} disabled={loading || profileLoading}>
-                    {loading ? "Saving..." : "Save Changes"}
-                  </Button>
-                </CardFooter>
-              </Card>
+                </div>
+              </CardContent>
+              <CardFooter>
+                <Button onClick={handleSaveProfile} disabled={loading || profileLoading}>
+                  {loading ? "Saving..." : "Save Changes"}
+                </Button>
+              </CardFooter>
+            </Card>
 
-              {/* PIN Code Card */}
-              <Card className="mb-6">
-                <CardHeader>
-                  <CardTitle>Time Clock PIN</CardTitle>
-                  <CardDescription>Set a PIN code for time clock access</CardDescription>
-                </CardHeader>
-                <CardContent>
-                  <div className="space-y-4">
-                    <div>
-                      <Label htmlFor="pinCode">PIN Code (4-10 digits)</Label>
-                      <Input id="pinCode" type="text" value={pinCode} onChange={handlePinCodeChange} placeholder="Enter PIN code" maxLength={10} className="mt-1 font-mono tracking-wider" />
-                      <p className="text-sm text-gray-500 mt-1">This PIN will be used for time clock access</p>
-                    </div>
+            {/* PIN Code Card */}
+            <Card className="mb-6">
+              <CardHeader>
+                <CardTitle>Time Clock PIN</CardTitle>
+                <CardDescription>Set a PIN code for time clock access</CardDescription>
+              </CardHeader>
+              <CardContent>
+                <div className="space-y-4">
+                  <div>
+                    <Label htmlFor="pinCode">PIN Code (4-10 digits)</Label>
+                    <Input id="pinCode" type="text" value={pinCode} onChange={handlePinCodeChange} placeholder="Enter PIN code" maxLength={10} className="mt-1 font-mono tracking-wider" />
+                    <p className="text-sm text-muted-foreground mt-1">This PIN will be used for time clock access</p>
                   </div>
-                </CardContent>
-                <CardFooter>
-                  <Button onClick={handleUpdatePin} disabled={loading || pinCode.length < 4}>
-                    {loading ? "Updating..." : "Update PIN"}
-                  </Button>
-                </CardFooter>
-              </Card>
+                </div>
+              </CardContent>
+              <CardFooter>
+                <Button onClick={handleUpdatePin} disabled={loading || pinCode.length < 4}>
+                  {loading ? "Updating..." : "Update PIN"}
+                </Button>
+              </CardFooter>
+            </Card>
 
-              {/* Change Password */}
-              <Card>
-                <CardHeader>
-                  <CardTitle>Change Password</CardTitle>
-                  <CardDescription>Update your account password</CardDescription>
-                </CardHeader>
-                <CardContent>
-                  <div className="space-y-4">
-                    <div>
-                      <Label htmlFor="newPassword">New Password</Label>
-                      <Input id="newPassword" type="password" value={newPassword} onChange={(e) => setNewPassword(e.target.value)} placeholder="Enter new password" className="mt-1" />
-                    </div>
-                    <div>
-                      <Label htmlFor="confirmPassword">Confirm New Password</Label>
-                      <Input id="confirmPassword" type="password" value={confirmPassword} onChange={(e) => setConfirmPassword(e.target.value)} placeholder="Confirm new password" className="mt-1" />
-                    </div>
+            {/* Change Password */}
+            <Card>
+              <CardHeader>
+                <CardTitle>Change Password</CardTitle>
+                <CardDescription>Update your account password</CardDescription>
+              </CardHeader>
+              <CardContent>
+                <div className="space-y-4">
+                  <div>
+                    <Label htmlFor="newPassword">New Password</Label>
+                    <Input id="newPassword" type="password" value={newPassword} onChange={(e) => setNewPassword(e.target.value)} placeholder="Enter new password" className="mt-1" />
                   </div>
-                </CardContent>
-                <CardFooter className="flex justify-between">
-                  <Button onClick={handleUpdatePassword} disabled={loading || !newPassword || !confirmPassword}>
-                    {loading ? "Updating..." : "Update Password"}
-                  </Button>
-                  <Button variant="outline" onClick={handleLogout}>Logout</Button>
-                </CardFooter>
-              </Card>
-            </TabsContent>
+                  <div>
+                    <Label htmlFor="confirmPassword">Confirm New Password</Label>
+                    <Input id="confirmPassword" type="password" value={confirmPassword} onChange={(e) => setConfirmPassword(e.target.value)} placeholder="Confirm new password" className="mt-1" />
+                  </div>
+                </div>
+              </CardContent>
+              <CardFooter className="flex justify-between">
+                <Button onClick={handleUpdatePassword} disabled={loading || !newPassword || !confirmPassword}>
+                  {loading ? "Updating..." : "Update Password"}
+                </Button>
+                <Button variant="outline" onClick={handleLogout}>Logout</Button>
+              </CardFooter>
+            </Card>
+          </TabsContent>
 
-            <TabsContent value="badges">
-              <Card>
-                <CardHeader>
-                  <CardTitle>Badge Template Designer</CardTitle>
-                  <CardDescription>Design and customize employee badge layouts</CardDescription>
-                </CardHeader>
-                <CardContent>
-                  <BadgeTemplateDesigner />
-                </CardContent>
-              </Card>
-            </TabsContent>
+          <TabsContent value="badges">
+            <Card>
+              <CardHeader>
+                <CardTitle>Badge Template Designer</CardTitle>
+                <CardDescription>Design and customize employee badge layouts</CardDescription>
+              </CardHeader>
+              <CardContent>
+                <BadgeTemplateDesigner />
+              </CardContent>
+            </Card>
+          </TabsContent>
 
-            <TabsContent value="system">
-              <div className="space-y-6">
-                <h2 className="text-xl font-semibold">System Administration</h2>
-                <PhotoMigrationPanel />
-              </div>
-            </TabsContent>
-          </Tabs>
-        </div>
-      </main>
-
-      <footer className="bg-white border-t border-gray-100 mt-8">
-        <div className="container mx-auto px-4 py-4">
-          <div className="flex justify-between items-center">
-            <div className="flex space-x-4 text-sm text-gray-500">
-              <Link to="/support" className="hover:text-gray-700">
-                Support
-              </Link>
-              <Link to="/privacy" className="hover:text-gray-700">
-                Privacy Policy
-              </Link>
-              <Link to="/terms" className="hover:text-gray-700">
-                Terms
-              </Link>
+          <TabsContent value="system">
+            <div className="space-y-6">
+              <h2 className="text-xl font-semibold">System Administration</h2>
+              <PhotoMigrationPanel />
             </div>
-            <div className="text-sm text-gray-500">
-              © 2025 CICO Timeclock
-            </div>
-          </div>
-        </div>
-      </footer>
-    </div>
+          </TabsContent>
+        </Tabs>
+      </div>
+    </DashboardLayout>
   );
 };
 

@@ -1,7 +1,7 @@
 import React, { useState, useMemo } from "react";
 import { format, startOfDay, endOfDay } from "date-fns";
 import { Calendar as CalendarIcon, User, Clock, Edit } from "lucide-react";
-import { StandardHeader } from "@/components/layout/StandardHeader";
+import { DashboardLayout } from "@/components/layout/DashboardLayout";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Calendar } from "@/components/ui/calendar";
@@ -187,41 +187,33 @@ const AdminTimeTracking: React.FC = () => {
 
   if (roleLoading) {
     return (
-      <div className="min-h-screen bg-background">
-        <StandardHeader />
-        <main className="pt-20 pb-20">
-          <div className="flex items-center justify-center min-h-[400px]">
-            <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary" />
-          </div>
-        </main>
-      </div>
+      <DashboardLayout>
+        <div className="flex items-center justify-center min-h-[400px]">
+          <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary" />
+        </div>
+      </DashboardLayout>
     );
   }
 
   if (!isAdmin) {
     return (
-      <div className="min-h-screen bg-background">
-        <StandardHeader />
-        <main className="pt-20 pb-20">
-          <div className="container mx-auto py-8 px-4">
-            <Alert variant="destructive">
-              <AlertCircle className="h-4 w-4" />
-              <AlertTitle>Access Denied</AlertTitle>
-              <AlertDescription>
-                You must be an administrator to access this page.
-              </AlertDescription>
-            </Alert>
-          </div>
-        </main>
-      </div>
+      <DashboardLayout>
+        <div className="py-8 px-4">
+          <Alert variant="destructive">
+            <AlertCircle className="h-4 w-4" />
+            <AlertTitle>Access Denied</AlertTitle>
+            <AlertDescription>
+              You must be an administrator to access this page.
+            </AlertDescription>
+          </Alert>
+        </div>
+      </DashboardLayout>
     );
   }
 
   return (
-    <div className="min-h-screen bg-background">
-      <StandardHeader />
-      <main className="pt-20 pb-20">
-        <div className="container mx-auto py-8 px-4 max-w-5xl">
+    <DashboardLayout>
+      <div className="max-w-5xl mx-auto">
         {/* Header */}
         <div className="mb-8">
           <h1 className="text-2xl font-bold text-foreground">Admin Time Management</h1>
@@ -375,9 +367,8 @@ const AdminTimeTracking: React.FC = () => {
             setEditingEntry(null);
           }}
         />
-        </div>
-      </main>
-    </div>
+      </div>
+    </DashboardLayout>
   );
 };
 

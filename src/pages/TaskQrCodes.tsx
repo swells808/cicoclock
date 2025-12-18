@@ -1,6 +1,6 @@
-import React, { useState, useMemo, useRef } from "react";
+import React, { useState, useMemo } from "react";
 import { Printer, AlertCircle, CheckSquare, Square } from "lucide-react";
-import { StandardHeader } from "@/components/layout/StandardHeader";
+import { DashboardLayout } from "@/components/layout/DashboardLayout";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
@@ -147,188 +147,177 @@ const TaskQrCodes: React.FC = () => {
 
   if (roleLoading) {
     return (
-      <div className="min-h-screen bg-background">
-        <StandardHeader />
-        <main className="pt-20 pb-20">
-          <div className="flex items-center justify-center min-h-[400px]">
-            <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary" />
-          </div>
-        </main>
-      </div>
+      <DashboardLayout>
+        <div className="flex items-center justify-center min-h-[400px]">
+          <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary" />
+        </div>
+      </DashboardLayout>
     );
   }
 
   if (!isAdmin) {
     return (
-      <div className="min-h-screen bg-background">
-        <StandardHeader />
-        <main className="pt-20 pb-20">
-          <div className="container mx-auto py-8 px-4">
-            <Alert variant="destructive">
-              <AlertCircle className="h-4 w-4" />
-              <AlertTitle>Access Denied</AlertTitle>
-              <AlertDescription>
-                You must be an administrator to access this page.
-              </AlertDescription>
-            </Alert>
-          </div>
-        </main>
-      </div>
+      <DashboardLayout>
+        <div className="py-8 px-4">
+          <Alert variant="destructive">
+            <AlertCircle className="h-4 w-4" />
+            <AlertTitle>Access Denied</AlertTitle>
+            <AlertDescription>
+              You must be an administrator to access this page.
+            </AlertDescription>
+          </Alert>
+        </div>
+      </DashboardLayout>
     );
   }
 
   return (
-    <div className="min-h-screen bg-background">
-      <StandardHeader />
-      <main className="pt-20 pb-20">
-        <div className="container mx-auto py-8 px-4">
-          <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-            {/* Left Column - Filters & Actions */}
-            <Card className="lg:col-span-1 h-fit">
-              <CardHeader>
-                <CardTitle className="text-lg">Filters & Actions</CardTitle>
-              </CardHeader>
-              <CardContent className="space-y-4">
-                {/* Project Filter */}
-                <div className="space-y-2">
-                  <label className="text-sm font-medium text-foreground">
-                    Filter by Project
-                  </label>
-                  <Select value={projectFilter} onValueChange={setProjectFilter}>
-                    <SelectTrigger>
-                      <SelectValue placeholder="All Projects" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="all">All Projects</SelectItem>
-                      {projects.map((project) => (
-                        <SelectItem key={project.id} value={project.id}>
-                          {project.name}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                </div>
+    <DashboardLayout>
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+        {/* Left Column - Filters & Actions */}
+        <Card className="lg:col-span-1 h-fit">
+          <CardHeader>
+            <CardTitle className="text-lg">Filters & Actions</CardTitle>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            {/* Project Filter */}
+            <div className="space-y-2">
+              <label className="text-sm font-medium text-foreground">
+                Filter by Project
+              </label>
+              <Select value={projectFilter} onValueChange={setProjectFilter}>
+                <SelectTrigger>
+                  <SelectValue placeholder="All Projects" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">All Projects</SelectItem>
+                  {projects.map((project) => (
+                    <SelectItem key={project.id} value={project.id}>
+                      {project.name}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
 
-                {/* Status Filter */}
-                <div className="space-y-2">
-                  <label className="text-sm font-medium text-foreground">
-                    Filter by Status
-                  </label>
-                  <Select value={statusFilter} onValueChange={setStatusFilter}>
-                    <SelectTrigger>
-                      <SelectValue placeholder="All Statuses" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="all">All Statuses</SelectItem>
-                      {statuses.map((status) => (
-                        <SelectItem key={status} value={status}>
-                          {status.replace(/_/g, " ").replace(/\b\w/g, (l) => l.toUpperCase())}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                </div>
+            {/* Status Filter */}
+            <div className="space-y-2">
+              <label className="text-sm font-medium text-foreground">
+                Filter by Status
+              </label>
+              <Select value={statusFilter} onValueChange={setStatusFilter}>
+                <SelectTrigger>
+                  <SelectValue placeholder="All Statuses" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">All Statuses</SelectItem>
+                  {statuses.map((status) => (
+                    <SelectItem key={status} value={status}>
+                      {status.replace(/_/g, " ").replace(/\b\w/g, (l) => l.toUpperCase())}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
 
-                {/* Selection Buttons */}
-                <div className="flex flex-col gap-2 pt-4">
-                  <Button
-                    variant="outline"
-                    onClick={handleSelectAll}
-                    className="w-full justify-start"
+            {/* Selection Buttons */}
+            <div className="flex flex-col gap-2 pt-4">
+              <Button
+                variant="outline"
+                onClick={handleSelectAll}
+                className="w-full justify-start"
+              >
+                <CheckSquare className="h-4 w-4 mr-2" />
+                Select All ({filteredTasks.length})
+              </Button>
+              <Button
+                variant="outline"
+                onClick={handleSelectNone}
+                className="w-full justify-start"
+              >
+                <Square className="h-4 w-4 mr-2" />
+                Select None
+              </Button>
+            </div>
+
+            {/* Print Button */}
+            <Button
+              onClick={handlePrintSelected}
+              disabled={selectedTasks.size === 0}
+              className="w-full mt-4"
+            >
+              <Printer className="h-4 w-4 mr-2" />
+              Print Selected ({selectedTasks.size})
+            </Button>
+          </CardContent>
+        </Card>
+
+        {/* Right Column - Project Tasks List */}
+        <Card className="lg:col-span-2">
+          <CardHeader>
+            <CardTitle className="text-lg">
+              Project Tasks ({filteredTasks.length})
+            </CardTitle>
+            <p className="text-sm text-muted-foreground">
+              Select tasks to generate QR codes for printing
+            </p>
+          </CardHeader>
+          <CardContent>
+            {tasksLoading ? (
+              <div className="flex items-center justify-center py-12">
+                <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary" />
+              </div>
+            ) : filteredTasks.length === 0 ? (
+              <div className="text-center py-12 text-muted-foreground">
+                <p>No tasks found matching the selected filters.</p>
+              </div>
+            ) : (
+              <div className="space-y-2 max-h-[600px] overflow-y-auto">
+                {filteredTasks.map((task) => (
+                  <div
+                    key={task.id}
+                    className="flex items-center gap-4 p-3 border rounded-lg hover:bg-muted/50 transition-colors"
                   >
-                    <CheckSquare className="h-4 w-4 mr-2" />
-                    Select All ({filteredTasks.length})
-                  </Button>
-                  <Button
-                    variant="outline"
-                    onClick={handleSelectNone}
-                    className="w-full justify-start"
-                  >
-                    <Square className="h-4 w-4 mr-2" />
-                    Select None
-                  </Button>
-                </div>
-
-                {/* Print Button */}
-                <Button
-                  onClick={handlePrintSelected}
-                  disabled={selectedTasks.size === 0}
-                  className="w-full mt-4"
-                >
-                  <Printer className="h-4 w-4 mr-2" />
-                  Print Selected ({selectedTasks.size})
-                </Button>
-              </CardContent>
-            </Card>
-
-            {/* Right Column - Project Tasks List */}
-            <Card className="lg:col-span-2">
-              <CardHeader>
-                <CardTitle className="text-lg">
-                  Project Tasks ({filteredTasks.length})
-                </CardTitle>
-                <p className="text-sm text-muted-foreground">
-                  Select tasks to generate QR codes for printing
-                </p>
-              </CardHeader>
-              <CardContent>
-                {tasksLoading ? (
-                  <div className="flex items-center justify-center py-12">
-                    <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary" />
-                  </div>
-                ) : filteredTasks.length === 0 ? (
-                  <div className="text-center py-12 text-muted-foreground">
-                    <p>No tasks found matching the selected filters.</p>
-                  </div>
-                ) : (
-                  <div className="space-y-2 max-h-[600px] overflow-y-auto">
-                    {filteredTasks.map((task) => (
-                      <div
-                        key={task.id}
-                        className="flex items-center gap-4 p-3 border rounded-lg hover:bg-muted/50 transition-colors"
-                      >
-                        <Checkbox
-                          checked={selectedTasks.has(task.id)}
-                          onCheckedChange={() => handleToggleTask(task.id)}
-                        />
-                        <div className="flex-1 min-w-0">
-                          <div className="flex items-center gap-2">
-                            <span className="font-medium text-foreground truncate">
-                              {task.project?.name || "No Project"}
-                            </span>
-                            <span className="text-muted-foreground">•</span>
-                            <span className="text-foreground truncate">{task.name}</span>
-                          </div>
-                          <div className="flex items-center gap-3 mt-1 text-sm text-muted-foreground">
-                            <Badge
-                              variant="secondary"
-                              className={getStatusColor(task.status)}
-                            >
-                              {(task.status || "pending")
-                                .replace(/_/g, " ")
-                                .replace(/\b\w/g, (l) => l.toUpperCase())}
-                            </Badge>
-                            <span>Assigned to: {getAssigneeName(task)}</span>
-                            {task.due_date && (
-                              <span>
-                                Due: {format(new Date(task.due_date), "MMM d, yyyy")}
-                              </span>
-                            )}
-                          </div>
-                        </div>
-                        <div className="text-xs text-muted-foreground font-mono">
-                          {task.id.substring(0, 8)}...
-                        </div>
+                    <Checkbox
+                      checked={selectedTasks.has(task.id)}
+                      onCheckedChange={() => handleToggleTask(task.id)}
+                    />
+                    <div className="flex-1 min-w-0">
+                      <div className="flex items-center gap-2">
+                        <span className="font-medium text-foreground truncate">
+                          {task.project?.name || "No Project"}
+                        </span>
+                        <span className="text-muted-foreground">•</span>
+                        <span className="text-foreground truncate">{task.name}</span>
                       </div>
-                    ))}
+                      <div className="flex items-center gap-3 mt-1 text-sm text-muted-foreground">
+                        <Badge
+                          variant="secondary"
+                          className={getStatusColor(task.status)}
+                        >
+                          {(task.status || "pending")
+                            .replace(/_/g, " ")
+                            .replace(/\b\w/g, (l) => l.toUpperCase())}
+                        </Badge>
+                        <span>Assigned to: {getAssigneeName(task)}</span>
+                        {task.due_date && (
+                          <span>
+                            Due: {format(new Date(task.due_date), "MMM d, yyyy")}
+                          </span>
+                        )}
+                      </div>
+                    </div>
+                    <div className="text-xs text-muted-foreground font-mono">
+                      {task.id.substring(0, 8)}...
+                    </div>
                   </div>
-                )}
-              </CardContent>
-            </Card>
-          </div>
-        </div>
-      </main>
-    </div>
+                ))}
+              </div>
+            )}
+          </CardContent>
+        </Card>
+      </div>
+    </DashboardLayout>
   );
 };
 
