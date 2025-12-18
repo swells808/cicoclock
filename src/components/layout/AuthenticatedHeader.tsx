@@ -48,7 +48,6 @@ export const AuthenticatedHeader = () => {
           { label: "Clients", path: "/clients" },
           { label: "Reports", path: "/reports" },
           { label: "Users", path: "/users" },
-          { label: "QR Codes", path: "/task-qr-codes" },
         ]
       : []),
   ];
@@ -66,7 +65,6 @@ export const AuthenticatedHeader = () => {
           { icon: Building2, label: t("clients") || "Clients", path: "/clients" },
           { icon: FileText, label: t("reports") || "Reports", path: "/reports" },
           { icon: IdCard, label: t("badgeDesigner") || "Badge Designer", path: "/badge-designer" },
-          { icon: FileText, label: "QR Codes", path: "/task-qr-codes" },
         ]
       : []),
     { icon: Settings, label: t("settings") || "Settings", path: "/settings" },
