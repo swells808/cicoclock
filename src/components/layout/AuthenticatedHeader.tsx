@@ -37,20 +37,39 @@ export const AuthenticatedHeader = () => {
     navigate("/");
   };
 
-  const navItems = [
-    { icon: LayoutDashboard, label: t("dashboard"), path: "/dashboard" },
-    { icon: Clock, label: t("timeclock"), path: "/timeclock" },
+  // Desktop nav items (simplified)
+  const desktopNavItems = [
+    { label: t("dashboard") || "Dashboard", path: "/dashboard" },
+    { label: "Clock", path: "/timeclock" },
+    ...(isAdmin || isSupervisor
+      ? [
+          { label: "Admin Time", path: "/admin-time-tracking" },
+          { label: t("projects") || "Projects", path: "/projects" },
+          { label: t("clients") || "Clients", path: "/clients" },
+          { label: t("reports") || "Reports", path: "/reports" },
+          { label: t("users") || "Users", path: "/users" },
+          { label: "QR Codes", path: "/task-qr-codes" },
+        ]
+      : []),
+  ];
+
+  // Mobile nav items (full navigation with icons)
+  const mobileNavItems = [
+    { icon: LayoutDashboard, label: t("dashboard") || "Dashboard", path: "/dashboard" },
+    { icon: Clock, label: "Clock", path: "/timeclock" },
     { icon: ClipboardCheck, label: t("taskCheckin") || "Task Check-in", path: "/task-checkin" },
     ...(isAdmin || isSupervisor
       ? [
-          { icon: Users, label: t("users"), path: "/users" },
-          { icon: FolderKanban, label: t("projects"), path: "/projects" },
-          { icon: Building2, label: t("clients"), path: "/clients" },
-          { icon: FileText, label: t("reports"), path: "/reports" },
+          { icon: Clock, label: "Admin Time", path: "/admin-time-tracking" },
+          { icon: Users, label: t("users") || "Users", path: "/users" },
+          { icon: FolderKanban, label: t("projects") || "Projects", path: "/projects" },
+          { icon: Building2, label: t("clients") || "Clients", path: "/clients" },
+          { icon: FileText, label: t("reports") || "Reports", path: "/reports" },
           { icon: IdCard, label: t("badgeDesigner") || "Badge Designer", path: "/badge-designer" },
+          { icon: FileText, label: "QR Codes", path: "/task-qr-codes" },
         ]
       : []),
-    { icon: Settings, label: t("settings"), path: "/settings" },
+    { icon: Settings, label: t("settings") || "Settings", path: "/settings" },
   ];
 
   return (
@@ -64,17 +83,17 @@ export const AuthenticatedHeader = () => {
 
           {/* Desktop Navigation */}
           <nav className="hidden lg:flex items-center gap-1">
-            {navItems.map((item) => {
+            {desktopNavItems.map((item) => {
               const isActive = location.pathname === item.path;
               return (
                 <Link
                   key={item.path}
                   to={item.path}
                   className={cn(
-                    "px-3 py-2 rounded-md text-sm font-medium transition-colors",
+                    "px-3 py-2 text-sm font-medium transition-colors",
                     isActive
-                      ? "bg-primary text-primary-foreground"
-                      : "text-muted-foreground hover:bg-muted hover:text-foreground"
+                      ? "text-primary"
+                      : "text-muted-foreground hover:text-foreground"
                   )}
                 >
                   {item.label}
@@ -112,7 +131,7 @@ export const AuthenticatedHeader = () => {
       {mobileMenuOpen && (
         <div className="lg:hidden fixed inset-0 top-16 bg-background z-40 p-4 overflow-y-auto">
           <nav className="space-y-1">
-            {navItems.map((item) => {
+            {mobileNavItems.map((item) => {
               const isActive = location.pathname === item.path;
               const Icon = item.icon;
               return (
