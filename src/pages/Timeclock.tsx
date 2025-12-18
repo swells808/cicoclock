@@ -208,7 +208,7 @@ const Timeclock = () => {
       <main>
         {showBadgeScanner ? (
           <section className="max-w-md mx-auto">
-            <QRScanner title="Scan Employee Badge" description="Scan your badge QR code or enter badge ID" onScan={handleBadgeScan} isLoading={scanningBadge} placeholder="Enter Badge ID or scan QR code" />
+            <QRScanner title="Scan Employee Badge" description="Scan your badge QR code or enter badge ID" onScan={handleBadgeScan} isLoading={scanningBadge} placeholder="Enter Badge ID or scan QR code" preferredCamera="user" />
             <div className="text-center mt-4"><Button variant="ghost" onClick={() => setShowBadgeScanner(false)}>Use Dropdown Instead</Button></div>
           </section>
         ) : showPinInput ? (
