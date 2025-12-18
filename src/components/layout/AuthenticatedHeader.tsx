@@ -39,15 +39,15 @@ export const AuthenticatedHeader = () => {
 
   // Desktop nav items (simplified)
   const desktopNavItems = [
-    { label: t("dashboard") || "Dashboard", path: "/dashboard" },
+    { label: "Dashboard", path: "/dashboard" },
     { label: "Clock", path: "/timeclock" },
     ...(isAdmin || isSupervisor
       ? [
           { label: "Admin Time", path: "/admin-time-tracking" },
-          { label: t("projects") || "Projects", path: "/projects" },
-          { label: t("clients") || "Clients", path: "/clients" },
-          { label: t("reports") || "Reports", path: "/reports" },
-          { label: t("users") || "Users", path: "/users" },
+          { label: "Projects", path: "/projects" },
+          { label: "Clients", path: "/clients" },
+          { label: "Reports", path: "/reports" },
+          { label: "Users", path: "/users" },
           { label: "QR Codes", path: "/task-qr-codes" },
         ]
       : []),
@@ -92,7 +92,7 @@ export const AuthenticatedHeader = () => {
                   className={cn(
                     "px-3 py-2 text-sm font-medium transition-colors",
                     isActive
-                      ? "text-primary"
+                      ? "text-secondary"
                       : "text-muted-foreground hover:text-foreground"
                   )}
                 >
