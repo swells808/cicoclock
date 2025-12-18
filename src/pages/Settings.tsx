@@ -19,14 +19,17 @@ import { CompanyForm } from "@/components/settings/CompanyForm";
 import { DepartmentManagement } from "@/components/settings/DepartmentManagement";
 import { BadgeTemplateDesigner } from "@/components/badge/BadgeTemplateDesigner";
 import { PhotoMigrationPanel } from "@/components/admin/PhotoMigrationPanel";
+import { TaskQrCodesPanel } from "@/components/settings/TaskQrCodesPanel";
 import { useAuth } from "@/contexts/AuthContext";
 import { useToast } from "@/hooks/use-toast";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { useUserRole } from "@/hooks/useUserRole";
 
 const Settings = () => {
   const navigate = useNavigate();
   const { user, signOut } = useAuth();
   const { toast } = useToast();
+  const { isAdmin, isSupervisor } = useUserRole();
 
   const [loading, setLoading] = useState(false);
   const [profileLoading, setProfileLoading] = useState(true);
@@ -243,10 +246,11 @@ const Settings = () => {
         <h1 className="text-2xl font-bold text-foreground mb-8">Settings</h1>
 
         <Tabs defaultValue="company" className="space-y-6">
-          <TabsList className="grid w-full grid-cols-4">
+          <TabsList className={`grid w-full ${isAdmin || isSupervisor ? 'grid-cols-5' : 'grid-cols-4'}`}>
             <TabsTrigger value="company">Company</TabsTrigger>
             <TabsTrigger value="profile">Profile</TabsTrigger>
             <TabsTrigger value="badges">Badge Templates</TabsTrigger>
+            {(isAdmin || isSupervisor) && <TabsTrigger value="qrcodes">QR Codes</TabsTrigger>}
             <TabsTrigger value="system">System</TabsTrigger>
           </TabsList>
 
@@ -410,6 +414,12 @@ const Settings = () => {
               </CardContent>
             </Card>
           </TabsContent>
+
+          {(isAdmin || isSupervisor) && (
+            <TabsContent value="qrcodes">
+              <TaskQrCodesPanel />
+            </TabsContent>
+          )}
 
           <TabsContent value="system">
             <div className="space-y-6">
