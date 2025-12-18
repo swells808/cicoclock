@@ -60,6 +60,7 @@ export const TimeclockMainCard: React.FC<TimeclockMainCardProps> = ({
 
       {!authenticatedEmployee && (
         <div className="space-y-3 mb-4">
+          {/* Select Employee dropdown - commented out for now
           <Select value={selectedEmployee} onValueChange={setSelectedEmployee}>
             <SelectTrigger className="w-full">
               <SelectValue placeholder={employeesLoading ? "Loading employees..." : t("timeclock.selectEmployeeDropdown")} />
@@ -80,6 +81,7 @@ export const TimeclockMainCard: React.FC<TimeclockMainCardProps> = ({
               </SelectGroup>
             </SelectContent>
           </Select>
+          */}
 
           {onScanBadge && (
           <Button
@@ -106,6 +108,7 @@ export const TimeclockMainCard: React.FC<TimeclockMainCardProps> = ({
         </div>
       )}
 
+      {/* Clock In, Clock Out, and Break buttons - commented out for now
       <div className="grid grid-cols-2 gap-4 mb-6">
         <Button
           disabled={!isActionEnabled || clockStatus === 'in'}
@@ -133,6 +136,7 @@ export const TimeclockMainCard: React.FC<TimeclockMainCardProps> = ({
         <Coffee className="w-4 h-4 mr-2" />
         {t("timeclock.break")}
       </Button>
+      */}
     </Card>
   </section>
 );
