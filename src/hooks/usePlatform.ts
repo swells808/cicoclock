@@ -52,18 +52,36 @@ export const usePlatform = (): PlatformInfo => {
     const detectPlatform = async () => {
       try {
         const { Capacitor } = await import('@capacitor/core');
-        const isNative = Capacitor.isNativePlatform();
-        const platform = Capacitor.getPlatform() as 'ios' | 'android' | 'web';
+        const isNativeCapacitor = Capacitor.isNativePlatform();
+        const capacitorPlatform = Capacitor.getPlatform() as 'ios' | 'android' | 'web';
         
-        setPlatformInfo({
-          isNative,
-          isIOS: platform === 'ios',
-          isAndroid: platform === 'android',
-          isWeb: platform === 'web',
-          platform,
-        });
-      } catch {
-        // Capacitor not available, default to web
+        // If Capacitor says we're native, use that
+        if (isNativeCapacitor) {
+          setPlatformInfo({
+            isNative: true,
+            isIOS: capacitorPlatform === 'ios',
+            isAndroid: capacitorPlatform === 'android',
+            isWeb: false,
+            platform: capacitorPlatform,
+          });
+          return;
+        }
+        
+        // Otherwise, check for mobile browser
+        const { isMobile, isIOS, isAndroid } = detectMobileBrowser();
+        if (isMobile) {
+          const platform = isIOS ? 'ios' : isAndroid ? 'android' : 'web';
+          setPlatformInfo({
+            isNative: true,
+            isIOS,
+            isAndroid,
+            isWeb: false,
+            platform: platform as 'ios' | 'android' | 'web',
+          });
+          return;
+        }
+        
+        // Fall back to web
         setPlatformInfo({
           isNative: false,
           isIOS: false,
@@ -71,6 +89,26 @@ export const usePlatform = (): PlatformInfo => {
           isWeb: true,
           platform: 'web',
         });
+      } catch {
+        // Capacitor not available - check mobile browser
+        const { isMobile, isIOS, isAndroid } = detectMobileBrowser();
+        if (isMobile) {
+          setPlatformInfo({
+            isNative: true,
+            isIOS,
+            isAndroid,
+            isWeb: false,
+            platform: isIOS ? 'ios' : isAndroid ? 'android' : 'web',
+          });
+        } else {
+          setPlatformInfo({
+            isNative: false,
+            isIOS: false,
+            isAndroid: false,
+            isWeb: true,
+            platform: 'web',
+          });
+        }
       }
     };
 
