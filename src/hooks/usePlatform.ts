@@ -8,6 +8,20 @@ interface PlatformInfo {
   platform: 'ios' | 'android' | 'web';
 }
 
+// Detect if running in a mobile browser (not native app)
+const detectMobileBrowser = (): { isMobile: boolean; isIOS: boolean; isAndroid: boolean } => {
+  if (typeof window === 'undefined' || typeof navigator === 'undefined') {
+    return { isMobile: false, isIOS: false, isAndroid: false };
+  }
+  
+  const userAgent = navigator.userAgent || navigator.vendor || '';
+  const isIOS = /iphone|ipad|ipod/i.test(userAgent);
+  const isAndroid = /android/i.test(userAgent);
+  const isMobile = isIOS || isAndroid || /mobile/i.test(userAgent);
+  
+  return { isMobile, isIOS, isAndroid };
+};
+
 export const usePlatform = (): PlatformInfo => {
   const [platformInfo, setPlatformInfo] = useState<PlatformInfo>(() => {
     // Check for ?mobile=true URL parameter for dev testing
@@ -18,14 +32,13 @@ export const usePlatform = (): PlatformInfo => {
       return {
         isNative: true,
         isIOS: false,
-        isAndroid: true, // Simulate Android for testing
+        isAndroid: true,
         isWeb: false,
         platform: 'android',
       };
     }
     
-    // Use synchronous Capacitor detection for initial render
-    // This prevents flash of web content before async detection completes
+    // Use synchronous detection for initial render
     return getPlatformSync();
   });
 
@@ -82,6 +95,19 @@ export const getPlatformSync = (): PlatformInfo => {
         isAndroid: platform === 'android',
         isWeb: false,
         platform,
+      };
+    }
+    
+    // Check for mobile browser
+    const { isMobile, isIOS, isAndroid } = detectMobileBrowser();
+    if (isMobile) {
+      const platform = isIOS ? 'ios' : isAndroid ? 'android' : 'web';
+      return {
+        isNative: true, // Treat mobile browsers as "native" for UI purposes
+        isIOS,
+        isAndroid,
+        isWeb: false,
+        platform: platform as 'ios' | 'android' | 'web',
       };
     }
   } catch {
