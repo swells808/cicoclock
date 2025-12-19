@@ -11,6 +11,7 @@ import { useReportRecipients } from '@/hooks/useScheduledReports';
 import { useDepartments } from '@/hooks/useDepartments';
 import { useUsers } from '@/hooks/useUsers';
 import { useAuth } from '@/contexts/AuthContext';
+import { useProfile } from '@/hooks/useProfile';
 import { toast } from 'sonner';
 import { X, Plus } from 'lucide-react';
 
@@ -44,7 +45,7 @@ const DAYS_OF_WEEK = [
 ];
 
 export const ScheduledReportDialog = ({ open, onOpenChange, report }: ScheduledReportDialogProps) => {
-  const { user } = useAuth();
+  const { data: profile } = useProfile();
   const { createReport, updateReport } = useScheduledReports();
   const { recipients: existingRecipients, refetch: fetchRecipients, addRecipient, removeRecipient } = useReportRecipients(report?.id || '');
   const { departments } = useDepartments();
@@ -168,7 +169,7 @@ export const ScheduledReportDialog = ({ open, onOpenChange, report }: ScheduledR
           scope: formData.report_scope,
           department_ids: formData.report_scope === 'department' ? formData.department_ids : [],
         },
-        created_by: user?.id || null,
+        created_by: profile?.id || null,
       };
 
       let reportId: string;
