@@ -2,9 +2,9 @@ import { useState, useEffect } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Switch } from "@/components/ui/switch";
+import { Badge } from "@/components/ui/badge";
 import { useEmployeeSchedule, ScheduleDay } from "@/hooks/useEmployeeSchedule";
-import { useDepartmentSchedule } from "@/hooks/useDepartmentSchedule";
-import { Save, Loader2, RotateCcw } from "lucide-react";
+import { Save, Loader2, RotateCcw, Building2, User } from "lucide-react";
 import { useUserRole } from "@/hooks/useUserRole";
 import { supabase } from "@/integrations/supabase/client";
 import { useQuery } from "@tanstack/react-query";
@@ -14,11 +14,8 @@ interface WeeklyScheduleEditorProps {
 }
 
 export const WeeklyScheduleEditor = ({ profileId }: WeeklyScheduleEditorProps) => {
-  const { schedule, loading, saveSchedule, isSaving, dayNames } = useEmployeeSchedule(profileId);
   const { isAdmin, isSupervisor } = useUserRole();
   const canEdit = isAdmin || isSupervisor;
-
-  const [localSchedule, setLocalSchedule] = useState<ScheduleDay[]>(schedule);
 
   // Fetch employee's department
   const { data: employeeProfile } = useQuery({
@@ -26,7 +23,7 @@ export const WeeklyScheduleEditor = ({ profileId }: WeeklyScheduleEditorProps) =
     queryFn: async () => {
       const { data, error } = await supabase
         .from("profiles")
-        .select("department_id")
+        .select("department_id, departments(name)")
         .eq("id", profileId)
         .single();
       if (error) throw error;
@@ -36,10 +33,21 @@ export const WeeklyScheduleEditor = ({ profileId }: WeeklyScheduleEditorProps) =
   });
 
   const departmentId = employeeProfile?.department_id;
-  const { schedule: departmentSchedule, loading: deptLoading } = useDepartmentSchedule(departmentId || undefined);
+  const departmentName = (employeeProfile as any)?.departments?.name;
 
-  // Check if department has a schedule configured
-  const hasDepartmentSchedule = departmentSchedule.some(day => day.start_time || day.end_time);
+  const { 
+    schedule, 
+    loading, 
+    saveSchedule, 
+    isSaving, 
+    dayNames,
+    isCustom,
+    source,
+    resetToDefault,
+    isResetting
+  } = useEmployeeSchedule(profileId, departmentId);
+
+  const [localSchedule, setLocalSchedule] = useState<ScheduleDay[]>(schedule);
 
   // Update local state when data loads
   useEffect(() => {
@@ -54,18 +62,8 @@ export const WeeklyScheduleEditor = ({ profileId }: WeeklyScheduleEditorProps) =
     ));
   };
 
-  const handleApplyDepartmentDefault = () => {
-    if (!departmentSchedule || departmentSchedule.length === 0) return;
-    
-    // Map department schedule to employee schedule format
-    const newSchedule: ScheduleDay[] = departmentSchedule.map(day => ({
-      day_of_week: day.day_of_week,
-      start_time: day.start_time,
-      end_time: day.end_time,
-      is_day_off: day.is_day_off,
-    }));
-    
-    setLocalSchedule(newSchedule);
+  const handleResetToDefault = () => {
+    resetToDefault();
   };
 
   const handleSave = () => {
@@ -78,22 +76,52 @@ export const WeeklyScheduleEditor = ({ profileId }: WeeklyScheduleEditorProps) =
 
   return (
     <div className="space-y-4">
-      {canEdit && departmentId && hasDepartmentSchedule && (
-        <div className="flex items-center justify-between p-3 bg-muted/50 rounded-lg border">
-          <div className="text-sm text-muted-foreground">
-            This employee's department has a default schedule configured.
-          </div>
+      {/* Schedule source indicator */}
+      <div className="flex items-center justify-between p-3 bg-muted/50 rounded-lg border">
+        <div className="flex items-center gap-2">
+          {source === "department" && (
+            <>
+              <Building2 className="h-4 w-4 text-primary" />
+              <span className="text-sm text-muted-foreground">
+                Using <span className="font-medium text-foreground">{departmentName || "department"}</span> default schedule
+              </span>
+              <Badge variant="secondary" className="ml-2">Inherited</Badge>
+            </>
+          )}
+          {source === "employee" && (
+            <>
+              <User className="h-4 w-4 text-primary" />
+              <span className="text-sm text-muted-foreground">Custom schedule</span>
+              <Badge variant="outline" className="ml-2">Custom</Badge>
+            </>
+          )}
+          {source === "default" && (
+            <>
+              <span className="text-sm text-muted-foreground">
+                {departmentId 
+                  ? "No department schedule configured. Using system default."
+                  : "No department assigned. Using system default."}
+              </span>
+            </>
+          )}
+        </div>
+
+        {canEdit && isCustom && departmentId && (
           <Button 
             variant="outline" 
             size="sm"
-            onClick={handleApplyDepartmentDefault}
-            disabled={deptLoading}
+            onClick={handleResetToDefault}
+            disabled={isResetting}
           >
-            <RotateCcw className="h-4 w-4 mr-2" />
-            Apply Department Default
+            {isResetting ? (
+              <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+            ) : (
+              <RotateCcw className="h-4 w-4 mr-2" />
+            )}
+            Reset to Department Default
           </Button>
-        </div>
-      )}
+        )}
+      </div>
 
       <div className="overflow-x-auto">
         <table className="w-full min-w-[500px]">
