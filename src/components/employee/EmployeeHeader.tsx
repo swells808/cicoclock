@@ -21,9 +21,10 @@ interface EmployeeHeaderProps {
     nextId: string | null;
   };
   onRefetch: () => void;
+  onEditEmployee: () => void;
 }
 
-export const EmployeeHeader = ({ employee, navigation, onRefetch }: EmployeeHeaderProps) => {
+export const EmployeeHeader = ({ employee, navigation, onRefetch, onEditEmployee }: EmployeeHeaderProps) => {
   const navigate = useNavigate();
 
   const getInitials = () => {
@@ -155,7 +156,7 @@ export const EmployeeHeader = ({ employee, navigation, onRefetch }: EmployeeHead
               </Button>
             </DropdownMenuTrigger>
             <DropdownMenuContent align="end">
-              <DropdownMenuItem onClick={() => navigate(`/users?edit=${employee.id}`)}>
+              <DropdownMenuItem onClick={onEditEmployee}>
                 <Edit className="h-4 w-4 mr-2" />
                 Edit Employee
               </DropdownMenuItem>
