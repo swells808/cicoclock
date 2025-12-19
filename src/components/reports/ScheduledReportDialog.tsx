@@ -4,7 +4,10 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
+import { Checkbox } from '@/components/ui/checkbox';
 import { useScheduledReports, ScheduledReport } from '@/hooks/useScheduledReports';
+import { useDepartments } from '@/hooks/useDepartments';
 import { useAuth } from '@/contexts/AuthContext';
 import { toast } from 'sonner';
 
@@ -15,10 +18,10 @@ interface ScheduledReportDialogProps {
 }
 
 const REPORT_TYPES = [
-  'Time Summary',
-  'Employee Hours',
-  'Project Hours',
-  'Overtime Report',
+  { value: 'employee_timecard', label: 'Employee Timecard' },
+  { value: 'project_timecard', label: 'Project Timecard' },
+  { value: 'weekly_payroll', label: 'Weekly Payroll' },
+  { value: 'monthly_project_billing', label: 'Monthly Project Billing' },
 ];
 
 const DAYS_OF_WEEK = [
@@ -34,34 +37,51 @@ const DAYS_OF_WEEK = [
 export const ScheduledReportDialog = ({ open, onOpenChange, report }: ScheduledReportDialogProps) => {
   const { user } = useAuth();
   const { createReport, updateReport } = useScheduledReports();
+  const { departments } = useDepartments();
   const [saving, setSaving] = useState(false);
   const [formData, setFormData] = useState({
-    report_type: 'Time Summary',
+    report_type: 'employee_timecard',
     schedule_frequency: 'weekly',
     schedule_time: '08:00',
     schedule_day_of_week: 1,
     schedule_day_of_month: 1,
+    report_scope: 'all' as 'all' | 'department',
+    department_ids: [] as string[],
   });
 
   useEffect(() => {
     if (report) {
+      const config = report.report_config as { scope?: string; department_ids?: string[] } | null;
       setFormData({
         report_type: report.report_type,
         schedule_frequency: report.schedule_frequency,
         schedule_time: report.schedule_time?.slice(0, 5) || '08:00',
         schedule_day_of_week: report.schedule_day_of_week ?? 1,
         schedule_day_of_month: report.schedule_day_of_month ?? 1,
+        report_scope: (config?.scope as 'all' | 'department') || 'all',
+        department_ids: config?.department_ids || [],
       });
     } else {
       setFormData({
-        report_type: 'Time Summary',
+        report_type: 'employee_timecard',
         schedule_frequency: 'weekly',
         schedule_time: '08:00',
         schedule_day_of_week: 1,
         schedule_day_of_month: 1,
+        report_scope: 'all',
+        department_ids: [],
       });
     }
   }, [report, open]);
+
+  const handleDepartmentToggle = (departmentId: string) => {
+    setFormData(prev => ({
+      ...prev,
+      department_ids: prev.department_ids.includes(departmentId)
+        ? prev.department_ids.filter(id => id !== departmentId)
+        : [...prev.department_ids, departmentId],
+    }));
+  };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -75,7 +95,10 @@ export const ScheduledReportDialog = ({ open, onOpenChange, report }: ScheduledR
         schedule_day_of_week: formData.schedule_frequency === 'weekly' ? formData.schedule_day_of_week : null,
         schedule_day_of_month: formData.schedule_frequency === 'monthly' ? formData.schedule_day_of_month : null,
         is_active: true,
-        report_config: {},
+        report_config: {
+          scope: formData.report_scope,
+          department_ids: formData.report_scope === 'department' ? formData.department_ids : [],
+        },
         created_by: user?.id || null,
       };
 
@@ -112,11 +135,53 @@ export const ScheduledReportDialog = ({ open, onOpenChange, report }: ScheduledR
               </SelectTrigger>
               <SelectContent>
                 {REPORT_TYPES.map((type) => (
-                  <SelectItem key={type} value={type}>{type}</SelectItem>
+                  <SelectItem key={type.value} value={type.value}>{type.label}</SelectItem>
                 ))}
               </SelectContent>
             </Select>
           </div>
+
+          <div className="space-y-3">
+            <Label>Report Scope</Label>
+            <RadioGroup
+              value={formData.report_scope}
+              onValueChange={(value: 'all' | 'department') => setFormData({ ...formData, report_scope: value, department_ids: [] })}
+              className="flex flex-col gap-2"
+            >
+              <div className="flex items-center space-x-2">
+                <RadioGroupItem value="all" id="scope-all" />
+                <Label htmlFor="scope-all" className="font-normal cursor-pointer">All Employees</Label>
+              </div>
+              <div className="flex items-center space-x-2">
+                <RadioGroupItem value="department" id="scope-department" />
+                <Label htmlFor="scope-department" className="font-normal cursor-pointer">By Department</Label>
+              </div>
+            </RadioGroup>
+          </div>
+
+          {formData.report_scope === 'department' && (
+            <div className="space-y-2 pl-6">
+              <Label>Select Departments</Label>
+              <div className="border rounded-md p-3 max-h-40 overflow-y-auto space-y-2">
+                {departments.length === 0 ? (
+                  <p className="text-sm text-muted-foreground">No departments available</p>
+                ) : (
+                  departments.map((dept) => (
+                    <div key={dept.id} className="flex items-center space-x-2">
+                      <Checkbox
+                        id={`dept-${dept.id}`}
+                        checked={formData.department_ids.includes(dept.id)}
+                        onCheckedChange={() => handleDepartmentToggle(dept.id)}
+                      />
+                      <Label htmlFor={`dept-${dept.id}`} className="font-normal cursor-pointer">
+                        {dept.name}
+                      </Label>
+                    </div>
+                  ))
+                )}
+              </div>
+            </div>
+          )}
 
           <div className="space-y-2">
             <Label htmlFor="schedule_frequency">Frequency</Label>
