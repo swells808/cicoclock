@@ -7,14 +7,23 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
 import { Checkbox } from '@/components/ui/checkbox';
 import { useScheduledReports, ScheduledReport } from '@/hooks/useScheduledReports';
+import { useReportRecipients } from '@/hooks/useScheduledReports';
 import { useDepartments } from '@/hooks/useDepartments';
+import { useUsers } from '@/hooks/useUsers';
 import { useAuth } from '@/contexts/AuthContext';
 import { toast } from 'sonner';
+import { X, Plus } from 'lucide-react';
 
 interface ScheduledReportDialogProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   report: ScheduledReport | null;
+}
+
+interface Recipient {
+  email: string;
+  profile_id?: string;
+  id?: string; // existing recipient id from DB
 }
 
 const REPORT_TYPES = [
@@ -37,8 +46,13 @@ const DAYS_OF_WEEK = [
 export const ScheduledReportDialog = ({ open, onOpenChange, report }: ScheduledReportDialogProps) => {
   const { user } = useAuth();
   const { createReport, updateReport } = useScheduledReports();
+  const { recipients: existingRecipients, refetch: fetchRecipients, addRecipient, removeRecipient } = useReportRecipients(report?.id || '');
   const { departments } = useDepartments();
+  const { users } = useUsers();
   const [saving, setSaving] = useState(false);
+  const [recipients, setRecipients] = useState<Recipient[]>([]);
+  const [emailInput, setEmailInput] = useState('');
+  const [selectedUserId, setSelectedUserId] = useState('');
   const [formData, setFormData] = useState({
     report_type: 'employee_timecard',
     schedule_frequency: 'weekly',
@@ -61,6 +75,7 @@ export const ScheduledReportDialog = ({ open, onOpenChange, report }: ScheduledR
         report_scope: (config?.scope as 'all' | 'department') || 'all',
         department_ids: config?.department_ids || [],
       });
+      fetchRecipients();
     } else {
       setFormData({
         report_type: 'employee_timecard',
@@ -71,8 +86,20 @@ export const ScheduledReportDialog = ({ open, onOpenChange, report }: ScheduledR
         report_scope: 'all',
         department_ids: [],
       });
+      setRecipients([]);
     }
   }, [report, open]);
+
+  // Sync existing recipients to local state when they load
+  useEffect(() => {
+    if (existingRecipients.length > 0) {
+      setRecipients(existingRecipients.map(r => ({
+        email: r.email,
+        profile_id: r.profile_id || undefined,
+        id: r.id,
+      })));
+    }
+  }, [existingRecipients]);
 
   const handleDepartmentToggle = (departmentId: string) => {
     setFormData(prev => ({
@@ -81,6 +108,48 @@ export const ScheduledReportDialog = ({ open, onOpenChange, report }: ScheduledR
         ? prev.department_ids.filter(id => id !== departmentId)
         : [...prev.department_ids, departmentId],
     }));
+  };
+
+  const addEmailRecipient = () => {
+    const email = emailInput.trim().toLowerCase();
+    if (!email) return;
+    
+    // Basic email validation
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
+      toast.error('Please enter a valid email address');
+      return;
+    }
+    
+    // Check for duplicates
+    if (recipients.some(r => r.email.toLowerCase() === email)) {
+      toast.error('This email is already added');
+      return;
+    }
+    
+    setRecipients([...recipients, { email }]);
+    setEmailInput('');
+  };
+
+  const addUserRecipient = (userId: string) => {
+    const selectedUser = users.find(u => u.id === userId);
+    if (!selectedUser || !selectedUser.email) return;
+    
+    // Check for duplicates
+    if (recipients.some(r => r.email.toLowerCase() === selectedUser.email?.toLowerCase())) {
+      toast.error('This user is already added');
+      setSelectedUserId('');
+      return;
+    }
+    
+    setRecipients([...recipients, { 
+      email: selectedUser.email, 
+      profile_id: selectedUser.id 
+    }]);
+    setSelectedUserId('');
+  };
+
+  const removeLocalRecipient = (email: string) => {
+    setRecipients(recipients.filter(r => r.email !== email));
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -102,11 +171,46 @@ export const ScheduledReportDialog = ({ open, onOpenChange, report }: ScheduledR
         created_by: user?.id || null,
       };
 
+      let reportId: string;
+
       if (report) {
         await updateReport(report.id, payload);
+        reportId = report.id;
+        
+        // Handle recipient changes for existing report
+        const existingEmails = existingRecipients.map(r => r.email.toLowerCase());
+        const newEmails = recipients.map(r => r.email.toLowerCase());
+        
+        // Remove recipients that were deleted
+        for (const existing of existingRecipients) {
+          if (!newEmails.includes(existing.email.toLowerCase())) {
+            await removeRecipient(existing.id);
+          }
+        }
+        
+        // Add new recipients
+        for (const recipient of recipients) {
+          if (!existingEmails.includes(recipient.email.toLowerCase())) {
+            await addRecipient(recipient.email, recipient.profile_id);
+          }
+        }
       } else {
-        await createReport(payload);
+        const newReport = await createReport(payload);
+        reportId = newReport.id;
+        
+        // Add all recipients to the new report
+        for (const recipient of recipients) {
+          // We need to add recipients using the new report ID
+          // Since useReportRecipients is tied to report?.id, we need to add directly
+          const { supabase } = await import('@/integrations/supabase/client');
+          await supabase.from('scheduled_report_recipients').insert({
+            scheduled_report_id: reportId,
+            email: recipient.email,
+            profile_id: recipient.profile_id || null,
+          });
+        }
       }
+      
       onOpenChange(false);
     } catch (err) {
       console.error('Error saving report:', err);
@@ -116,9 +220,12 @@ export const ScheduledReportDialog = ({ open, onOpenChange, report }: ScheduledR
     }
   };
 
+  // Filter users who have emails
+  const usersWithEmails = users.filter(u => u.email);
+
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="sm:max-w-[500px]">
+      <DialogContent className="sm:max-w-[500px] max-h-[90vh] overflow-y-auto">
         <DialogHeader>
           <DialogTitle>{report ? 'Edit Scheduled Report' : 'New Scheduled Report'}</DialogTitle>
         </DialogHeader>
@@ -246,6 +353,71 @@ export const ScheduledReportDialog = ({ open, onOpenChange, report }: ScheduledR
               value={formData.schedule_time}
               onChange={(e) => setFormData({ ...formData, schedule_time: e.target.value })}
             />
+          </div>
+
+          {/* Recipients Section */}
+          <div className="space-y-3 pt-2 border-t">
+            <Label>Recipients</Label>
+            
+            {/* Add by email */}
+            <div className="flex gap-2">
+              <Input
+                type="email"
+                placeholder="Enter email address"
+                value={emailInput}
+                onChange={(e) => setEmailInput(e.target.value)}
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter') {
+                    e.preventDefault();
+                    addEmailRecipient();
+                  }
+                }}
+                className="flex-1"
+              />
+              <Button type="button" variant="outline" size="icon" onClick={addEmailRecipient}>
+                <Plus className="h-4 w-4" />
+              </Button>
+            </div>
+
+            {/* Add from users */}
+            <div className="flex gap-2">
+              <Select value={selectedUserId} onValueChange={addUserRecipient}>
+                <SelectTrigger className="flex-1">
+                  <SelectValue placeholder="Or select an employee" />
+                </SelectTrigger>
+                <SelectContent>
+                  {usersWithEmails.map((u) => (
+                    <SelectItem key={u.id} value={u.id}>
+                      {u.name} ({u.email})
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+
+            {/* List of recipients */}
+            {recipients.length > 0 && (
+              <div className="border rounded-md divide-y max-h-32 overflow-y-auto">
+                {recipients.map((recipient) => (
+                  <div key={recipient.email} className="flex items-center justify-between px-3 py-2">
+                    <span className="text-sm truncate">{recipient.email}</span>
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      size="icon"
+                      className="h-6 w-6 text-muted-foreground hover:text-destructive"
+                      onClick={() => removeLocalRecipient(recipient.email)}
+                    >
+                      <X className="h-4 w-4" />
+                    </Button>
+                  </div>
+                ))}
+              </div>
+            )}
+            
+            {recipients.length === 0 && (
+              <p className="text-sm text-muted-foreground">No recipients added yet</p>
+            )}
           </div>
 
           <DialogFooter>
