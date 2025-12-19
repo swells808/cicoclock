@@ -1,5 +1,6 @@
 import React from "react";
-import { MoreHorizontal, CreditCard, Download, Eye, Edit, Trash2 } from "lucide-react";
+import { useNavigate } from "react-router-dom";
+import { MoreHorizontal, CreditCard, Eye, Edit, Trash2 } from "lucide-react";
 import {
   Table,
   TableBody,
@@ -32,7 +33,6 @@ interface UserTableProps {
 
 export const UserTable: React.FC<UserTableProps> = ({
   users,
-  onUserClick,
   onEditUser,
   onDeleteUser,
   selectedUsers,
@@ -40,6 +40,7 @@ export const UserTable: React.FC<UserTableProps> = ({
   onSelectAll,
   onGenerateBadge,
 }) => {
+  const navigate = useNavigate();
   const allSelected = users.length > 0 && selectedUsers.length === users.length;
 
   const getRoleBadgeVariant = (role: string): "default" | "secondary" | "destructive" => {
@@ -90,7 +91,7 @@ export const UserTable: React.FC<UserTableProps> = ({
               <TableRow 
                 key={user.id} 
                 className="cursor-pointer hover:bg-muted/50"
-                onClick={() => onUserClick(user)}
+                onClick={() => navigate(`/employee/${user.id}`)}
               >
                 <TableCell onClick={(e) => e.stopPropagation()}>
                   <Checkbox
@@ -125,7 +126,7 @@ export const UserTable: React.FC<UserTableProps> = ({
                       <MoreHorizontal className="h-4 w-4 text-muted-foreground" />
                     </DropdownMenuTrigger>
                     <DropdownMenuContent align="end">
-                      <DropdownMenuItem onClick={() => onUserClick(user)}>
+                      <DropdownMenuItem onClick={() => navigate(`/employee/${user.id}`)}>
                         <Eye className="h-4 w-4 mr-2" />
                         View Details
                       </DropdownMenuItem>
