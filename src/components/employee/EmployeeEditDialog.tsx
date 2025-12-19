@@ -298,12 +298,12 @@ export const EmployeeEditDialog = ({ open, onOpenChange, employee, onSave }: Emp
           <TabsContent value="work" className="space-y-4 mt-4">
             <div className="space-y-2">
               <Label htmlFor="department">Department</Label>
-              <Select value={departmentId} onValueChange={setDepartmentId}>
+              <Select value={departmentId || "__none__"} onValueChange={(val) => setDepartmentId(val === "__none__" ? "" : val)}>
                 <SelectTrigger>
                   <SelectValue placeholder="Select department" />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="">No Department</SelectItem>
+                  <SelectItem value="__none__">No Department</SelectItem>
                   {departments.map((dept) => (
                     <SelectItem key={dept.id} value={dept.id}>
                       {dept.name}
