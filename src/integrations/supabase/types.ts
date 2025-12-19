@@ -250,6 +250,57 @@ export type Database = {
           },
         ]
       }
+      department_schedules: {
+        Row: {
+          company_id: string
+          created_at: string | null
+          day_of_week: number
+          department_id: string
+          end_time: string | null
+          id: string
+          is_day_off: boolean | null
+          start_time: string | null
+          updated_at: string | null
+        }
+        Insert: {
+          company_id: string
+          created_at?: string | null
+          day_of_week: number
+          department_id: string
+          end_time?: string | null
+          id?: string
+          is_day_off?: boolean | null
+          start_time?: string | null
+          updated_at?: string | null
+        }
+        Update: {
+          company_id?: string
+          created_at?: string | null
+          day_of_week?: number
+          department_id?: string
+          end_time?: string | null
+          id?: string
+          is_day_off?: boolean | null
+          start_time?: string | null
+          updated_at?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "department_schedules_company_id_fkey"
+            columns: ["company_id"]
+            isOneToOne: false
+            referencedRelation: "companies"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "department_schedules_department_id_fkey"
+            columns: ["department_id"]
+            isOneToOne: false
+            referencedRelation: "departments"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       departments: {
         Row: {
           company_id: string
