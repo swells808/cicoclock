@@ -5,13 +5,13 @@ import { EmployeeHeader } from "@/components/employee/EmployeeHeader";
 import { EmployeeTabs } from "@/components/employee/EmployeeTabs";
 import { useEmployeeDetail } from "@/hooks/useEmployeeDetail";
 import { Skeleton } from "@/components/ui/skeleton";
-import { UserDialog } from "@/components/users/UserDialog";
-import type { User } from "@/hooks/useUsers";
+import { EmployeeEditDialog } from "@/components/employee/EmployeeEditDialog";
 
 const EmployeeDetail = () => {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
   const { employee, loading, error, refetch, navigation } = useEmployeeDetail(id);
+  const [isEditDialogOpen, setIsEditDialogOpen] = useState(false);
 
   if (loading) {
     return (
@@ -50,27 +50,6 @@ const EmployeeDetail = () => {
     );
   }
 
-  const [isEditDialogOpen, setIsEditDialogOpen] = useState(false);
-
-  // Convert employee to User type for UserDialog
-  const userForDialog: User | null = employee ? {
-    id: employee.id,
-    user_id: employee.user_id || employee.id,
-    name: [employee.first_name, employee.last_name].filter(Boolean).join(" ") || employee.display_name || "",
-    email: employee.email || "",
-    role: employee.role === "admin" ? "Admin" : employee.role === "supervisor" ? "Manager" : "Employee",
-    status: employee.status === "active" ? "Active" : employee.status === "inactive" ? "Inactive" : "Deactivated",
-    lastActive: "Recently",
-    avatar: employee.avatar_url || undefined,
-    department: employee.department_name || "No Department",
-    phone: employee.phone || undefined,
-    first_name: employee.first_name || undefined,
-    last_name: employee.last_name || undefined,
-    display_name: employee.display_name || undefined,
-    employeeId: employee.employee_id || "",
-    pin: employee.pin || "",
-  } : null;
-
   return (
     <DashboardLayout>
       <div className="space-y-6">
@@ -86,16 +65,12 @@ const EmployeeDetail = () => {
         />
       </div>
 
-      {userForDialog && (
-        <UserDialog
-          open={isEditDialogOpen}
-          onOpenChange={setIsEditDialogOpen}
-          user={userForDialog}
-          onSave={() => {
-            refetch();
-          }}
-        />
-      )}
+      <EmployeeEditDialog
+        open={isEditDialogOpen}
+        onOpenChange={setIsEditDialogOpen}
+        employee={employee}
+        onSave={refetch}
+      />
     </DashboardLayout>
   );
 };
