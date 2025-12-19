@@ -220,8 +220,11 @@ export const ScheduledReportDialog = ({ open, onOpenChange, report }: ScheduledR
     }
   };
 
-  // Filter users who have emails
-  const usersWithEmails = users.filter(u => u.email);
+  // Filter for active users with valid emails, sorted alphabetically
+  const usersWithEmails = users
+    .filter(u => u.status === 'Active')
+    .filter(u => u.email && u.email !== 'N/A' && u.email.includes('@'))
+    .sort((a, b) => a.name.localeCompare(b.name));
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
