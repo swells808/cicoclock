@@ -280,6 +280,194 @@ export type Database = {
         }
         Relationships: []
       }
+      employee_assignments: {
+        Row: {
+          assigned_date: string | null
+          category: Database["public"]["Enums"]["assignment_category"]
+          company_id: string
+          created_at: string | null
+          description: string | null
+          id: string
+          name: string
+          notes: string | null
+          profile_id: string
+          return_date: string | null
+          serial_number: string | null
+          status: string | null
+          updated_at: string | null
+        }
+        Insert: {
+          assigned_date?: string | null
+          category: Database["public"]["Enums"]["assignment_category"]
+          company_id: string
+          created_at?: string | null
+          description?: string | null
+          id?: string
+          name: string
+          notes?: string | null
+          profile_id: string
+          return_date?: string | null
+          serial_number?: string | null
+          status?: string | null
+          updated_at?: string | null
+        }
+        Update: {
+          assigned_date?: string | null
+          category?: Database["public"]["Enums"]["assignment_category"]
+          company_id?: string
+          created_at?: string | null
+          description?: string | null
+          id?: string
+          name?: string
+          notes?: string | null
+          profile_id?: string
+          return_date?: string | null
+          serial_number?: string | null
+          status?: string | null
+          updated_at?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "employee_assignments_company_id_fkey"
+            columns: ["company_id"]
+            isOneToOne: false
+            referencedRelation: "companies"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "employee_assignments_profile_id_fkey"
+            columns: ["profile_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      employee_schedules: {
+        Row: {
+          company_id: string
+          created_at: string | null
+          day_of_week: number
+          end_time: string | null
+          id: string
+          is_day_off: boolean | null
+          profile_id: string
+          start_time: string | null
+          updated_at: string | null
+        }
+        Insert: {
+          company_id: string
+          created_at?: string | null
+          day_of_week: number
+          end_time?: string | null
+          id?: string
+          is_day_off?: boolean | null
+          profile_id: string
+          start_time?: string | null
+          updated_at?: string | null
+        }
+        Update: {
+          company_id?: string
+          created_at?: string | null
+          day_of_week?: number
+          end_time?: string | null
+          id?: string
+          is_day_off?: boolean | null
+          profile_id?: string
+          start_time?: string | null
+          updated_at?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "employee_schedules_company_id_fkey"
+            columns: ["company_id"]
+            isOneToOne: false
+            referencedRelation: "companies"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "employee_schedules_profile_id_fkey"
+            columns: ["profile_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      overtime_entries: {
+        Row: {
+          approved_at: string | null
+          approved_by: string | null
+          company_id: string
+          created_at: string | null
+          date: string
+          hours: number
+          id: string
+          profile_id: string
+          reason: string | null
+          status: Database["public"]["Enums"]["overtime_status"] | null
+          time_entry_id: string | null
+          updated_at: string | null
+        }
+        Insert: {
+          approved_at?: string | null
+          approved_by?: string | null
+          company_id: string
+          created_at?: string | null
+          date: string
+          hours: number
+          id?: string
+          profile_id: string
+          reason?: string | null
+          status?: Database["public"]["Enums"]["overtime_status"] | null
+          time_entry_id?: string | null
+          updated_at?: string | null
+        }
+        Update: {
+          approved_at?: string | null
+          approved_by?: string | null
+          company_id?: string
+          created_at?: string | null
+          date?: string
+          hours?: number
+          id?: string
+          profile_id?: string
+          reason?: string | null
+          status?: Database["public"]["Enums"]["overtime_status"] | null
+          time_entry_id?: string | null
+          updated_at?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "overtime_entries_approved_by_fkey"
+            columns: ["approved_by"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "overtime_entries_company_id_fkey"
+            columns: ["company_id"]
+            isOneToOne: false
+            referencedRelation: "companies"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "overtime_entries_profile_id_fkey"
+            columns: ["profile_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "overtime_entries_time_entry_id_fkey"
+            columns: ["time_entry_id"]
+            isOneToOne: false
+            referencedRelation: "time_entries"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       profiles: {
         Row: {
           address_city: string | null
@@ -888,6 +1076,76 @@ export type Database = {
           },
         ]
       }
+      time_off_requests: {
+        Row: {
+          company_id: string
+          created_at: string | null
+          end_date: string
+          hours_requested: number | null
+          id: string
+          profile_id: string
+          reason: string | null
+          reviewed_at: string | null
+          reviewed_by: string | null
+          start_date: string
+          status: Database["public"]["Enums"]["time_off_status"] | null
+          type: Database["public"]["Enums"]["time_off_type"]
+          updated_at: string | null
+        }
+        Insert: {
+          company_id: string
+          created_at?: string | null
+          end_date: string
+          hours_requested?: number | null
+          id?: string
+          profile_id: string
+          reason?: string | null
+          reviewed_at?: string | null
+          reviewed_by?: string | null
+          start_date: string
+          status?: Database["public"]["Enums"]["time_off_status"] | null
+          type: Database["public"]["Enums"]["time_off_type"]
+          updated_at?: string | null
+        }
+        Update: {
+          company_id?: string
+          created_at?: string | null
+          end_date?: string
+          hours_requested?: number | null
+          id?: string
+          profile_id?: string
+          reason?: string | null
+          reviewed_at?: string | null
+          reviewed_by?: string | null
+          start_date?: string
+          status?: Database["public"]["Enums"]["time_off_status"] | null
+          type?: Database["public"]["Enums"]["time_off_type"]
+          updated_at?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "time_off_requests_company_id_fkey"
+            columns: ["company_id"]
+            isOneToOne: false
+            referencedRelation: "companies"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "time_off_requests_profile_id_fkey"
+            columns: ["profile_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "time_off_requests_reviewed_by_fkey"
+            columns: ["reviewed_by"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       user_certifications: {
         Row: {
           cert_code: string
@@ -994,7 +1252,16 @@ export type Database = {
     }
     Enums: {
       app_role: "admin" | "supervisor" | "employee"
+      assignment_category:
+        | "tools"
+        | "fleet"
+        | "tech_assets"
+        | "equipment"
+        | "cards"
+      overtime_status: "pending" | "approved" | "denied"
       task_action_type: "start" | "finish"
+      time_off_status: "pending" | "approved" | "denied" | "cancelled"
+      time_off_type: "vacation" | "sick" | "personal" | "bereavement" | "other"
     }
     CompositeTypes: {
       [_ in never]: never
@@ -1123,7 +1390,17 @@ export const Constants = {
   public: {
     Enums: {
       app_role: ["admin", "supervisor", "employee"],
+      assignment_category: [
+        "tools",
+        "fleet",
+        "tech_assets",
+        "equipment",
+        "cards",
+      ],
+      overtime_status: ["pending", "approved", "denied"],
       task_action_type: ["start", "finish"],
+      time_off_status: ["pending", "approved", "denied", "cancelled"],
+      time_off_type: ["vacation", "sick", "personal", "bereavement", "other"],
     },
   },
 } as const
