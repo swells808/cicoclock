@@ -7,8 +7,9 @@ import { Textarea } from '@/components/ui/textarea';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { useDepartments, Department } from '@/hooks/useDepartments';
-import { Plus, Pencil, Trash2, Building2 } from 'lucide-react';
+import { Plus, Pencil, Trash2, Building2, Clock } from 'lucide-react';
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from '@/components/ui/alert-dialog';
+import { DepartmentScheduleDialog } from './DepartmentScheduleDialog';
 
 export const DepartmentManagement = () => {
   const { departments, loading, createDepartment, updateDepartment, deleteDepartment } = useDepartments();
@@ -16,6 +17,10 @@ export const DepartmentManagement = () => {
   const [editingDepartment, setEditingDepartment] = useState<Department | null>(null);
   const [formData, setFormData] = useState({ name: '', description: '' });
   const [saving, setSaving] = useState(false);
+  
+  // Schedule dialog state
+  const [scheduleDialogOpen, setScheduleDialogOpen] = useState(false);
+  const [scheduleDepartment, setScheduleDepartment] = useState<Department | null>(null);
 
   const handleOpenDialog = (department?: Department) => {
     if (department) {
@@ -26,6 +31,11 @@ export const DepartmentManagement = () => {
       setFormData({ name: '', description: '' });
     }
     setDialogOpen(true);
+  };
+
+  const handleOpenScheduleDialog = (department: Department) => {
+    setScheduleDepartment(department);
+    setScheduleDialogOpen(true);
   };
 
   const handleSave = async () => {
@@ -64,7 +74,7 @@ export const DepartmentManagement = () => {
               <Building2 className="h-5 w-5" />
               Departments
             </CardTitle>
-            <CardDescription>Manage company departments and teams</CardDescription>
+            <CardDescription>Manage company departments and their default schedules</CardDescription>
           </div>
           <Button onClick={() => handleOpenDialog()} size="sm">
             <Plus className="h-4 w-4 mr-2" />
@@ -85,7 +95,7 @@ export const DepartmentManagement = () => {
               <TableRow>
                 <TableHead>Name</TableHead>
                 <TableHead>Description</TableHead>
-                <TableHead className="w-[100px]">Actions</TableHead>
+                <TableHead className="w-[150px]">Actions</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
@@ -94,11 +104,20 @@ export const DepartmentManagement = () => {
                   <TableCell className="font-medium">{dept.name}</TableCell>
                   <TableCell className="text-muted-foreground">{dept.description || '—'}</TableCell>
                   <TableCell>
-                    <div className="flex items-center gap-2">
+                    <div className="flex items-center gap-1">
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        onClick={() => handleOpenScheduleDialog(dept)}
+                        title="Set default schedule"
+                      >
+                        <Clock className="h-4 w-4" />
+                      </Button>
                       <Button
                         variant="ghost"
                         size="icon"
                         onClick={() => handleOpenDialog(dept)}
+                        title="Edit department"
                       >
                         <Pencil className="h-4 w-4" />
                       </Button>
@@ -163,6 +182,15 @@ export const DepartmentManagement = () => {
             </DialogFooter>
           </DialogContent>
         </Dialog>
+
+        {scheduleDepartment && (
+          <DepartmentScheduleDialog
+            open={scheduleDialogOpen}
+            onOpenChange={setScheduleDialogOpen}
+            departmentId={scheduleDepartment.id}
+            departmentName={scheduleDepartment.name}
+          />
+        )}
       </CardContent>
     </Card>
   );

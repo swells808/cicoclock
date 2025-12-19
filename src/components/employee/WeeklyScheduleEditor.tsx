@@ -1,11 +1,13 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
 import { useEmployeeSchedule, ScheduleDay } from "@/hooks/useEmployeeSchedule";
-import { Save, Loader2 } from "lucide-react";
+import { useDepartmentSchedule } from "@/hooks/useDepartmentSchedule";
+import { Save, Loader2, RotateCcw } from "lucide-react";
 import { useUserRole } from "@/hooks/useUserRole";
+import { supabase } from "@/integrations/supabase/client";
+import { useQuery } from "@tanstack/react-query";
 
 interface WeeklyScheduleEditorProps {
   profileId: string;
@@ -18,15 +20,52 @@ export const WeeklyScheduleEditor = ({ profileId }: WeeklyScheduleEditorProps) =
 
   const [localSchedule, setLocalSchedule] = useState<ScheduleDay[]>(schedule);
 
+  // Fetch employee's department
+  const { data: employeeProfile } = useQuery({
+    queryKey: ["employee-profile-department", profileId],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from("profiles")
+        .select("department_id")
+        .eq("id", profileId)
+        .single();
+      if (error) throw error;
+      return data;
+    },
+    enabled: !!profileId,
+  });
+
+  const departmentId = employeeProfile?.department_id;
+  const { schedule: departmentSchedule, loading: deptLoading } = useDepartmentSchedule(departmentId || undefined);
+
+  // Check if department has a schedule configured
+  const hasDepartmentSchedule = departmentSchedule.some(day => day.start_time || day.end_time);
+
   // Update local state when data loads
-  if (!loading && schedule.length > 0 && localSchedule.length === 0) {
-    setLocalSchedule(schedule);
-  }
+  useEffect(() => {
+    if (!loading && schedule.length > 0) {
+      setLocalSchedule(schedule);
+    }
+  }, [loading, schedule]);
 
   const handleDayChange = (dayIndex: number, field: keyof ScheduleDay, value: any) => {
     setLocalSchedule(prev => prev.map((day, i) => 
       i === dayIndex ? { ...day, [field]: value } : day
     ));
+  };
+
+  const handleApplyDepartmentDefault = () => {
+    if (!departmentSchedule || departmentSchedule.length === 0) return;
+    
+    // Map department schedule to employee schedule format
+    const newSchedule: ScheduleDay[] = departmentSchedule.map(day => ({
+      day_of_week: day.day_of_week,
+      start_time: day.start_time,
+      end_time: day.end_time,
+      is_day_off: day.is_day_off,
+    }));
+    
+    setLocalSchedule(newSchedule);
   };
 
   const handleSave = () => {
@@ -39,6 +78,23 @@ export const WeeklyScheduleEditor = ({ profileId }: WeeklyScheduleEditorProps) =
 
   return (
     <div className="space-y-4">
+      {canEdit && departmentId && hasDepartmentSchedule && (
+        <div className="flex items-center justify-between p-3 bg-muted/50 rounded-lg border">
+          <div className="text-sm text-muted-foreground">
+            This employee's department has a default schedule configured.
+          </div>
+          <Button 
+            variant="outline" 
+            size="sm"
+            onClick={handleApplyDepartmentDefault}
+            disabled={deptLoading}
+          >
+            <RotateCcw className="h-4 w-4 mr-2" />
+            Apply Department Default
+          </Button>
+        </div>
+      )}
+
       <div className="overflow-x-auto">
         <table className="w-full min-w-[500px]">
           <thead>
