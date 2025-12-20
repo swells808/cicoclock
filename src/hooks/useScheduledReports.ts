@@ -7,6 +7,7 @@ import type { Json } from '@/integrations/supabase/types';
 export interface ScheduledReport {
   id: string;
   company_id: string;
+  name: string | null;
   report_type: string;
   schedule_frequency: string;
   schedule_time: string;
@@ -61,6 +62,7 @@ export const useScheduledReports = () => {
   };
 
   const createReport = async (reportData: {
+    name?: string | null;
     report_type: string;
     schedule_frequency: string;
     schedule_time: string;
@@ -75,6 +77,7 @@ export const useScheduledReports = () => {
     const { data, error } = await supabase
       .from('scheduled_reports')
       .insert([{
+        name: reportData.name || null,
         report_type: reportData.report_type,
         schedule_frequency: reportData.schedule_frequency,
         schedule_time: reportData.schedule_time,
@@ -95,6 +98,7 @@ export const useScheduledReports = () => {
   };
 
   const updateReport = async (id: string, updates: {
+    name?: string | null;
     report_type?: string;
     schedule_frequency?: string;
     schedule_time?: string;

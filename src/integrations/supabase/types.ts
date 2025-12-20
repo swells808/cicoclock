@@ -853,6 +853,7 @@ export type Database = {
           created_by: string | null
           id: string
           is_active: boolean
+          name: string | null
           report_config: Json | null
           report_type: string
           schedule_day_of_month: number | null
@@ -867,6 +868,7 @@ export type Database = {
           created_by?: string | null
           id?: string
           is_active?: boolean
+          name?: string | null
           report_config?: Json | null
           report_type: string
           schedule_day_of_month?: number | null
@@ -881,6 +883,7 @@ export type Database = {
           created_by?: string | null
           id?: string
           is_active?: boolean
+          name?: string | null
           report_config?: Json | null
           report_type?: string
           schedule_day_of_month?: number | null
