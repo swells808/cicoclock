@@ -111,7 +111,8 @@ export const ScheduledReportsList = () => {
           <Table>
             <TableHeader>
               <TableRow>
-                <TableHead>Report Type</TableHead>
+                <TableHead>Name</TableHead>
+                <TableHead>Type</TableHead>
                 <TableHead>Schedule</TableHead>
                 <TableHead>Status</TableHead>
                 <TableHead className="w-[200px]">Actions</TableHead>
@@ -120,6 +121,7 @@ export const ScheduledReportsList = () => {
             <TableBody>
               {reports.map((report) => (
                 <TableRow key={report.id}>
+                  <TableCell className="font-medium">{report.name || 'Untitled Report'}</TableCell>
                   <TableCell>{getReportTypeBadge(report.report_type)}</TableCell>
                   <TableCell>
                     <div className="flex items-center gap-2">

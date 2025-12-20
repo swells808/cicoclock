@@ -28,10 +28,10 @@ interface Recipient {
 }
 
 const REPORT_TYPES = [
-  { value: 'employee_timecard', label: 'Employee Timecard' },
-  { value: 'project_timecard', label: 'Project Timecard' },
-  { value: 'weekly_payroll', label: 'Weekly Payroll' },
-  { value: 'monthly_project_billing', label: 'Monthly Project Billing' },
+  { value: 'employee_timecard', label: 'Employee Timecard', defaultName: 'Employee Timecard Report' },
+  { value: 'project_timecard', label: 'Project Timecard', defaultName: 'Project Timecard Report' },
+  { value: 'weekly_payroll', label: 'Weekly Payroll', defaultName: 'Weekly Payroll Report' },
+  { value: 'monthly_project_billing', label: 'Monthly Project Billing', defaultName: 'Monthly Project Billing Report' },
 ];
 
 const DAYS_OF_WEEK = [
@@ -55,6 +55,7 @@ export const ScheduledReportDialog = ({ open, onOpenChange, report }: ScheduledR
   const [emailInput, setEmailInput] = useState('');
   const [selectedUserId, setSelectedUserId] = useState('');
   const [formData, setFormData] = useState({
+    name: 'Employee Timecard Report',
     report_type: 'employee_timecard',
     schedule_frequency: 'weekly',
     schedule_time: '08:00',
@@ -68,6 +69,7 @@ export const ScheduledReportDialog = ({ open, onOpenChange, report }: ScheduledR
     if (report) {
       const config = report.report_config as { scope?: string; department_ids?: string[] } | null;
       setFormData({
+        name: report.name || REPORT_TYPES.find(t => t.value === report.report_type)?.defaultName || '',
         report_type: report.report_type,
         schedule_frequency: report.schedule_frequency,
         schedule_time: report.schedule_time?.slice(0, 5) || '08:00',
@@ -79,6 +81,7 @@ export const ScheduledReportDialog = ({ open, onOpenChange, report }: ScheduledR
       fetchRecipients();
     } else {
       setFormData({
+        name: 'Employee Timecard Report',
         report_type: 'employee_timecard',
         schedule_frequency: 'weekly',
         schedule_time: '08:00',
@@ -159,6 +162,7 @@ export const ScheduledReportDialog = ({ open, onOpenChange, report }: ScheduledR
 
     try {
       const payload = {
+        name: formData.name.trim() || null,
         report_type: formData.report_type,
         schedule_frequency: formData.schedule_frequency,
         schedule_time: formData.schedule_time + ':00',
@@ -236,10 +240,30 @@ export const ScheduledReportDialog = ({ open, onOpenChange, report }: ScheduledR
 
         <form onSubmit={handleSubmit} className="space-y-4 py-4">
           <div className="space-y-2">
+            <Label htmlFor="name">Report Name</Label>
+            <Input
+              id="name"
+              placeholder="Enter report name"
+              value={formData.name}
+              onChange={(e) => setFormData({ ...formData, name: e.target.value })}
+            />
+          </div>
+
+          <div className="space-y-2">
             <Label htmlFor="report_type">Report Type</Label>
             <Select
               value={formData.report_type}
-              onValueChange={(value) => setFormData({ ...formData, report_type: value })}
+              onValueChange={(value) => {
+                const type = REPORT_TYPES.find(t => t.value === value);
+                setFormData({ 
+                  ...formData, 
+                  report_type: value,
+                  // Auto-update name if it matches the previous default
+                  name: REPORT_TYPES.some(t => t.defaultName === formData.name) 
+                    ? type?.defaultName || formData.name 
+                    : formData.name
+                });
+              }}
             >
               <SelectTrigger>
                 <SelectValue placeholder="Select report type" />
