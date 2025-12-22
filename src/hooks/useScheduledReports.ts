@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import { useCompany } from '@/contexts/CompanyContext';
 import { toast } from 'sonner';
@@ -34,7 +34,7 @@ export const useScheduledReports = () => {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
-  const fetchReports = async () => {
+  const fetchReports = useCallback(async () => {
     if (!company?.id) {
       setReports([]);
       setLoading(false);
@@ -59,7 +59,7 @@ export const useScheduledReports = () => {
     } finally {
       setLoading(false);
     }
-  };
+  }, [company?.id]);
 
   const createReport = async (reportData: {
     name?: string | null;
@@ -154,7 +154,7 @@ export const useScheduledReports = () => {
 
   useEffect(() => {
     fetchReports();
-  }, [company?.id]);
+  }, [fetchReports]);
 
   return {
     reports,
