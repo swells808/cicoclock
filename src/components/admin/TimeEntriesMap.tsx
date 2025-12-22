@@ -134,18 +134,39 @@ export const TimeEntriesMap: React.FC<TimeEntriesMapProps> = ({ entries, selecte
       entriesWithLocation.forEach(entry => {
         const name = getEmployeeName(entry);
         
-        // Clock in marker (green)
+        // Clock in marker (green) with name label
         if (entry.clock_in_latitude && entry.clock_in_longitude) {
           const clockInEl = document.createElement('div');
           clockInEl.className = 'clock-in-marker';
           clockInEl.style.cssText = `
-            width: 24px;
-            height: 24px;
-            background: #22c55e;
-            border: 3px solid white;
-            border-radius: 50%;
-            box-shadow: 0 2px 6px rgba(0,0,0,0.3);
+            display: flex;
+            flex-direction: column;
+            align-items: center;
             cursor: pointer;
+          `;
+          clockInEl.innerHTML = `
+            <div style="
+              background: rgba(255,255,255,0.95);
+              padding: 2px 6px;
+              border-radius: 4px;
+              font-size: 11px;
+              font-weight: 600;
+              color: #22c55e;
+              white-space: nowrap;
+              box-shadow: 0 1px 3px rgba(0,0,0,0.2);
+              margin-bottom: 4px;
+              max-width: 100px;
+              overflow: hidden;
+              text-overflow: ellipsis;
+            ">${name}</div>
+            <div style="
+              width: 24px;
+              height: 24px;
+              background: #22c55e;
+              border: 3px solid white;
+              border-radius: 50%;
+              box-shadow: 0 2px 6px rgba(0,0,0,0.3);
+            "></div>
           `;
 
           const clockInPopup = new mapboxgl.Popup({ offset: 25 }).setHTML(`
@@ -165,18 +186,39 @@ export const TimeEntriesMap: React.FC<TimeEntriesMapProps> = ({ entries, selecte
           markersRef.current.push(marker);
         }
 
-        // Clock out marker (red)
+        // Clock out marker (red) with name label
         if (entry.clock_out_latitude && entry.clock_out_longitude && entry.end_time) {
           const clockOutEl = document.createElement('div');
           clockOutEl.className = 'clock-out-marker';
           clockOutEl.style.cssText = `
-            width: 24px;
-            height: 24px;
-            background: #ef4444;
-            border: 3px solid white;
-            border-radius: 50%;
-            box-shadow: 0 2px 6px rgba(0,0,0,0.3);
+            display: flex;
+            flex-direction: column;
+            align-items: center;
             cursor: pointer;
+          `;
+          clockOutEl.innerHTML = `
+            <div style="
+              background: rgba(255,255,255,0.95);
+              padding: 2px 6px;
+              border-radius: 4px;
+              font-size: 11px;
+              font-weight: 600;
+              color: #ef4444;
+              white-space: nowrap;
+              box-shadow: 0 1px 3px rgba(0,0,0,0.2);
+              margin-bottom: 4px;
+              max-width: 100px;
+              overflow: hidden;
+              text-overflow: ellipsis;
+            ">${name}</div>
+            <div style="
+              width: 24px;
+              height: 24px;
+              background: #ef4444;
+              border: 3px solid white;
+              border-radius: 50%;
+              box-shadow: 0 2px 6px rgba(0,0,0,0.3);
+            "></div>
           `;
 
           const clockOutPopup = new mapboxgl.Popup({ offset: 25 }).setHTML(`
