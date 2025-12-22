@@ -254,13 +254,24 @@ export const TimeEntryDetailsReport: React.FC<TimeEntryDetailsReportProps> = ({
                       </Badge>
                     </TableCell>
                     <TableCell>
-                      <div className="flex gap-1">
+                      <div className="flex gap-2">
                         {entry.clock_in_photo_url && (
                           <Dialog>
                             <DialogTrigger asChild>
-                              <Button variant="ghost" size="sm">
-                                <Image className="h-4 w-4" />
-                              </Button>
+                              <div className="cursor-pointer group relative">
+                                {photoUrls[entry.id]?.clockIn ? (
+                                  <img 
+                                    src={photoUrls[entry.id].clockIn} 
+                                    alt="Clock in" 
+                                    className="w-10 h-10 rounded object-cover border border-border hover:border-primary transition-colors"
+                                  />
+                                ) : (
+                                  <div className="w-10 h-10 rounded bg-muted flex items-center justify-center">
+                                    <Image className="h-4 w-4 text-muted-foreground" />
+                                  </div>
+                                )}
+                                <span className="absolute -bottom-1 left-1/2 -translate-x-1/2 text-[10px] bg-primary text-primary-foreground px-1 rounded">In</span>
+                              </div>
                             </DialogTrigger>
                             <DialogContent>
                               <DialogHeader>
@@ -283,9 +294,20 @@ export const TimeEntryDetailsReport: React.FC<TimeEntryDetailsReportProps> = ({
                         {entry.clock_out_photo_url && (
                           <Dialog>
                             <DialogTrigger asChild>
-                              <Button variant="ghost" size="sm">
-                                <Image className="h-4 w-4" />
-                              </Button>
+                              <div className="cursor-pointer group relative">
+                                {photoUrls[entry.id]?.clockOut ? (
+                                  <img 
+                                    src={photoUrls[entry.id].clockOut} 
+                                    alt="Clock out" 
+                                    className="w-10 h-10 rounded object-cover border border-border hover:border-primary transition-colors"
+                                  />
+                                ) : (
+                                  <div className="w-10 h-10 rounded bg-muted flex items-center justify-center">
+                                    <Image className="h-4 w-4 text-muted-foreground" />
+                                  </div>
+                                )}
+                                <span className="absolute -bottom-1 left-1/2 -translate-x-1/2 text-[10px] bg-secondary text-secondary-foreground px-1 rounded">Out</span>
+                              </div>
                             </DialogTrigger>
                             <DialogContent>
                               <DialogHeader>
