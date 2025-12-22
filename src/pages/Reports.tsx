@@ -337,11 +337,11 @@ const Reports = () => {
               </div>
             </div>
 
-            {/* Daily Timecard Report */}
+            {/* Daily Timecard Report - defaults to today */}
             <DailyTimecardReport />
 
-            {/* Time Entry Details Report with Photos */}
-            <TimeEntryDetailsReport />
+            {/* Time Entry Details Report with Photos - defaults to today */}
+            <TimeEntryDetailsReport startDate={new Date()} endDate={new Date()} />
 
             {/* Report Content */}
             <section className="bg-card rounded-xl shadow-sm border border-border mb-8">
