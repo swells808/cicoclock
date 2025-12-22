@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { supabase } from '@/integrations/supabase/client';
@@ -28,11 +28,15 @@ interface DailyTimecardReportProps {
 }
 
 export const DailyTimecardReport: React.FC<DailyTimecardReportProps> = ({ 
-  date = new Date() 
+  date: propDate 
 }) => {
   const { company } = useCompany();
   const [entries, setEntries] = useState<TimeEntry[]>([]);
   const [loading, setLoading] = useState(true);
+
+  // Stabilize date to prevent infinite re-renders from new Date() default
+  const date = useMemo(() => propDate ?? new Date(), [propDate]);
+  const dateStr = format(date, 'yyyy-MM-dd');
 
   useEffect(() => {
     const fetchEntries = async () => {
@@ -91,7 +95,7 @@ export const DailyTimecardReport: React.FC<DailyTimecardReportProps> = ({
     };
 
     fetchEntries();
-  }, [company?.id, date]);
+  }, [company?.id, dateStr]);
 
   const formatDuration = (minutes: number | null) => {
     if (!minutes) return '-';
