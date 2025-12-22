@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { supabase } from '@/integrations/supabase/client';
@@ -24,11 +24,15 @@ interface UnClockedUsersReportProps {
 }
 
 export const UnClockedUsersReport: React.FC<UnClockedUsersReportProps> = ({ 
-  date = new Date() 
+  date: propDate 
 }) => {
   const { company } = useCompany();
   const [unclockedUsers, setUnclockedUsers] = useState<Profile[]>([]);
   const [loading, setLoading] = useState(true);
+
+  // Stabilize date to prevent infinite re-renders from new Date() default
+  const date = useMemo(() => propDate ?? new Date(), [propDate]);
+  const dateStr = format(date, 'yyyy-MM-dd');
 
   useEffect(() => {
     let isMounted = true;
@@ -103,7 +107,7 @@ export const UnClockedUsersReport: React.FC<UnClockedUsersReportProps> = ({
     return () => {
       isMounted = false;
     };
-  }, [company?.id, date]);
+  }, [company?.id, dateStr]);
 
   const getEmployeeName = (profile: Profile) => {
     if (profile.first_name || profile.last_name) {

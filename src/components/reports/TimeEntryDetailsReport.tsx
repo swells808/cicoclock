@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { supabase } from '@/integrations/supabase/client';
@@ -36,12 +36,18 @@ interface TimeEntryDetailsReportProps {
 }
 
 export const TimeEntryDetailsReport: React.FC<TimeEntryDetailsReportProps> = ({ 
-  startDate = new Date(new Date().getFullYear(), new Date().getMonth(), 1),
-  endDate = new Date()
+  startDate: propStartDate,
+  endDate: propEndDate
 }) => {
   const { company } = useCompany();
   const [entries, setEntries] = useState<TimeEntryDetail[]>([]);
   const [loading, setLoading] = useState(true);
+
+  // Stabilize dates to prevent infinite re-renders from new Date() defaults
+  const startDate = useMemo(() => propStartDate ?? new Date(new Date().getFullYear(), new Date().getMonth(), 1), [propStartDate]);
+  const endDate = useMemo(() => propEndDate ?? new Date(), [propEndDate]);
+  const startDateStr = format(startDate, 'yyyy-MM-dd');
+  const endDateStr = format(endDate, 'yyyy-MM-dd');
 
   useEffect(() => {
     const fetchEntries = async () => {
@@ -105,7 +111,7 @@ export const TimeEntryDetailsReport: React.FC<TimeEntryDetailsReportProps> = ({
     };
 
     fetchEntries();
-  }, [company?.id, startDate, endDate]);
+  }, [company?.id, startDateStr, endDateStr]);
 
   const formatDuration = (minutes: number | null) => {
     if (!minutes) return '-';
