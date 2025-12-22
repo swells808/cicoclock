@@ -214,9 +214,50 @@ const Timeclock = () => {
     setPhotoAction(null);
   };
 
+  // Get current geolocation
+  const getCurrentLocation = (): Promise<{ latitude: number; longitude: number; address: string | null }> => {
+    return new Promise((resolve) => {
+      if (!navigator.geolocation || !companyFeatures?.geolocation) {
+        resolve({ latitude: 0, longitude: 0, address: null });
+        return;
+      }
+      
+      navigator.geolocation.getCurrentPosition(
+        async (position) => {
+          const { latitude, longitude } = position.coords;
+          let address: string | null = null;
+          
+          // Try reverse geocoding with Nominatim (free, no API key required)
+          try {
+            const response = await fetch(
+              `https://nominatim.openstreetmap.org/reverse?format=json&lat=${latitude}&lon=${longitude}&zoom=18&addressdetails=1`,
+              { headers: { 'User-Agent': 'TimeclockApp/1.0' } }
+            );
+            if (response.ok) {
+              const data = await response.json();
+              address = data.display_name || null;
+            }
+          } catch (e) {
+            console.log('Reverse geocoding failed:', e);
+          }
+          
+          resolve({ latitude, longitude, address });
+        },
+        (error) => {
+          console.log('Geolocation error:', error);
+          resolve({ latitude: 0, longitude: 0, address: null });
+        },
+        { enableHighAccuracy: true, timeout: 10000, maximumAge: 60000 }
+      );
+    });
+  };
+
   const performClockIn = async (photoUrl?: string) => {
     if (!authenticatedEmployee || !company) return;
     setIsProcessing(true);
+    
+    // Get location data
+    const location = await getCurrentLocation();
     
     const { data, error } = await supabase
       .from('time_entries')
@@ -224,7 +265,10 @@ const Timeclock = () => {
         user_id: authenticatedEmployee.user_id, 
         company_id: company.id, 
         start_time: new Date().toISOString(), 
-        clock_in_photo_url: photoUrl 
+        clock_in_photo_url: photoUrl,
+        clock_in_latitude: location.latitude || null,
+        clock_in_longitude: location.longitude || null,
+        clock_in_address: location.address
       })
       .select()
       .single();
@@ -257,6 +301,9 @@ const Timeclock = () => {
     if (!activeTimeEntry || !authenticatedEmployee) return;
     setIsProcessing(true);
     
+    // Get location data
+    const location = await getCurrentLocation();
+    
     const endTime = new Date(); 
     const startTime = new Date(activeTimeEntry.start_time); 
     const durationMinutes = Math.floor((endTime.getTime() - startTime.getTime()) / 60000);
@@ -266,7 +313,10 @@ const Timeclock = () => {
       .update({ 
         end_time: endTime.toISOString(), 
         duration_minutes: durationMinutes, 
-        clock_out_photo_url: photoUrl 
+        clock_out_photo_url: photoUrl,
+        clock_out_latitude: location.latitude || null,
+        clock_out_longitude: location.longitude || null,
+        clock_out_address: location.address
       })
       .eq('id', activeTimeEntry.id);
     

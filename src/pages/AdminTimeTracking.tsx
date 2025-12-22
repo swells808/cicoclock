@@ -1,6 +1,6 @@
 import React, { useState, useMemo } from "react";
 import { format, startOfDay, endOfDay } from "date-fns";
-import { Calendar as CalendarIcon, User, Clock, Edit } from "lucide-react";
+import { Calendar as CalendarIcon, User, Clock } from "lucide-react";
 import { DashboardLayout } from "@/components/layout/DashboardLayout";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -25,6 +25,7 @@ import { useQuery } from "@tanstack/react-query";
 import { useCompany } from "@/contexts/CompanyContext";
 import { useUserRole } from "@/hooks/useUserRole";
 import { EditTimeEntryDialog } from "@/components/admin/EditTimeEntryDialog";
+import { TimeEntryCard } from "@/components/admin/TimeEntryCard";
 
 interface TimeEntry {
   id: string;
@@ -33,6 +34,14 @@ interface TimeEntry {
   end_time: string | null;
   duration_minutes: number | null;
   project_id: string | null;
+  clock_in_photo_url: string | null;
+  clock_out_photo_url: string | null;
+  clock_in_address: string | null;
+  clock_out_address: string | null;
+  clock_in_latitude: number | null;
+  clock_in_longitude: number | null;
+  clock_out_latitude: number | null;
+  clock_out_longitude: number | null;
   profiles: {
     id: string;
     user_id: string;
@@ -40,6 +49,7 @@ interface TimeEntry {
     first_name: string | null;
     last_name: string | null;
     email: string | null;
+    avatar_url: string | null;
   } | null;
 }
 
@@ -76,7 +86,7 @@ const AdminTimeTracking: React.FC = () => {
     enabled: !!company?.id,
   });
 
-  // Fetch time entries for selected date
+  // Fetch time entries for selected date with photos and geolocation
   const { data: timeEntries = [], refetch: refetchEntries } = useQuery({
     queryKey: ["admin-time-entries", company?.id, selectedDate],
     queryFn: async () => {
@@ -94,7 +104,15 @@ const AdminTimeTracking: React.FC = () => {
           start_time,
           end_time,
           duration_minutes,
-          project_id
+          project_id,
+          clock_in_photo_url,
+          clock_out_photo_url,
+          clock_in_latitude,
+          clock_in_longitude,
+          clock_in_address,
+          clock_out_latitude,
+          clock_out_longitude,
+          clock_out_address
         `)
         .eq("company_id", company.id)
         .gte("start_time", dayStart)
@@ -107,7 +125,7 @@ const AdminTimeTracking: React.FC = () => {
       const profileIds = [...new Set((data || []).map(e => e.profile_id || e.user_id).filter(Boolean))];
       const { data: profiles } = await supabase
         .from("profiles")
-        .select("id, user_id, display_name, first_name, last_name, email")
+        .select("id, user_id, display_name, first_name, last_name, email, avatar_url")
         .or(`id.in.(${profileIds.join(',')}),user_id.in.(${profileIds.join(',')})`);
       
       const profileMap = new Map();
@@ -130,17 +148,6 @@ const AdminTimeTracking: React.FC = () => {
     return timeEntries.filter(entry => entry.user_id === selectedEmployee);
   }, [timeEntries, selectedEmployee]);
 
-  // Group entries by employee email
-  const groupedEntries = useMemo(() => {
-    const groups: Record<string, TimeEntry[]> = {};
-    filteredEntries.forEach(entry => {
-      const email = entry.profiles?.email || "Unknown";
-      if (!groups[email]) groups[email] = [];
-      groups[email].push(entry);
-    });
-    return groups;
-  }, [filteredEntries]);
-
   // Calculate summary
   const summary = useMemo(() => {
     const activeShifts = timeEntries.filter(e => !e.end_time).length;
@@ -154,30 +161,6 @@ const AdminTimeTracking: React.FC = () => {
       return `${emp.first_name || ""} ${emp.last_name || ""}`.trim();
     }
     return emp.email || "Unknown";
-  };
-
-  const formatTimeRange = (entry: TimeEntry) => {
-    const start = format(new Date(entry.start_time), "h:mm a");
-    if (!entry.end_time) return `${start} - Active`;
-    const end = format(new Date(entry.end_time), "h:mm a");
-    return `${start} - ${end}`;
-  };
-
-  const formatDuration = (entry: TimeEntry) => {
-    if (!entry.duration_minutes && !entry.end_time) {
-      const now = new Date();
-      const start = new Date(entry.start_time);
-      const mins = Math.floor((now.getTime() - start.getTime()) / 60000);
-      const hours = Math.floor(mins / 60);
-      const remainingMins = mins % 60;
-      return `Duration: ${hours}h ${remainingMins}m (active)`;
-    }
-    if (entry.duration_minutes) {
-      const hours = Math.floor(entry.duration_minutes / 60);
-      const mins = entry.duration_minutes % 60;
-      return `Duration: ${hours}h ${mins}m`;
-    }
-    return "";
   };
 
   const handleEdit = (entry: TimeEntry) => {
@@ -216,9 +199,9 @@ const AdminTimeTracking: React.FC = () => {
       <div className="max-w-5xl mx-auto">
         {/* Header */}
         <div className="mb-8">
-          <h1 className="text-2xl font-bold text-foreground">Admin Time Management</h1>
+          <h1 className="text-2xl font-bold text-foreground">Time Tracking</h1>
           <p className="text-muted-foreground mt-1">
-            Retroactively adjust employee time entries and auto-close tasks
+            View and manage employee time entries
           </p>
         </div>
 
@@ -312,46 +295,20 @@ const AdminTimeTracking: React.FC = () => {
         <div>
           <h2 className="text-lg font-semibold text-foreground mb-4">Time Entries</h2>
           
-          {Object.keys(groupedEntries).length === 0 ? (
+          {filteredEntries.length === 0 ? (
             <Card>
               <CardContent className="py-8 text-center text-muted-foreground">
                 No time entries found for this date.
               </CardContent>
             </Card>
           ) : (
-            <div className="space-y-6">
-              {Object.entries(groupedEntries).map(([email, entries]) => (
-                <div key={email}>
-                  <p className="text-sm font-medium text-foreground mb-2">{email}</p>
-                  <div className="space-y-2">
-                    {entries.map((entry) => (
-                      <Card key={entry.id}>
-                        <CardContent className="py-3 px-4 flex items-center justify-between">
-                          <div className="flex items-start gap-3">
-                            <Clock className="h-4 w-4 text-muted-foreground mt-0.5" />
-                            <div>
-                              <p className="text-sm font-medium text-foreground">
-                                {formatTimeRange(entry)}
-                              </p>
-                              <p className="text-xs text-muted-foreground">
-                                {formatDuration(entry)}
-                              </p>
-                            </div>
-                          </div>
-                          <Button
-                            variant="ghost"
-                            size="sm"
-                            onClick={() => handleEdit(entry)}
-                            className="text-muted-foreground hover:text-foreground"
-                          >
-                            <Edit className="h-4 w-4 mr-1" />
-                            Edit
-                          </Button>
-                        </CardContent>
-                      </Card>
-                    ))}
-                  </div>
-                </div>
+            <div className="space-y-4">
+              {filteredEntries.map((entry) => (
+                <TimeEntryCard
+                  key={entry.id}
+                  entry={entry}
+                  onEdit={handleEdit}
+                />
               ))}
             </div>
           )}
