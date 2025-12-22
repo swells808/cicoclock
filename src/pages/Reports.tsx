@@ -13,7 +13,7 @@ import { useReports } from "@/hooks/useReports";
 import { ReportFilters, ReportFiltersValues } from "@/components/reports/ReportFilters";
 import { buildRealTableHTML } from "@/utils/reportUtils";
 import { DailyTimecardReport } from "@/components/reports/DailyTimecardReport";
-import { UnClockedUsersReport } from "@/components/reports/UnClockedUsersReport";
+
 import { ScheduledReportsManager } from "@/components/reports/ScheduledReportsManager";
 import { TimeEntryDetailsReport } from "@/components/reports/TimeEntryDetailsReport";
 
@@ -336,9 +336,6 @@ const Reports = () => {
                   </div>
               </div>
             </div>
-
-            {/* Un-Clocked Users Report */}
-            <UnClockedUsersReport />
 
             {/* Daily Timecard Report */}
             <DailyTimecardReport />
