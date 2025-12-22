@@ -5,7 +5,7 @@ import { supabase } from '@/integrations/supabase/client';
 import { useCompany } from '@/contexts/CompanyContext';
 import { format } from 'date-fns';
 import { Skeleton } from '@/components/ui/skeleton';
-import { FileText, Image } from 'lucide-react';
+import { FileText, Image, Map } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
@@ -18,6 +18,12 @@ interface TimeEntryDetail {
   duration_minutes: number | null;
   clock_in_photo_url: string | null;
   clock_out_photo_url: string | null;
+  clock_in_latitude: number | null;
+  clock_in_longitude: number | null;
+  clock_out_latitude: number | null;
+  clock_out_longitude: number | null;
+  clock_in_address: string | null;
+  clock_out_address: string | null;
   description: string | null;
   is_break: boolean;
   profile?: {
@@ -29,6 +35,34 @@ interface TimeEntryDetail {
     name: string;
   } | null;
 }
+
+// MiniMap component for displaying location
+const MiniMap: React.FC<{
+  latitude: number | null;
+  longitude: number | null;
+  color: "green" | "red";
+}> = ({ latitude, longitude, color }) => {
+  const mapboxToken = localStorage.getItem("mapbox_public_token");
+  
+  if (!latitude || !longitude || !mapboxToken) {
+    return (
+      <div className="w-10 h-10 flex-shrink-0 rounded border border-dashed border-border flex items-center justify-center bg-muted/30">
+        <Map className="h-3 w-3 text-muted-foreground/50" />
+      </div>
+    );
+  }
+
+  const pinColor = color === "green" ? "22c55e" : "ef4444";
+  const mapUrl = `https://api.mapbox.com/styles/v1/mapbox/streets-v12/static/pin-s+${pinColor}(${longitude},${latitude})/${longitude},${latitude},15/40x40@2x?access_token=${mapboxToken}`;
+
+  return (
+    <img
+      src={mapUrl}
+      alt="Location map"
+      className="w-10 h-10 flex-shrink-0 rounded border border-border object-cover"
+    />
+  );
+};
 
 interface TimeEntryDetailsReportProps {
   startDate?: Date;
@@ -74,6 +108,12 @@ export const TimeEntryDetailsReport: React.FC<TimeEntryDetailsReportProps> = ({
             duration_minutes,
             clock_in_photo_url,
             clock_out_photo_url,
+            clock_in_latitude,
+            clock_in_longitude,
+            clock_out_latitude,
+            clock_out_longitude,
+            clock_in_address,
+            clock_out_address,
             description,
             is_break,
             projects(name)
@@ -235,6 +275,7 @@ export const TimeEntryDetailsReport: React.FC<TimeEntryDetailsReportProps> = ({
                   <TableHead>Duration</TableHead>
                   <TableHead>Type</TableHead>
                   <TableHead>Photos</TableHead>
+                  <TableHead>Location</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
@@ -329,6 +370,41 @@ export const TimeEntryDetailsReport: React.FC<TimeEntryDetailsReportProps> = ({
                         )}
                         {!entry.clock_in_photo_url && !entry.clock_out_photo_url && (
                           <span className="text-xs text-muted-foreground">-</span>
+                        )}
+                      </div>
+                    </TableCell>
+                    <TableCell>
+                      <div className="flex gap-3">
+                        {/* Clock In Location */}
+                        <div className="flex flex-col items-center gap-1">
+                          <MiniMap 
+                            latitude={entry.clock_in_latitude} 
+                            longitude={entry.clock_in_longitude} 
+                            color="green" 
+                          />
+                          <span className="text-[10px] bg-primary text-primary-foreground px-1.5 py-0.5 rounded">In</span>
+                          {entry.clock_in_address && (
+                            <p className="text-[10px] text-muted-foreground max-w-[80px] truncate" title={entry.clock_in_address}>
+                              {entry.clock_in_address}
+                            </p>
+                          )}
+                        </div>
+                        
+                        {/* Clock Out Location */}
+                        {entry.end_time && (
+                          <div className="flex flex-col items-center gap-1">
+                            <MiniMap 
+                              latitude={entry.clock_out_latitude} 
+                              longitude={entry.clock_out_longitude} 
+                              color="red" 
+                            />
+                            <span className="text-[10px] bg-secondary text-secondary-foreground px-1.5 py-0.5 rounded">Out</span>
+                            {entry.clock_out_address && (
+                              <p className="text-[10px] text-muted-foreground max-w-[80px] truncate" title={entry.clock_out_address}>
+                                {entry.clock_out_address}
+                              </p>
+                            )}
+                          </div>
                         )}
                       </div>
                     </TableCell>
