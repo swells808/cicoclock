@@ -50,39 +50,43 @@ export const TimeEntryDetailsReport: React.FC<TimeEntryDetailsReportProps> = ({
         return;
       }
 
-      setLoading(true);
-      const start = new Date(startDate);
-      start.setHours(0, 0, 0, 0);
-      const end = new Date(endDate);
-      end.setHours(23, 59, 59, 999);
+      try {
+        setLoading(true);
+        const start = new Date(startDate);
+        start.setHours(0, 0, 0, 0);
+        const end = new Date(endDate);
+        end.setHours(23, 59, 59, 999);
 
-      const { data, error } = await supabase
-        .from('time_entries')
-        .select(`
-          id,
-          user_id,
-          start_time,
-          end_time,
-          duration_minutes,
-          clock_in_photo_url,
-          clock_out_photo_url,
-          description,
-          is_break,
-          projects(name)
-        `)
-        .eq('company_id', company.id)
-        .gte('start_time', start.toISOString())
-        .lte('start_time', end.toISOString())
-        .order('start_time', { ascending: false })
-        .limit(100);
+        const { data, error } = await supabase
+          .from('time_entries')
+          .select(`
+            id,
+            user_id,
+            start_time,
+            end_time,
+            duration_minutes,
+            clock_in_photo_url,
+            clock_out_photo_url,
+            description,
+            is_break,
+            projects(name)
+          `)
+          .eq('company_id', company.id)
+          .gte('start_time', start.toISOString())
+          .lte('start_time', end.toISOString())
+          .order('start_time', { ascending: false })
+          .limit(100);
 
-      if (!error && data) {
+        if (error) throw error;
+
         // Fetch profiles separately
         const userIds = [...new Set(data.map(e => e.user_id))];
-        const { data: profiles } = await supabase
+        const { data: profiles, error: profilesError } = await supabase
           .from('profiles')
           .select('user_id, first_name, last_name, display_name')
           .in('user_id', userIds);
+
+        if (profilesError) throw profilesError;
 
         const profileMap = profiles?.reduce((acc, p) => {
           acc[p.user_id] = p;
@@ -93,8 +97,11 @@ export const TimeEntryDetailsReport: React.FC<TimeEntryDetailsReportProps> = ({
           ...entry,
           profile: profileMap[entry.user_id]
         })));
+      } catch (error) {
+        console.error('Error fetching time entry details:', error);
+      } finally {
+        setLoading(false);
       }
-      setLoading(false);
     };
 
     fetchEntries();
