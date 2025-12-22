@@ -1052,7 +1052,13 @@ export type Database = {
       }
       time_entries: {
         Row: {
+          clock_in_address: string | null
+          clock_in_latitude: number | null
+          clock_in_longitude: number | null
           clock_in_photo_url: string | null
+          clock_out_address: string | null
+          clock_out_latitude: number | null
+          clock_out_longitude: number | null
           clock_out_photo_url: string | null
           company_id: string
           created_at: string
@@ -1068,7 +1074,13 @@ export type Database = {
           user_id: string
         }
         Insert: {
+          clock_in_address?: string | null
+          clock_in_latitude?: number | null
+          clock_in_longitude?: number | null
           clock_in_photo_url?: string | null
+          clock_out_address?: string | null
+          clock_out_latitude?: number | null
+          clock_out_longitude?: number | null
           clock_out_photo_url?: string | null
           company_id: string
           created_at?: string
@@ -1084,7 +1096,13 @@ export type Database = {
           user_id: string
         }
         Update: {
+          clock_in_address?: string | null
+          clock_in_latitude?: number | null
+          clock_in_longitude?: number | null
           clock_in_photo_url?: string | null
+          clock_out_address?: string | null
+          clock_out_latitude?: number | null
+          clock_out_longitude?: number | null
           clock_out_photo_url?: string | null
           company_id?: string
           created_at?: string
