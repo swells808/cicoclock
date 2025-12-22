@@ -258,7 +258,7 @@ export const TimeEntryDetailsReport: React.FC<TimeEntryDetailsReportProps> = ({
                         {entry.clock_in_photo_url && (
                           <Dialog>
                             <DialogTrigger asChild>
-                              <div className="cursor-pointer group relative">
+                              <div className="cursor-pointer flex flex-col items-center gap-1">
                                 {photoUrls[entry.id]?.clockIn ? (
                                   <img 
                                     src={photoUrls[entry.id].clockIn} 
@@ -270,7 +270,7 @@ export const TimeEntryDetailsReport: React.FC<TimeEntryDetailsReportProps> = ({
                                     <Image className="h-4 w-4 text-muted-foreground" />
                                   </div>
                                 )}
-                                <span className="absolute -bottom-1 left-1/2 -translate-x-1/2 text-[10px] bg-primary text-primary-foreground px-1 rounded">In</span>
+                                <span className="text-[10px] bg-primary text-primary-foreground px-1.5 py-0.5 rounded">In</span>
                               </div>
                             </DialogTrigger>
                             <DialogContent>
@@ -294,7 +294,7 @@ export const TimeEntryDetailsReport: React.FC<TimeEntryDetailsReportProps> = ({
                         {entry.clock_out_photo_url && (
                           <Dialog>
                             <DialogTrigger asChild>
-                              <div className="cursor-pointer group relative">
+                              <div className="cursor-pointer flex flex-col items-center gap-1">
                                 {photoUrls[entry.id]?.clockOut ? (
                                   <img 
                                     src={photoUrls[entry.id].clockOut} 
@@ -306,7 +306,7 @@ export const TimeEntryDetailsReport: React.FC<TimeEntryDetailsReportProps> = ({
                                     <Image className="h-4 w-4 text-muted-foreground" />
                                   </div>
                                 )}
-                                <span className="absolute -bottom-1 left-1/2 -translate-x-1/2 text-[10px] bg-secondary text-secondary-foreground px-1 rounded">Out</span>
+                                <span className="text-[10px] bg-secondary text-secondary-foreground px-1.5 py-0.5 rounded">Out</span>
                               </div>
                             </DialogTrigger>
                             <DialogContent>
