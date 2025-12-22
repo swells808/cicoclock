@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useRef } from "react";
 import { useNavigate } from "react-router-dom";
 import { useLanguage } from "@/contexts/LanguageContext";
 import { PasswordDialog } from "@/components/PasswordDialog";
@@ -36,23 +36,72 @@ const Timeclock = () => {
   const [clockStatus, setClockStatus] = useState<'out' | 'in'>('out');
   const [showPhotoCapture, setShowPhotoCapture] = useState(false);
   const [photoAction, setPhotoAction] = useState<'clock_in' | 'clock_out' | null>(null);
+  const [isProcessing, setIsProcessing] = useState(false);
+  
+  // Track if we've already triggered auto-clock for this authenticated employee
+  const autoClockTriggeredRef = useRef<string | null>(null);
 
   useEffect(() => {
     const timer = setInterval(() => setCurrentTime(new Date()), 1000);
     return () => clearInterval(timer);
   }, []);
 
+  // Check active time entry and auto-trigger clock action after badge scan
   useEffect(() => {
-    const checkActiveTimeEntry = async () => {
-      if (!authenticatedEmployee) return;
-      const { data, error } = await supabase.from('time_entries').select('*').eq('user_id', authenticatedEmployee.user_id).is('end_time', null).order('start_time', { ascending: false }).limit(1).single();
-      if (data && !error) { setActiveTimeEntry(data); setClockStatus('in'); } else { setActiveTimeEntry(null); setClockStatus('out'); }
+    const checkAndAutoTrigger = async () => {
+      if (!authenticatedEmployee) {
+        autoClockTriggeredRef.current = null;
+        return;
+      }
+      
+      // Check active time entry
+      const { data, error } = await supabase
+        .from('time_entries')
+        .select('*')
+        .eq('user_id', authenticatedEmployee.user_id)
+        .is('end_time', null)
+        .order('start_time', { ascending: false })
+        .limit(1)
+        .single();
+      
+      const hasActiveEntry = data && !error;
+      setActiveTimeEntry(hasActiveEntry ? data : null);
+      setClockStatus(hasActiveEntry ? 'in' : 'out');
+      
+      // Auto-trigger clock action if not already triggered for this employee
+      if (autoClockTriggeredRef.current !== authenticatedEmployee.id) {
+        autoClockTriggeredRef.current = authenticatedEmployee.id;
+        
+        // Small delay to ensure state is updated
+        setTimeout(() => {
+          if (hasActiveEntry) {
+            // Employee is clocked in, trigger clock out
+            handleClockOut();
+          } else {
+            // Employee is clocked out, trigger clock in
+            handleClockIn();
+          }
+        }, 100);
+      }
     };
-    checkActiveTimeEntry();
+    
+    checkAndAutoTrigger();
   }, [authenticatedEmployee]);
 
   const isActionEnabled = authenticatedEmployee !== null;
   const isPinRequired = companyFeatures?.employee_pin;
+
+  // Reset screen for next user
+  const resetForNextUser = () => {
+    setSelectedEmployee("");
+    setAuthenticatedEmployee(null);
+    setActiveTimeEntry(null);
+    setClockStatus('out');
+    setShowPhotoCapture(false);
+    setPhotoAction(null);
+    setIsProcessing(false);
+    autoClockTriggeredRef.current = null;
+  };
 
   const handleEmployeeSelect = (employeeId: string) => {
     setSelectedEmployee(employeeId);
@@ -167,22 +216,83 @@ const Timeclock = () => {
 
   const performClockIn = async (photoUrl?: string) => {
     if (!authenticatedEmployee || !company) return;
-    const { data, error } = await supabase.from('time_entries').insert({ user_id: authenticatedEmployee.user_id, company_id: company.id, start_time: new Date().toISOString(), clock_in_photo_url: photoUrl }).select().single();
-    if (error) { toast({ title: "Clock In Failed", description: "Please try again.", variant: "destructive" }); return; }
-    setActiveTimeEntry(data); setClockStatus('in'); toast({ title: "Clocked In", description: "You have successfully clocked in." });
+    setIsProcessing(true);
+    
+    const { data, error } = await supabase
+      .from('time_entries')
+      .insert({ 
+        user_id: authenticatedEmployee.user_id, 
+        company_id: company.id, 
+        start_time: new Date().toISOString(), 
+        clock_in_photo_url: photoUrl 
+      })
+      .select()
+      .single();
+    
+    if (error) { 
+      toast({ title: "Clock In Failed", description: "Please try again.", variant: "destructive" }); 
+      setIsProcessing(false);
+      return; 
+    }
+    
+    const employeeName = authenticatedEmployee.display_name || authenticatedEmployee.first_name || "Employee";
+    toast({ title: "Clocked In!", description: `Welcome, ${employeeName}!` });
+    
+    // Reset screen after short delay
+    setTimeout(() => {
+      resetForNextUser();
+    }, 2500);
   };
 
-  const handleClockIn = async () => { if (companyFeatures?.photo_capture) { setPhotoAction('clock_in'); setShowPhotoCapture(true); } else { await performClockIn(); } };
+  const handleClockIn = async () => { 
+    if (companyFeatures?.photo_capture) { 
+      setPhotoAction('clock_in'); 
+      setShowPhotoCapture(true); 
+    } else { 
+      await performClockIn(); 
+    } 
+  };
 
   const performClockOut = async (photoUrl?: string) => {
-    if (!activeTimeEntry) return;
-    const endTime = new Date(); const startTime = new Date(activeTimeEntry.start_time); const durationMinutes = Math.floor((endTime.getTime() - startTime.getTime()) / 60000);
-    const { error } = await supabase.from('time_entries').update({ end_time: endTime.toISOString(), duration_minutes: durationMinutes, clock_out_photo_url: photoUrl }).eq('id', activeTimeEntry.id);
-    if (error) { toast({ title: "Clock Out Failed", description: "Please try again.", variant: "destructive" }); return; }
-    setActiveTimeEntry(null); setClockStatus('out'); toast({ title: "Clocked Out", description: "You have successfully clocked out." });
+    if (!activeTimeEntry || !authenticatedEmployee) return;
+    setIsProcessing(true);
+    
+    const endTime = new Date(); 
+    const startTime = new Date(activeTimeEntry.start_time); 
+    const durationMinutes = Math.floor((endTime.getTime() - startTime.getTime()) / 60000);
+    
+    const { error } = await supabase
+      .from('time_entries')
+      .update({ 
+        end_time: endTime.toISOString(), 
+        duration_minutes: durationMinutes, 
+        clock_out_photo_url: photoUrl 
+      })
+      .eq('id', activeTimeEntry.id);
+    
+    if (error) { 
+      toast({ title: "Clock Out Failed", description: "Please try again.", variant: "destructive" }); 
+      setIsProcessing(false);
+      return; 
+    }
+    
+    const employeeName = authenticatedEmployee.display_name || authenticatedEmployee.first_name || "Employee";
+    toast({ title: "Clocked Out!", description: `Goodbye, ${employeeName}!` });
+    
+    // Reset screen after short delay
+    setTimeout(() => {
+      resetForNextUser();
+    }, 2500);
   };
 
-  const handleClockOut = async () => { if (companyFeatures?.photo_capture) { setPhotoAction('clock_out'); setShowPhotoCapture(true); } else { await performClockOut(); } };
+  const handleClockOut = async () => { 
+    if (companyFeatures?.photo_capture) { 
+      setPhotoAction('clock_out'); 
+      setShowPhotoCapture(true); 
+    } else { 
+      await performClockOut(); 
+    } 
+  };
 
   const handleBreak = async () => {
     if (!authenticatedEmployee || !company) return;
@@ -219,7 +329,21 @@ const Timeclock = () => {
       </main>
       <TimeclockFooter onClosePage={handleClosePage} closeDisabled={false} t={t} />
       <PasswordDialog open={showPasswordDialog} onSubmit={handlePasswordSubmit} onCancel={() => setShowPasswordDialog(false)} loading={checkingPassword} error={passwordError} />
-      <PhotoCapture open={showPhotoCapture} onCapture={handlePhotoCapture} onCancel={() => { setShowPhotoCapture(false); setPhotoAction(null); }} title={photoAction === 'clock_in' ? "Clock In Photo" : "Clock Out Photo"} description={photoAction === 'clock_in' ? "Please take a photo to verify your clock in" : "Please take a photo to verify your clock out"} />
+      <PhotoCapture 
+        open={showPhotoCapture} 
+        onCapture={handlePhotoCapture} 
+        onCancel={() => { setShowPhotoCapture(false); setPhotoAction(null); resetForNextUser(); }} 
+        onSkip={() => { 
+          setShowPhotoCapture(false); 
+          if (photoAction === 'clock_in') performClockIn(); 
+          else if (photoAction === 'clock_out') performClockOut(); 
+          setPhotoAction(null); 
+        }}
+        title={photoAction === 'clock_in' ? "Clock In Photo" : "Clock Out Photo"} 
+        description={photoAction === 'clock_in' ? "Please take a photo to verify your clock in" : "Please take a photo to verify your clock out"} 
+        autoCapture={true}
+        autoCaptureDelay={3}
+      />
     </div>
   );
 };
