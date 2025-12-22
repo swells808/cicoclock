@@ -1,6 +1,6 @@
 import React, { useState, useMemo } from "react";
 import { format, startOfDay, endOfDay } from "date-fns";
-import { Calendar as CalendarIcon, User, Clock } from "lucide-react";
+import { Calendar as CalendarIcon, User, Clock, List, Map as MapIcon } from "lucide-react";
 import { DashboardLayout } from "@/components/layout/DashboardLayout";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -26,6 +26,8 @@ import { useCompany } from "@/contexts/CompanyContext";
 import { useUserRole } from "@/hooks/useUserRole";
 import { EditTimeEntryDialog } from "@/components/admin/EditTimeEntryDialog";
 import { TimeEntryCard } from "@/components/admin/TimeEntryCard";
+import { TimeEntriesMap } from "@/components/admin/TimeEntriesMap";
+import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
 
 interface TimeEntry {
   id: string;
@@ -67,6 +69,7 @@ const AdminTimeTracking: React.FC = () => {
   const { company } = useCompany();
   const [selectedDate, setSelectedDate] = useState<Date>(new Date());
   const [selectedEmployee, setSelectedEmployee] = useState<string>("all");
+  const [viewMode, setViewMode] = useState<"list" | "map">("list");
   const [editingEntry, setEditingEntry] = useState<TimeEntry | null>(null);
   const [editDialogOpen, setEditDialogOpen] = useState(false);
 
@@ -293,9 +296,23 @@ const AdminTimeTracking: React.FC = () => {
 
         {/* Time Entries */}
         <div>
-          <h2 className="text-lg font-semibold text-foreground mb-4">Time Entries</h2>
+          <div className="flex items-center justify-between mb-4">
+            <h2 className="text-lg font-semibold text-foreground">Time Entries</h2>
+            <ToggleGroup type="single" value={viewMode} onValueChange={(v) => v && setViewMode(v as "list" | "map")}>
+              <ToggleGroupItem value="list" aria-label="List view" className="gap-1.5">
+                <List className="h-4 w-4" />
+                <span className="hidden sm:inline">List</span>
+              </ToggleGroupItem>
+              <ToggleGroupItem value="map" aria-label="Map view" className="gap-1.5">
+                <MapIcon className="h-4 w-4" />
+                <span className="hidden sm:inline">Map</span>
+              </ToggleGroupItem>
+            </ToggleGroup>
+          </div>
           
-          {filteredEntries.length === 0 ? (
+          {viewMode === "map" ? (
+            <TimeEntriesMap entries={filteredEntries} selectedDate={selectedDate} />
+          ) : filteredEntries.length === 0 ? (
             <Card>
               <CardContent className="py-8 text-center text-muted-foreground">
                 No time entries found for this date.
