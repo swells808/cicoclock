@@ -3,10 +3,7 @@ import mapboxgl from 'mapbox-gl';
 import 'mapbox-gl/dist/mapbox-gl.css';
 import { format } from 'date-fns';
 import { Card, CardContent } from '@/components/ui/card';
-import { Input } from '@/components/ui/input';
-import { Button } from '@/components/ui/button';
-import { Label } from '@/components/ui/label';
-import { AlertCircle, Key } from 'lucide-react';
+import { AlertCircle } from 'lucide-react';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 
 interface TimeEntryProfile {
@@ -39,16 +36,12 @@ interface TimeEntriesMapProps {
   selectedDate: Date;
 }
 
-const MAPBOX_TOKEN_KEY = 'mapbox_public_token';
+const MAPBOX_TOKEN = localStorage.getItem('mapbox_public_token') || '';
 
 export const TimeEntriesMap: React.FC<TimeEntriesMapProps> = ({ entries, selectedDate }) => {
   const mapContainer = useRef<HTMLDivElement>(null);
   const map = useRef<mapboxgl.Map | null>(null);
   const markersRef = useRef<mapboxgl.Marker[]>([]);
-  const [mapboxToken, setMapboxToken] = useState<string>(() => {
-    return localStorage.getItem(MAPBOX_TOKEN_KEY) || '';
-  });
-  const [tokenInput, setTokenInput] = useState('');
   const [mapError, setMapError] = useState<string | null>(null);
 
   const entriesWithLocation = entries.filter(
@@ -65,19 +58,11 @@ export const TimeEntriesMap: React.FC<TimeEntriesMapProps> = ({ entries, selecte
     return entry.profiles.email || "Unknown";
   };
 
-  const saveToken = () => {
-    if (tokenInput.trim()) {
-      localStorage.setItem(MAPBOX_TOKEN_KEY, tokenInput.trim());
-      setMapboxToken(tokenInput.trim());
-      setMapError(null);
-    }
-  };
-
   useEffect(() => {
-    if (!mapContainer.current || !mapboxToken) return;
+    if (!mapContainer.current || !MAPBOX_TOKEN) return;
 
     try {
-      mapboxgl.accessToken = mapboxToken;
+      mapboxgl.accessToken = MAPBOX_TOKEN;
       
       // Calculate bounds from entries
       let bounds: mapboxgl.LngLatBounds | null = null;
@@ -122,12 +107,12 @@ export const TimeEntriesMap: React.FC<TimeEntriesMapProps> = ({ entries, selecte
 
       map.current.on('error', (e) => {
         console.error('Mapbox error:', e);
-        setMapError('Invalid Mapbox token or map error. Please check your token.');
+        setMapError('Map error occurred. Please refresh the page.');
       });
 
     } catch (error) {
       console.error('Map initialization error:', error);
-      setMapError('Failed to initialize map. Please check your Mapbox token.');
+      setMapError('Failed to initialize map.');
     }
 
     return () => {
@@ -135,11 +120,11 @@ export const TimeEntriesMap: React.FC<TimeEntriesMapProps> = ({ entries, selecte
       markersRef.current = [];
       map.current?.remove();
     };
-  }, [mapboxToken]);
+  }, [entriesWithLocation.length]);
 
   // Add markers when map is ready
   useEffect(() => {
-    if (!map.current || !mapboxToken) return;
+    if (!map.current || !MAPBOX_TOKEN) return;
 
     const addMarkers = () => {
       // Clear existing markers
@@ -218,45 +203,13 @@ export const TimeEntriesMap: React.FC<TimeEntriesMapProps> = ({ entries, selecte
     } else {
       map.current.on('load', addMarkers);
     }
-  }, [entries, mapboxToken]);
+  }, [entries]);
 
-  if (!mapboxToken) {
+  if (!MAPBOX_TOKEN) {
     return (
       <Card>
-        <CardContent className="py-8">
-          <div className="max-w-md mx-auto space-y-4">
-            <div className="flex items-center gap-2 text-muted-foreground">
-              <Key className="h-5 w-5" />
-              <h3 className="font-medium text-foreground">Mapbox Token Required</h3>
-            </div>
-            <p className="text-sm text-muted-foreground">
-              To view the map, please enter your Mapbox public token. You can find it at{' '}
-              <a 
-                href="https://mapbox.com/" 
-                target="_blank" 
-                rel="noopener noreferrer"
-                className="text-primary hover:underline"
-              >
-                mapbox.com
-              </a>{' '}
-              in the Tokens section of your dashboard.
-            </p>
-            <div className="space-y-2">
-              <Label htmlFor="mapbox-token">Mapbox Public Token</Label>
-              <div className="flex gap-2">
-                <Input
-                  id="mapbox-token"
-                  type="text"
-                  placeholder="pk.eyJ1Ijoi..."
-                  value={tokenInput}
-                  onChange={(e) => setTokenInput(e.target.value)}
-                />
-                <Button onClick={saveToken} disabled={!tokenInput.trim()}>
-                  Save
-                </Button>
-              </div>
-            </div>
-          </div>
+        <CardContent className="py-8 text-center text-muted-foreground">
+          Mapbox token not configured. Please add your token to localStorage with key "mapbox_public_token".
         </CardContent>
       </Card>
     );
@@ -266,20 +219,10 @@ export const TimeEntriesMap: React.FC<TimeEntriesMapProps> = ({ entries, selecte
     return (
       <Card>
         <CardContent className="py-8">
-          <Alert variant="destructive" className="mb-4">
+          <Alert variant="destructive">
             <AlertCircle className="h-4 w-4" />
             <AlertDescription>{mapError}</AlertDescription>
           </Alert>
-          <Button 
-            variant="outline" 
-            onClick={() => {
-              localStorage.removeItem(MAPBOX_TOKEN_KEY);
-              setMapboxToken('');
-              setMapError(null);
-            }}
-          >
-            Reset Token
-          </Button>
         </CardContent>
       </Card>
     );
