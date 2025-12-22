@@ -45,7 +45,10 @@ export const TimeEntryDetailsReport: React.FC<TimeEntryDetailsReportProps> = ({
 
   useEffect(() => {
     const fetchEntries = async () => {
-      if (!company?.id) return;
+      if (!company?.id) {
+        setLoading(false);
+        return;
+      }
 
       setLoading(true);
       const start = new Date(startDate);

@@ -34,7 +34,10 @@ export const UnClockedUsersReport: React.FC<UnClockedUsersReportProps> = ({
     let isMounted = true;
     
     const fetchUnclockedUsers = async () => {
-      if (!company?.id) return;
+      if (!company?.id) {
+        setLoading(false);
+        return;
+      }
 
       setLoading(true);
       const startOfDay = new Date(date);
