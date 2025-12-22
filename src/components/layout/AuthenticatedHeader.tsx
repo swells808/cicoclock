@@ -43,7 +43,7 @@ export const AuthenticatedHeader = () => {
     { label: "Clock", path: "/timeclock" },
     ...(isAdmin || isSupervisor
       ? [
-          { label: "Admin Time", path: "/time-tracking/admin" },
+          { label: "Tracking", path: "/time-tracking/admin" },
           { label: "Projects", path: "/projects" },
           { label: "Clients", path: "/clients" },
           { label: "Reports", path: "/reports" },
@@ -59,7 +59,7 @@ export const AuthenticatedHeader = () => {
     { icon: ClipboardCheck, label: t("taskCheckin") || "Task Check-in", path: "/task-checkin" },
     ...(isAdmin || isSupervisor
       ? [
-          { icon: Clock, label: "Admin Time", path: "/time-tracking/admin" },
+          { icon: Clock, label: "Tracking", path: "/time-tracking/admin" },
           { icon: Users, label: t("users") || "Users", path: "/users" },
           { icon: FolderKanban, label: t("projects") || "Projects", path: "/projects" },
           { icon: Building2, label: t("clients") || "Clients", path: "/clients" },
