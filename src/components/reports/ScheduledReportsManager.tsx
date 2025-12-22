@@ -138,7 +138,7 @@ export const ScheduledReportsManager = () => {
                 <div className="flex items-start justify-between">
                   <div className="space-y-1">
                     <CardTitle className="flex items-center gap-2">
-                      {getReportTypeName(report.report_type)}
+                      {report.name || getReportTypeName(report.report_type)}
                       <Badge variant={report.is_active ? 'default' : 'secondary'}>
                         {report.is_active ? 'Active' : 'Inactive'}
                       </Badge>
