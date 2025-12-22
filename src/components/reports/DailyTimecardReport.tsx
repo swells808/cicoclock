@@ -36,7 +36,10 @@ export const DailyTimecardReport: React.FC<DailyTimecardReportProps> = ({
 
   useEffect(() => {
     const fetchEntries = async () => {
-      if (!company?.id) return;
+      if (!company?.id) {
+        setLoading(false);
+        return;
+      }
 
       setLoading(true);
       const startOfDay = new Date(date);
