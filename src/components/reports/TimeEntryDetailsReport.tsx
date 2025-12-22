@@ -42,6 +42,7 @@ export const TimeEntryDetailsReport: React.FC<TimeEntryDetailsReportProps> = ({
   const { company } = useCompany();
   const [entries, setEntries] = useState<TimeEntryDetail[]>([]);
   const [loading, setLoading] = useState(true);
+  const [photoUrls, setPhotoUrls] = useState<Record<string, { clockIn?: string; clockOut?: string }>>({});
 
   // Stabilize dates to prevent infinite re-renders from new Date() defaults
   const startDate = useMemo(() => propStartDate ?? new Date(new Date().getFullYear(), new Date().getMonth(), 1), [propStartDate]);
@@ -113,6 +114,61 @@ export const TimeEntryDetailsReport: React.FC<TimeEntryDetailsReportProps> = ({
     fetchEntries();
   }, [company?.id, startDateStr, endDateStr]);
 
+  // Fetch signed URLs for photos from private bucket
+  useEffect(() => {
+    const fetchPhotoUrls = async () => {
+      const urlMap: Record<string, { clockIn?: string; clockOut?: string }> = {};
+
+      for (const entry of entries) {
+        const urls: { clockIn?: string; clockOut?: string } = {};
+
+        if (entry.clock_in_photo_url) {
+          const path = entry.clock_in_photo_url.startsWith('http') 
+            ? null 
+            : entry.clock_in_photo_url;
+          
+          if (path) {
+            const { data } = await supabase.storage
+              .from('timeclock-photos')
+              .createSignedUrl(path, 3600);
+            if (data?.signedUrl) {
+              urls.clockIn = data.signedUrl;
+            }
+          } else {
+            urls.clockIn = entry.clock_in_photo_url;
+          }
+        }
+
+        if (entry.clock_out_photo_url) {
+          const path = entry.clock_out_photo_url.startsWith('http') 
+            ? null 
+            : entry.clock_out_photo_url;
+          
+          if (path) {
+            const { data } = await supabase.storage
+              .from('timeclock-photos')
+              .createSignedUrl(path, 3600);
+            if (data?.signedUrl) {
+              urls.clockOut = data.signedUrl;
+            }
+          } else {
+            urls.clockOut = entry.clock_out_photo_url;
+          }
+        }
+
+        if (urls.clockIn || urls.clockOut) {
+          urlMap[entry.id] = urls;
+        }
+      }
+
+      setPhotoUrls(urlMap);
+    };
+
+    if (entries.length > 0) {
+      fetchPhotoUrls();
+    }
+  }, [entries]);
+
   const formatDuration = (minutes: number | null) => {
     if (!minutes) return '-';
     const hours = Math.floor(minutes / 60);
@@ -129,12 +185,6 @@ export const TimeEntryDetailsReport: React.FC<TimeEntryDetailsReportProps> = ({
     return display_name || 'Unknown';
   };
 
-  const getPhotoUrl = (path: string | null) => {
-    if (!path) return null;
-    if (path.startsWith('http')) return path;
-    const { data } = supabase.storage.from('timeclock-photos').getPublicUrl(path);
-    return data.publicUrl;
-  };
 
   if (loading) {
     return (
@@ -216,11 +266,17 @@ export const TimeEntryDetailsReport: React.FC<TimeEntryDetailsReportProps> = ({
                               <DialogHeader>
                                 <DialogTitle>Clock In Photo</DialogTitle>
                               </DialogHeader>
-                              <img 
-                                src={getPhotoUrl(entry.clock_in_photo_url) || ''} 
-                                alt="Clock in" 
-                                className="w-full rounded-lg"
-                              />
+                              {photoUrls[entry.id]?.clockIn ? (
+                                <img 
+                                  src={photoUrls[entry.id].clockIn} 
+                                  alt="Clock in" 
+                                  className="w-full rounded-lg"
+                                />
+                              ) : (
+                                <div className="flex items-center justify-center h-48 bg-muted rounded-lg">
+                                  <span className="text-muted-foreground">Loading photo...</span>
+                                </div>
+                              )}
                             </DialogContent>
                           </Dialog>
                         )}
@@ -235,11 +291,17 @@ export const TimeEntryDetailsReport: React.FC<TimeEntryDetailsReportProps> = ({
                               <DialogHeader>
                                 <DialogTitle>Clock Out Photo</DialogTitle>
                               </DialogHeader>
-                              <img 
-                                src={getPhotoUrl(entry.clock_out_photo_url) || ''} 
-                                alt="Clock out" 
-                                className="w-full rounded-lg"
-                              />
+                              {photoUrls[entry.id]?.clockOut ? (
+                                <img 
+                                  src={photoUrls[entry.id].clockOut} 
+                                  alt="Clock out" 
+                                  className="w-full rounded-lg"
+                                />
+                              ) : (
+                                <div className="flex items-center justify-center h-48 bg-muted rounded-lg">
+                                  <span className="text-muted-foreground">Loading photo...</span>
+                                </div>
+                              )}
                             </DialogContent>
                           </Dialog>
                         )}
