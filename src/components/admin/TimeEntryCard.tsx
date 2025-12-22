@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from "react";
 import { format } from "date-fns";
-import { Clock, MapPin, Camera, Edit, User } from "lucide-react";
+import { Clock, MapPin, Camera, Edit, User, Map } from "lucide-react";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -12,6 +12,34 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { supabase } from "@/integrations/supabase/client";
+
+// Mini map component using Mapbox Static Images API
+const MiniMap: React.FC<{
+  latitude: number | null;
+  longitude: number | null;
+  color: "green" | "red";
+}> = ({ latitude, longitude, color }) => {
+  const mapboxToken = localStorage.getItem("mapbox_public_token");
+  
+  if (!latitude || !longitude || !mapboxToken) {
+    return (
+      <div className="w-16 h-16 flex-shrink-0 rounded-md border border-dashed border-border flex items-center justify-center bg-muted/30">
+        <Map className="h-5 w-5 text-muted-foreground/50" />
+      </div>
+    );
+  }
+
+  const pinColor = color === "green" ? "22c55e" : "ef4444";
+  const mapUrl = `https://api.mapbox.com/styles/v1/mapbox/streets-v12/static/pin-s+${pinColor}(${longitude},${latitude})/${longitude},${latitude},15/64x64@2x?access_token=${mapboxToken}`;
+
+  return (
+    <img
+      src={mapUrl}
+      alt="Location map"
+      className="w-16 h-16 flex-shrink-0 rounded-md border border-border object-cover"
+    />
+  );
+};
 
 interface TimeEntryProfile {
   id: string;
@@ -181,6 +209,11 @@ export const TimeEntryCard: React.FC<TimeEntryCardProps> = ({ entry, onEdit }) =
                     <Camera className="h-5 w-5 text-muted-foreground/50" />
                   </div>
                 )}
+                <MiniMap 
+                  latitude={entry.clock_in_latitude} 
+                  longitude={entry.clock_in_longitude} 
+                  color="green" 
+                />
                 <div className="min-w-0 flex-1">
                   <p className="text-sm text-foreground">
                     {format(new Date(entry.start_time), "h:mm a")}
@@ -204,64 +237,6 @@ export const TimeEntryCard: React.FC<TimeEntryCardProps> = ({ entry, onEdit }) =
                   )}
                 </div>
               </div>
-            </div>
-
-            {/* Clock Out Details */}
-            <div className="space-y-2">
-              <p className="text-xs font-medium text-muted-foreground uppercase tracking-wide">Clock Out</p>
-              {entry.end_time ? (
-                <div className="flex items-start gap-2">
-                  {clockOutPhotoUrl ? (
-                    <button
-                      onClick={() => handlePhotoClick(clockOutPhotoUrl, "Clock Out Photo")}
-                      className="relative flex-shrink-0 rounded-md overflow-hidden border border-border hover:border-primary transition-colors"
-                    >
-                      <img
-                        src={clockOutPhotoUrl}
-                        alt="Clock out"
-                        className="w-16 h-16 object-cover"
-                      />
-                      <div className="absolute inset-0 flex items-center justify-center bg-black/0 hover:bg-black/20 transition-colors">
-                        <Camera className="h-4 w-4 text-white opacity-0 hover:opacity-100 transition-opacity" />
-                      </div>
-                    </button>
-                  ) : (
-                    <div className="w-16 h-16 flex-shrink-0 rounded-md border border-dashed border-border flex items-center justify-center bg-muted/30">
-                      <Camera className="h-5 w-5 text-muted-foreground/50" />
-                    </div>
-                  )}
-                  <div className="min-w-0 flex-1">
-                    <p className="text-sm text-foreground">
-                      {format(new Date(entry.end_time), "h:mm a")}
-                    </p>
-                    {entry.clock_out_address ? (
-                      <div className="flex items-start gap-1 mt-1">
-                        <MapPin className="h-3.5 w-3.5 text-muted-foreground flex-shrink-0 mt-0.5" />
-                        <p className="text-xs text-muted-foreground line-clamp-2">
-                          {entry.clock_out_address}
-                        </p>
-                      </div>
-                    ) : entry.clock_out_latitude && entry.clock_out_longitude ? (
-                      <div className="flex items-start gap-1 mt-1">
-                        <MapPin className="h-3.5 w-3.5 text-muted-foreground flex-shrink-0 mt-0.5" />
-                        <p className="text-xs text-muted-foreground">
-                          {entry.clock_out_latitude.toFixed(4)}, {entry.clock_out_longitude.toFixed(4)}
-                        </p>
-                      </div>
-                    ) : (
-                      <p className="text-xs text-muted-foreground/50 mt-1">No location data</p>
-                    )}
-                  </div>
-                </div>
-              ) : (
-                <div className="flex items-center gap-2 text-muted-foreground/50">
-                  <div className="w-16 h-16 flex-shrink-0 rounded-md border border-dashed border-border flex items-center justify-center bg-muted/30">
-                    <User className="h-5 w-5 text-muted-foreground/50" />
-                  </div>
-                  <p className="text-sm italic">Still clocked in</p>
-                </div>
-              )}
-            </div>
           </div>
         </CardContent>
       </Card>
