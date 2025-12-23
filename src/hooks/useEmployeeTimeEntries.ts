@@ -12,6 +12,12 @@ export interface TimeEntryWithDetails {
   project_name?: string | null;
   clock_in_photo_url: string | null;
   clock_out_photo_url: string | null;
+  clock_in_latitude: number | null;
+  clock_in_longitude: number | null;
+  clock_out_latitude: number | null;
+  clock_out_longitude: number | null;
+  clock_in_address: string | null;
+  clock_out_address: string | null;
   is_break: boolean;
 }
 
@@ -80,8 +86,21 @@ export const useEmployeeTimeEntries = (
         const dateKey = format(parseISO(entry.start_time), "yyyy-MM-dd");
         const existing = entriesByDate.get(dateKey) || [];
         existing.push({
-          ...entry,
+          id: entry.id,
+          start_time: entry.start_time,
+          end_time: entry.end_time,
+          duration_minutes: entry.duration_minutes,
+          project_id: entry.project_id,
           project_name: entry.projects?.name || null,
+          clock_in_photo_url: entry.clock_in_photo_url,
+          clock_out_photo_url: entry.clock_out_photo_url,
+          clock_in_latitude: entry.clock_in_latitude,
+          clock_in_longitude: entry.clock_in_longitude,
+          clock_out_latitude: entry.clock_out_latitude,
+          clock_out_longitude: entry.clock_out_longitude,
+          clock_in_address: entry.clock_in_address,
+          clock_out_address: entry.clock_out_address,
+          is_break: entry.is_break,
         });
         entriesByDate.set(dateKey, existing);
       });
