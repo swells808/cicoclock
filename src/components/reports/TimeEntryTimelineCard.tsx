@@ -24,8 +24,8 @@ const MiniMap: React.FC<{
   
   if (!latitude || !longitude || !mapboxToken) {
     return (
-      <div className="w-12 h-12 flex-shrink-0 rounded border border-dashed border-border flex items-center justify-center bg-muted/30">
-        <Map className="h-4 w-4 text-muted-foreground/50" />
+      <div className="w-8 h-8 sm:w-12 sm:h-12 flex-shrink-0 rounded border border-dashed border-border flex items-center justify-center bg-muted/30">
+        <Map className="h-3 w-3 sm:h-4 sm:w-4 text-muted-foreground/50" />
       </div>
     );
   }
@@ -37,7 +37,7 @@ const MiniMap: React.FC<{
     <img
       src={mapUrl}
       alt="Location map"
-      className="w-12 h-12 flex-shrink-0 rounded border border-border object-cover"
+      className="w-8 h-8 sm:w-12 sm:h-12 flex-shrink-0 rounded border border-border object-cover"
     />
   );
 };
@@ -50,15 +50,15 @@ const PhotoThumbnail: React.FC<{
 }> = ({ photoUrl, signedUrl, label }) => {
   if (!photoUrl) {
     return (
-      <div className="w-12 h-12 flex-shrink-0 rounded border border-dashed border-border flex items-center justify-center bg-muted/30">
-        <Image className="h-4 w-4 text-muted-foreground/50" />
+      <div className="w-8 h-8 sm:w-12 sm:h-12 flex-shrink-0 rounded border border-dashed border-border flex items-center justify-center bg-muted/30">
+        <Image className="h-3 w-3 sm:h-4 sm:w-4 text-muted-foreground/50" />
       </div>
     );
   }
 
   if (!signedUrl) {
     return (
-      <div className="w-12 h-12 flex-shrink-0 rounded border border-border bg-muted animate-pulse" />
+      <div className="w-8 h-8 sm:w-12 sm:h-12 flex-shrink-0 rounded border border-border bg-muted animate-pulse" />
     );
   }
 
@@ -68,7 +68,7 @@ const PhotoThumbnail: React.FC<{
         <img
           src={signedUrl}
           alt={label}
-          className="w-12 h-12 flex-shrink-0 rounded border border-border object-cover cursor-pointer hover:opacity-80 transition-opacity"
+          className="w-8 h-8 sm:w-12 sm:h-12 flex-shrink-0 rounded border border-border object-cover cursor-pointer hover:opacity-80 transition-opacity"
         />
       </DialogTrigger>
       <DialogContent className="max-w-lg">
@@ -102,17 +102,17 @@ const ClockPanel: React.FC<{
 
   if (!time) {
     return (
-      <div className="flex flex-col items-center gap-1 p-2 rounded-lg bg-muted/30 min-w-[100px]">
-        <span className="text-xs text-muted-foreground">{label}</span>
-        <span className="text-sm font-medium text-muted-foreground">—</span>
+      <div className="flex flex-col items-center gap-1 p-1.5 sm:p-2 rounded-lg bg-muted/30 min-w-[60px] sm:min-w-[100px]">
+        <span className="text-[10px] sm:text-xs text-muted-foreground">{label}</span>
+        <span className="text-xs sm:text-sm font-medium text-muted-foreground">—</span>
       </div>
     );
   }
 
   return (
-    <div className={`flex flex-col items-center gap-1.5 p-2 rounded-lg ${bgColor} min-w-[100px]`}>
-      <span className={`text-xs font-medium ${textColor}`}>{label}</span>
-      <span className={`text-sm font-bold ${textColor}`}>
+    <div className={`flex flex-col items-center gap-1 sm:gap-1.5 p-1.5 sm:p-2 rounded-lg ${bgColor} min-w-[60px] sm:min-w-[100px]`}>
+      <span className={`text-[10px] sm:text-xs font-medium ${textColor}`}>{label}</span>
+      <span className={`text-xs sm:text-sm font-bold ${textColor}`}>
         {format(parseISO(time), "h:mm a")}
       </span>
       <div className="flex gap-1">
@@ -120,7 +120,7 @@ const ClockPanel: React.FC<{
         <MiniMap latitude={latitude} longitude={longitude} color={color} />
       </div>
       {address && (
-        <p className="text-[10px] text-muted-foreground max-w-[100px] text-center line-clamp-2" title={address}>
+        <p className="text-[10px] text-muted-foreground max-w-[80px] sm:max-w-[100px] text-center line-clamp-2 hidden sm:block" title={address}>
           {address}
         </p>
       )}
@@ -345,7 +345,7 @@ export const TimeEntryTimelineCard = ({
       </div>
 
       {/* Main Content */}
-      <div className="flex items-stretch gap-4 p-4">
+      <div className="flex items-stretch gap-2 sm:gap-4 p-2 sm:p-4">
         {/* Clock In Panel */}
         <ClockPanel
           type="in"
@@ -359,8 +359,8 @@ export const TimeEntryTimelineCard = ({
 
         {/* Timeline Bar Section */}
         <div className="flex-1 flex flex-col justify-center min-w-0">
-          {/* Hour Labels */}
-          <div className="relative h-5 mb-1">
+          {/* Hour Labels - hidden on mobile */}
+          <div className="relative h-5 mb-1 hidden sm:block">
             {hourTicks.map((hour) => (
               <span
                 key={hour}
@@ -412,8 +412,8 @@ export const TimeEntryTimelineCard = ({
             ))}
           </div>
 
-          {/* Legend */}
-          <div className="flex items-center gap-3 mt-2 flex-wrap">
+          {/* Legend - hidden on mobile for space */}
+          <div className="hidden sm:flex items-center gap-3 mt-2 flex-wrap">
             <div className="flex items-center gap-1">
               <div className="w-3 h-3 rounded bg-blue-500" />
               <span className="text-[10px] text-muted-foreground">Regular</span>
