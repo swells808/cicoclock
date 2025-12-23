@@ -1,14 +1,12 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { supabase } from '@/integrations/supabase/client';
 import { useCompany } from '@/contexts/CompanyContext';
 import { format } from 'date-fns';
 import { Skeleton } from '@/components/ui/skeleton';
-import { FileText, Image, Map } from 'lucide-react';
-import { Badge } from '@/components/ui/badge';
-import { Button } from '@/components/ui/button';
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
+import { FileText } from 'lucide-react';
+import { TimeEntryTimelineCard, TimeEntryForCard } from './TimeEntryTimelineCard';
+import { ScrollArea } from '@/components/ui/scroll-area';
 
 interface TimeEntryDetail {
   id: string;
@@ -35,34 +33,6 @@ interface TimeEntryDetail {
     name: string;
   } | null;
 }
-
-// MiniMap component for displaying location
-const MiniMap: React.FC<{
-  latitude: number | null;
-  longitude: number | null;
-  color: "green" | "red";
-}> = ({ latitude, longitude, color }) => {
-  const mapboxToken = localStorage.getItem("mapbox_public_token");
-  
-  if (!latitude || !longitude || !mapboxToken) {
-    return (
-      <div className="w-10 h-10 flex-shrink-0 rounded border border-dashed border-border flex items-center justify-center bg-muted/30">
-        <Map className="h-3 w-3 text-muted-foreground/50" />
-      </div>
-    );
-  }
-
-  const pinColor = color === "green" ? "22c55e" : "ef4444";
-  const mapUrl = `https://api.mapbox.com/styles/v1/mapbox/streets-v12/static/pin-s+${pinColor}(${longitude},${latitude})/${longitude},${latitude},15/40x40@2x?access_token=${mapboxToken}`;
-
-  return (
-    <img
-      src={mapUrl}
-      alt="Location map"
-      className="w-10 h-10 flex-shrink-0 rounded border border-border object-cover"
-    />
-  );
-};
 
 interface TimeEntryDetailsReportProps {
   startDate?: Date;
@@ -209,13 +179,6 @@ export const TimeEntryDetailsReport: React.FC<TimeEntryDetailsReportProps> = ({
     }
   }, [entries]);
 
-  const formatDuration = (minutes: number | null) => {
-    if (!minutes) return '-';
-    const hours = Math.floor(minutes / 60);
-    const mins = minutes % 60;
-    return `${hours}h ${mins}m`;
-  };
-
   const getEmployeeName = (entry: TimeEntryDetail) => {
     if (!entry.profile) return 'Unknown';
     const { first_name, last_name, display_name } = entry.profile;
@@ -225,6 +188,26 @@ export const TimeEntryDetailsReport: React.FC<TimeEntryDetailsReportProps> = ({
     return display_name || 'Unknown';
   };
 
+  // Transform entries to card format
+  const cardEntries: TimeEntryForCard[] = entries.map(entry => ({
+    id: entry.id,
+    start_time: entry.start_time,
+    end_time: entry.end_time,
+    duration_minutes: entry.duration_minutes,
+    clock_in_photo_url: entry.clock_in_photo_url,
+    clock_out_photo_url: entry.clock_out_photo_url,
+    clock_in_latitude: entry.clock_in_latitude,
+    clock_in_longitude: entry.clock_in_longitude,
+    clock_out_latitude: entry.clock_out_latitude,
+    clock_out_longitude: entry.clock_out_longitude,
+    clock_in_address: entry.clock_in_address,
+    clock_out_address: entry.clock_out_address,
+    is_break: entry.is_break,
+    employeeName: getEmployeeName(entry),
+    projectName: entry.projects?.name || null,
+    signedClockInUrl: photoUrls[entry.id]?.clockIn || null,
+    signedClockOutUrl: photoUrls[entry.id]?.clockOut || null,
+  }));
 
   if (loading) {
     return (
@@ -236,9 +219,9 @@ export const TimeEntryDetailsReport: React.FC<TimeEntryDetailsReportProps> = ({
           </CardTitle>
         </CardHeader>
         <CardContent>
-          <div className="space-y-2">
+          <div className="space-y-4">
             {[1, 2, 3].map(i => (
-              <Skeleton key={i} className="h-12 w-full" />
+              <Skeleton key={i} className="h-40 w-full rounded-lg" />
             ))}
           </div>
         </CardContent>
@@ -263,156 +246,13 @@ export const TimeEntryDetailsReport: React.FC<TimeEntryDetailsReportProps> = ({
             No time entries for this period
           </p>
         ) : (
-          <div className="overflow-x-auto">
-            <Table>
-              <TableHeader>
-                <TableRow>
-                  <TableHead>Date</TableHead>
-                  <TableHead>Employee</TableHead>
-                  <TableHead>Project</TableHead>
-                  <TableHead>Clock In</TableHead>
-                  <TableHead>Clock Out</TableHead>
-                  <TableHead>Duration</TableHead>
-                  <TableHead>Type</TableHead>
-                  <TableHead>Photos</TableHead>
-                  <TableHead>Location</TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {entries.map((entry) => (
-                  <TableRow key={entry.id}>
-                    <TableCell>{format(new Date(entry.start_time), 'MMM d, yyyy')}</TableCell>
-                    <TableCell className="font-medium">{getEmployeeName(entry)}</TableCell>
-                    <TableCell>{entry.projects?.name || 'No Project'}</TableCell>
-                    <TableCell>{format(new Date(entry.start_time), 'h:mm a')}</TableCell>
-                    <TableCell>
-                      {entry.end_time ? format(new Date(entry.end_time), 'h:mm a') : 'Active'}
-                    </TableCell>
-                    <TableCell>{formatDuration(entry.duration_minutes)}</TableCell>
-                    <TableCell>
-                      <Badge variant={entry.is_break ? 'secondary' : 'default'}>
-                        {entry.is_break ? 'Break' : 'Work'}
-                      </Badge>
-                    </TableCell>
-                    <TableCell>
-                      <div className="flex gap-2">
-                        {entry.clock_in_photo_url && (
-                          <Dialog>
-                            <DialogTrigger asChild>
-                              <div className="cursor-pointer flex flex-col items-center gap-1">
-                                {photoUrls[entry.id]?.clockIn ? (
-                                  <img 
-                                    src={photoUrls[entry.id].clockIn} 
-                                    alt="Clock in" 
-                                    className="w-10 h-10 rounded object-cover border border-border hover:border-primary transition-colors"
-                                  />
-                                ) : (
-                                  <div className="w-10 h-10 rounded bg-muted flex items-center justify-center">
-                                    <Image className="h-4 w-4 text-muted-foreground" />
-                                  </div>
-                                )}
-                                <span className="text-[10px] bg-primary text-primary-foreground px-1.5 py-0.5 rounded">In</span>
-                              </div>
-                            </DialogTrigger>
-                            <DialogContent>
-                              <DialogHeader>
-                                <DialogTitle>Clock In Photo</DialogTitle>
-                              </DialogHeader>
-                              {photoUrls[entry.id]?.clockIn ? (
-                                <img 
-                                  src={photoUrls[entry.id].clockIn} 
-                                  alt="Clock in" 
-                                  className="w-full rounded-lg"
-                                />
-                              ) : (
-                                <div className="flex items-center justify-center h-48 bg-muted rounded-lg">
-                                  <span className="text-muted-foreground">Loading photo...</span>
-                                </div>
-                              )}
-                            </DialogContent>
-                          </Dialog>
-                        )}
-                        {entry.clock_out_photo_url && (
-                          <Dialog>
-                            <DialogTrigger asChild>
-                              <div className="cursor-pointer flex flex-col items-center gap-1">
-                                {photoUrls[entry.id]?.clockOut ? (
-                                  <img 
-                                    src={photoUrls[entry.id].clockOut} 
-                                    alt="Clock out" 
-                                    className="w-10 h-10 rounded object-cover border border-border hover:border-primary transition-colors"
-                                  />
-                                ) : (
-                                  <div className="w-10 h-10 rounded bg-muted flex items-center justify-center">
-                                    <Image className="h-4 w-4 text-muted-foreground" />
-                                  </div>
-                                )}
-                                <span className="text-[10px] bg-secondary text-secondary-foreground px-1.5 py-0.5 rounded">Out</span>
-                              </div>
-                            </DialogTrigger>
-                            <DialogContent>
-                              <DialogHeader>
-                                <DialogTitle>Clock Out Photo</DialogTitle>
-                              </DialogHeader>
-                              {photoUrls[entry.id]?.clockOut ? (
-                                <img 
-                                  src={photoUrls[entry.id].clockOut} 
-                                  alt="Clock out" 
-                                  className="w-full rounded-lg"
-                                />
-                              ) : (
-                                <div className="flex items-center justify-center h-48 bg-muted rounded-lg">
-                                  <span className="text-muted-foreground">Loading photo...</span>
-                                </div>
-                              )}
-                            </DialogContent>
-                          </Dialog>
-                        )}
-                        {!entry.clock_in_photo_url && !entry.clock_out_photo_url && (
-                          <span className="text-xs text-muted-foreground">-</span>
-                        )}
-                      </div>
-                    </TableCell>
-                    <TableCell>
-                      <div className="flex gap-3">
-                        {/* Clock In Location */}
-                        <div className="flex flex-col items-center gap-1">
-                          <MiniMap 
-                            latitude={entry.clock_in_latitude} 
-                            longitude={entry.clock_in_longitude} 
-                            color="green" 
-                          />
-                          <span className="text-[10px] bg-primary text-primary-foreground px-1.5 py-0.5 rounded">In</span>
-                          {entry.clock_in_address && (
-                            <p className="text-[10px] text-muted-foreground max-w-[80px] truncate" title={entry.clock_in_address}>
-                              {entry.clock_in_address}
-                            </p>
-                          )}
-                        </div>
-                        
-                        {/* Clock Out Location */}
-                        {entry.end_time && (
-                          <div className="flex flex-col items-center gap-1">
-                            <MiniMap 
-                              latitude={entry.clock_out_latitude} 
-                              longitude={entry.clock_out_longitude} 
-                              color="red" 
-                            />
-                            <span className="text-[10px] bg-secondary text-secondary-foreground px-1.5 py-0.5 rounded">Out</span>
-                            {entry.clock_out_address && (
-                              <p className="text-[10px] text-muted-foreground max-w-[80px] truncate" title={entry.clock_out_address}>
-                                {entry.clock_out_address}
-                              </p>
-                            )}
-                          </div>
-                        )}
-                      </div>
-                    </TableCell>
-                  </TableRow>
-                ))}
-              </TableBody>
-            </Table>
-          </div>
+          <ScrollArea className="h-[600px] pr-4">
+            <div className="space-y-4">
+              {cardEntries.map((entry) => (
+                <TimeEntryTimelineCard key={entry.id} entry={entry} />
+              ))}
+            </div>
+          </ScrollArea>
         )}
       </CardContent>
     </Card>
