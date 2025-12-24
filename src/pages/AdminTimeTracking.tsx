@@ -1,4 +1,4 @@
-import React, { useState, useMemo } from "react";
+import React, { useState, useMemo, useEffect } from "react";
 import { format, startOfDay, endOfDay } from "date-fns";
 import { Calendar as CalendarIcon, User, Clock, List, Map as MapIcon } from "lucide-react";
 import { DashboardLayout } from "@/components/layout/DashboardLayout";
@@ -25,13 +25,14 @@ import { useQuery } from "@tanstack/react-query";
 import { useCompany } from "@/contexts/CompanyContext";
 import { useUserRole } from "@/hooks/useUserRole";
 import { EditTimeEntryDialog } from "@/components/admin/EditTimeEntryDialog";
-import { TimeEntryCard } from "@/components/admin/TimeEntryCard";
+import { TimeEntryTimelineCard, TimeEntryForCard } from "@/components/reports/TimeEntryTimelineCard";
 import { TimeEntriesMap } from "@/components/admin/TimeEntriesMap";
 import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
 
 interface TimeEntry {
   id: string;
   user_id: string;
+  profile_id: string | null;
   start_time: string;
   end_time: string | null;
   duration_minutes: number | null;
@@ -44,6 +45,7 @@ interface TimeEntry {
   clock_in_longitude: number | null;
   clock_out_latitude: number | null;
   clock_out_longitude: number | null;
+  is_break?: boolean;
   profiles: {
     id: string;
     user_id: string;
@@ -52,6 +54,9 @@ interface TimeEntry {
     last_name: string | null;
     email: string | null;
     avatar_url: string | null;
+  } | null;
+  project?: {
+    name: string;
   } | null;
 }
 
@@ -64,6 +69,13 @@ interface Employee {
   email: string | null;
 }
 
+interface SignedUrls {
+  [entryId: string]: {
+    clockIn?: string | null;
+    clockOut?: string | null;
+  };
+}
+
 const AdminTimeTracking: React.FC = () => {
   const { isAdmin, isLoading: roleLoading } = useUserRole();
   const { company } = useCompany();
@@ -72,6 +84,7 @@ const AdminTimeTracking: React.FC = () => {
   const [viewMode, setViewMode] = useState<"list" | "map">("list");
   const [editingEntry, setEditingEntry] = useState<TimeEntry | null>(null);
   const [editDialogOpen, setEditDialogOpen] = useState(false);
+  const [signedUrls, setSignedUrls] = useState<SignedUrls>({});
 
   // Fetch employees
   const { data: employees = [] } = useQuery({
@@ -108,6 +121,7 @@ const AdminTimeTracking: React.FC = () => {
           end_time,
           duration_minutes,
           project_id,
+          is_break,
           clock_in_photo_url,
           clock_out_photo_url,
           clock_in_latitude,
@@ -115,7 +129,8 @@ const AdminTimeTracking: React.FC = () => {
           clock_in_address,
           clock_out_latitude,
           clock_out_longitude,
-          clock_out_address
+          clock_out_address,
+          projects:project_id (name)
         `)
         .eq("company_id", company.id)
         .gte("start_time", dayStart)
@@ -139,11 +154,49 @@ const AdminTimeTracking: React.FC = () => {
       
       return (data || []).map(entry => ({
         ...entry,
-        profiles: profileMap.get(entry.profile_id) || profileMap.get(entry.user_id) || null
+        profiles: profileMap.get(entry.profile_id) || profileMap.get(entry.user_id) || null,
+        project: entry.projects as { name: string } | null
       }));
     },
     enabled: !!company?.id,
   });
+
+  // Fetch signed URLs for photos
+  useEffect(() => {
+    const fetchSignedUrls = async () => {
+      if (!timeEntries.length) return;
+      
+      const newSignedUrls: SignedUrls = {};
+      
+      await Promise.all(
+        timeEntries.map(async (entry) => {
+          const urls: { clockIn?: string | null; clockOut?: string | null } = {};
+          
+          if (entry.clock_in_photo_url) {
+            const { data } = await supabase.storage
+              .from("timeclock-photos")
+              .createSignedUrl(entry.clock_in_photo_url, 3600);
+            urls.clockIn = data?.signedUrl || null;
+          }
+          
+          if (entry.clock_out_photo_url) {
+            const { data } = await supabase.storage
+              .from("timeclock-photos")
+              .createSignedUrl(entry.clock_out_photo_url, 3600);
+            urls.clockOut = data?.signedUrl || null;
+          }
+          
+          if (urls.clockIn || urls.clockOut) {
+            newSignedUrls[entry.id] = urls;
+          }
+        })
+      );
+      
+      setSignedUrls(newSignedUrls);
+    };
+    
+    fetchSignedUrls();
+  }, [timeEntries]);
 
   // Filter entries by selected employee
   const filteredEntries = useMemo(() => {
@@ -165,6 +218,38 @@ const AdminTimeTracking: React.FC = () => {
     }
     return emp.email || "Unknown";
   };
+
+  const getProfileDisplayName = (profile: TimeEntry["profiles"]) => {
+    if (!profile) return "Unknown";
+    if (profile.display_name) return profile.display_name;
+    if (profile.first_name || profile.last_name) {
+      return `${profile.first_name || ""} ${profile.last_name || ""}`.trim();
+    }
+    return profile.email || "Unknown";
+  };
+
+  // Transform entries to TimeEntryForCard format
+  const transformedEntries: TimeEntryForCard[] = useMemo(() => {
+    return filteredEntries.map(entry => ({
+      id: entry.id,
+      start_time: entry.start_time,
+      end_time: entry.end_time,
+      duration_minutes: entry.duration_minutes,
+      clock_in_photo_url: entry.clock_in_photo_url,
+      clock_out_photo_url: entry.clock_out_photo_url,
+      clock_in_latitude: entry.clock_in_latitude,
+      clock_in_longitude: entry.clock_in_longitude,
+      clock_out_latitude: entry.clock_out_latitude,
+      clock_out_longitude: entry.clock_out_longitude,
+      clock_in_address: entry.clock_in_address,
+      clock_out_address: entry.clock_out_address,
+      is_break: entry.is_break || false,
+      employeeName: getProfileDisplayName(entry.profiles),
+      projectName: entry.project?.name || null,
+      signedClockInUrl: signedUrls[entry.id]?.clockIn,
+      signedClockOutUrl: signedUrls[entry.id]?.clockOut,
+    }));
+  }, [filteredEntries, signedUrls]);
 
   const handleEdit = (entry: TimeEntry) => {
     setEditingEntry(entry);
@@ -320,11 +405,11 @@ const AdminTimeTracking: React.FC = () => {
             </Card>
           ) : (
             <div className="space-y-4">
-              {filteredEntries.map((entry) => (
-                <TimeEntryCard
-                  key={entry.id}
-                  entry={entry}
-                  onEdit={handleEdit}
+              {transformedEntries.map((transformedEntry, index) => (
+                <TimeEntryTimelineCard
+                  key={transformedEntry.id}
+                  entry={transformedEntry}
+                  onEdit={() => handleEdit(filteredEntries[index])}
                 />
               ))}
             </div>
