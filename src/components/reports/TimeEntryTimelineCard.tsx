@@ -1,6 +1,7 @@
 import { useState, useEffect } from "react";
 import { format, parseISO } from "date-fns";
-import { CheckCircle, AlertTriangle, XCircle, Clock, Map, Image } from "lucide-react";
+import { CheckCircle, AlertTriangle, XCircle, Clock, Map, Image, Edit } from "lucide-react";
+import { Button } from "@/components/ui/button";
 import { supabase } from "@/integrations/supabase/client";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { Badge } from "@/components/ui/badge";
@@ -152,12 +153,14 @@ interface TimeEntryTimelineCardProps {
   entry: TimeEntryForCard;
   scheduledStart?: string;
   scheduledEnd?: string;
+  onEdit?: () => void;
 }
 
 export const TimeEntryTimelineCard = ({ 
   entry,
   scheduledStart = "08:00", 
-  scheduledEnd = "17:00" 
+  scheduledEnd = "17:00",
+  onEdit
 }: TimeEntryTimelineCardProps) => {
   const { 
     start_time, 
@@ -339,8 +342,16 @@ export const TimeEntryTimelineCard = ({
           </Badge>
           {getStatusBadge()}
         </div>
-        <div className="text-sm font-medium">
-          Duration: {formatDuration(duration_minutes)}
+        <div className="flex items-center gap-2">
+          <span className="text-sm font-medium">
+            Duration: {formatDuration(duration_minutes)}
+          </span>
+          {onEdit && (
+            <Button variant="ghost" size="sm" onClick={onEdit} className="h-7 px-2 text-muted-foreground hover:text-foreground">
+              <Edit className="h-3.5 w-3.5 mr-1" />
+              <span className="hidden sm:inline">Edit</span>
+            </Button>
+          )}
         </div>
       </div>
 
