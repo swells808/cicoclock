@@ -137,10 +137,14 @@ export const CompanyForm: React.FC = () => {
     try {
       const { error } = await supabase
         .from('company_features')
-        .upsert({
-          company_id: company.id,
-          ...features,
-        });
+        .update({
+          photo_capture: features.photo_capture,
+          geolocation: features.geolocation,
+          employee_pin: features.employee_pin,
+          mapbox_public_token: features.mapbox_public_token,
+          updated_at: new Date().toISOString(),
+        })
+        .eq('company_id', company.id);
 
       if (error) throw error;
 
