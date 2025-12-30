@@ -207,12 +207,36 @@ export async function exportUserProfilePictures(users: ReportUser[], onProgress?
   saveAs(zipBlob, `profile_pictures_${timestamp}.zip`);
 }
 
-async function generateQRCodeDataURL(text: string): Promise<string> {
+export async function generateQRCodeDataURL(text: string): Promise<string> {
   return await QRCode.toDataURL(text, {
     width: 512,
     margin: 2,
     color: { dark: '#000000', light: '#FFFFFF' }
   });
+}
+
+export async function downloadUserAssets(user: ReportUser): Promise<void> {
+  const zip = new JSZip();
+  const sanitizedName = sanitizeFilename(user.name);
+  
+  // Add employee photo if available
+  if (user.avatar) {
+    const photoBlob = await downloadImageAsBlob(user.avatar);
+    if (photoBlob) {
+      zip.file(`${sanitizedName}_photo.png`, photoBlob);
+    }
+  }
+  
+  // Generate and add QR code
+  const badgeUrl = `${window.location.origin}/badge/${user.id}`;
+  const qrDataURL = await generateQRCodeDataURL(badgeUrl);
+  const qrResponse = await fetch(qrDataURL);
+  const qrBlob = await qrResponse.blob();
+  zip.file(`${sanitizedName}_qrcode.png`, qrBlob);
+  
+  // Download the zip
+  const zipBlob = await zip.generateAsync({ type: "blob" });
+  saveAs(zipBlob, `${sanitizedName}_assets.zip`);
 }
 
 export async function exportStandaloneQRCodes(users: ReportUser[], onProgress?: (progress: number) => void) {
