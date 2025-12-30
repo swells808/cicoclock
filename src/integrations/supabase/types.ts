@@ -219,6 +219,7 @@ export type Database = {
           employee_pin: boolean
           geolocation: boolean
           id: string
+          mapbox_public_token: string | null
           photo_capture: boolean
           updated_at: string
         }
@@ -228,6 +229,7 @@ export type Database = {
           employee_pin?: boolean
           geolocation?: boolean
           id?: string
+          mapbox_public_token?: string | null
           photo_capture?: boolean
           updated_at?: string
         }
@@ -237,6 +239,7 @@ export type Database = {
           employee_pin?: boolean
           geolocation?: boolean
           id?: string
+          mapbox_public_token?: string | null
           photo_capture?: boolean
           updated_at?: string
         }
