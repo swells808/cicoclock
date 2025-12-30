@@ -276,6 +276,7 @@ const Timeclock = () => {
       console.error('[Timeclock] Clock in failed:', error || data?.error);
       toast({ title: "Clock In Failed", description: data?.error || "Please try again.", variant: "destructive" }); 
       setIsProcessing(false);
+      setTimeout(() => { resetForNextUser(); }, 2500);
       return; 
     }
     
@@ -319,6 +320,7 @@ const Timeclock = () => {
       console.error('[Timeclock] Clock out failed:', error || data?.error);
       toast({ title: "Clock Out Failed", description: data?.error || "Please try again.", variant: "destructive" }); 
       setIsProcessing(false);
+      setTimeout(() => { resetForNextUser(); }, 2500);
       return; 
     }
     
@@ -353,6 +355,8 @@ const Timeclock = () => {
     if (error || !data?.success) {
       console.error('[Timeclock] Break failed:', error || data?.error);
       toast({ title: "Break Failed", description: data?.error || "Please try again.", variant: "destructive" });
+      setTimeout(() => { resetForNextUser(); }, 2500);
+      return;
     }
   };
 
