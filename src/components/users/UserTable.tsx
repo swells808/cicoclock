@@ -123,8 +123,16 @@ export const UserTable: React.FC<UserTableProps> = ({
                 </TableCell>
                 <TableCell>
                   <div className="flex items-center gap-3">
-                    <div className="h-10 w-10 rounded-full bg-muted flex items-center justify-center text-muted-foreground font-medium">
-                      {user.name.split(' ').map(n => n[0]).join('').slice(0, 2).toUpperCase()}
+                    <div className="h-10 w-10 rounded-full bg-muted flex items-center justify-center text-muted-foreground font-medium overflow-hidden">
+                      {user.avatar ? (
+                        <img 
+                          src={user.avatar} 
+                          alt={user.name}
+                          className="h-full w-full object-cover"
+                        />
+                      ) : (
+                        user.name.split(' ').map(n => n[0]).join('').slice(0, 2).toUpperCase()
+                      )}
                     </div>
                     <div>
                       <div className="font-medium text-foreground">{user.name}</div>
