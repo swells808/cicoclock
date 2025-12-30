@@ -23,6 +23,7 @@ interface CompanyFeatures {
   geolocation: boolean;
   employee_pin: boolean;
   photo_capture: boolean;
+  mapbox_public_token?: string | null;
 }
 
 interface CompanyContextType {

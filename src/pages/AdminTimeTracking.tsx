@@ -24,6 +24,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { useQuery } from "@tanstack/react-query";
 import { useCompany } from "@/contexts/CompanyContext";
 import { useUserRole } from "@/hooks/useUserRole";
+import { useCompanyFeatures } from "@/hooks/useCompanyFeatures";
 import { EditTimeEntryDialog } from "@/components/admin/EditTimeEntryDialog";
 import { TimeEntryTimelineCard, TimeEntryForCard } from "@/components/reports/TimeEntryTimelineCard";
 import { TimeEntriesMap } from "@/components/admin/TimeEntriesMap";
@@ -79,12 +80,20 @@ interface SignedUrls {
 const AdminTimeTracking: React.FC = () => {
   const { isAdmin, isLoading: roleLoading } = useUserRole();
   const { company } = useCompany();
+  const { data: companyFeatures } = useCompanyFeatures();
   const [selectedDate, setSelectedDate] = useState<Date>(new Date());
   const [selectedEmployee, setSelectedEmployee] = useState<string>("all");
   const [viewMode, setViewMode] = useState<"list" | "map">("list");
   const [editingEntry, setEditingEntry] = useState<TimeEntry | null>(null);
   const [editDialogOpen, setEditDialogOpen] = useState(false);
   const [signedUrls, setSignedUrls] = useState<SignedUrls>({});
+
+  // Set mapbox token in localStorage when available
+  useEffect(() => {
+    if (companyFeatures?.mapbox_public_token) {
+      localStorage.setItem("mapbox_public_token", companyFeatures.mapbox_public_token);
+    }
+  }, [companyFeatures]);
 
   // Fetch employees
   const { data: employees = [] } = useQuery({
@@ -173,16 +182,22 @@ const AdminTimeTracking: React.FC = () => {
           const urls: { clockIn?: string | null; clockOut?: string | null } = {};
           
           if (entry.clock_in_photo_url) {
-            const { data } = await supabase.storage
+            const { data, error } = await supabase.storage
               .from("timeclock-photos")
               .createSignedUrl(entry.clock_in_photo_url, 3600);
+            if (error) {
+              console.error('Failed to get signed URL for clock-in:', entry.clock_in_photo_url, error);
+            }
             urls.clockIn = data?.signedUrl || null;
           }
           
           if (entry.clock_out_photo_url) {
-            const { data } = await supabase.storage
+            const { data, error } = await supabase.storage
               .from("timeclock-photos")
               .createSignedUrl(entry.clock_out_photo_url, 3600);
+            if (error) {
+              console.error('Failed to get signed URL for clock-out:', entry.clock_out_photo_url, error);
+            }
             urls.clockOut = data?.signedUrl || null;
           }
           

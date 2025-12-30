@@ -32,6 +32,7 @@ export const CompanyForm: React.FC = () => {
     photo_capture: true,
     geolocation: true,
     employee_pin: false,
+    mapbox_public_token: '',
   });
 
   useEffect(() => {
@@ -54,6 +55,7 @@ export const CompanyForm: React.FC = () => {
         photo_capture: companyFeatures.photo_capture,
         geolocation: companyFeatures.geolocation,
         employee_pin: companyFeatures.employee_pin,
+        mapbox_public_token: companyFeatures.mapbox_public_token || '',
       });
     }
   }, [company, companyFeatures]);
@@ -346,6 +348,21 @@ export const CompanyForm: React.FC = () => {
               checked={features.employee_pin}
               onCheckedChange={(checked) => setFeatures({ ...features, employee_pin: checked })}
             />
+          </div>
+          
+          <div className="space-y-2 pt-4 border-t">
+            <Label htmlFor="mapbox_token">Mapbox Public Token</Label>
+            <p className="text-sm text-muted-foreground">Required for location maps on time entries</p>
+            <Input
+              id="mapbox_token"
+              type="text"
+              value={features.mapbox_public_token}
+              onChange={(e) => setFeatures({ ...features, mapbox_public_token: e.target.value })}
+              placeholder="pk.eyJ1IjoieW91..."
+            />
+            <p className="text-xs text-muted-foreground">
+              Get your public token from <a href="https://mapbox.com/" target="_blank" rel="noopener noreferrer" className="underline">mapbox.com</a>
+            </p>
           </div>
         </CardContent>
         <CardFooter>

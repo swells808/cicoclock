@@ -216,7 +216,7 @@ const Timeclock = () => {
     setPhotoAction(null);
   };
 
-  // Get current geolocation
+  // Get current geolocation with Mapbox reverse geocoding for better accuracy
   const getCurrentLocation = (): Promise<{ latitude: number; longitude: number; address: string | null }> => {
     return new Promise((resolve) => {
       if (!navigator.geolocation || !companyFeatures?.geolocation) {
@@ -229,18 +229,39 @@ const Timeclock = () => {
           const { latitude, longitude } = position.coords;
           let address: string | null = null;
           
-          // Try reverse geocoding with Nominatim (free, no API key required)
-          try {
-            const response = await fetch(
-              `https://nominatim.openstreetmap.org/reverse?format=json&lat=${latitude}&lon=${longitude}&zoom=18&addressdetails=1`,
-              { headers: { 'User-Agent': 'TimeclockApp/1.0' } }
-            );
-            if (response.ok) {
-              const data = await response.json();
-              address = data.display_name || null;
+          // Try Mapbox reverse geocoding first (more accurate)
+          const mapboxToken = companyFeatures?.mapbox_public_token || localStorage.getItem("mapbox_public_token");
+          
+          if (mapboxToken) {
+            try {
+              const response = await fetch(
+                `https://api.mapbox.com/geocoding/v5/mapbox.places/${longitude},${latitude}.json?access_token=${mapboxToken}&types=address,poi&limit=1`
+              );
+              if (response.ok) {
+                const data = await response.json();
+                if (data.features && data.features.length > 0) {
+                  address = data.features[0].place_name || null;
+                }
+              }
+            } catch (e) {
+              console.log('Mapbox reverse geocoding failed:', e);
             }
-          } catch (e) {
-            console.log('Reverse geocoding failed:', e);
+          }
+          
+          // Fallback to Nominatim if Mapbox fails or no token
+          if (!address) {
+            try {
+              const response = await fetch(
+                `https://nominatim.openstreetmap.org/reverse?format=json&lat=${latitude}&lon=${longitude}&zoom=18&addressdetails=1`,
+                { headers: { 'User-Agent': 'TimeclockApp/1.0' } }
+              );
+              if (response.ok) {
+                const data = await response.json();
+                address = data.display_name || null;
+              }
+            } catch (e) {
+              console.log('Nominatim reverse geocoding failed:', e);
+            }
           }
           
           resolve({ latitude, longitude, address });
