@@ -36,13 +36,13 @@ interface TimeEntriesMapProps {
   selectedDate: Date;
 }
 
-const MAPBOX_TOKEN = localStorage.getItem('mapbox_public_token') || '';
-
 export const TimeEntriesMap: React.FC<TimeEntriesMapProps> = ({ entries, selectedDate }) => {
   const mapContainer = useRef<HTMLDivElement>(null);
   const map = useRef<mapboxgl.Map | null>(null);
   const markersRef = useRef<mapboxgl.Marker[]>([]);
   const [mapError, setMapError] = useState<string | null>(null);
+  
+  const mapboxToken = localStorage.getItem('mapbox_public_token') || '';
 
   const entriesWithLocation = entries.filter(
     e => (e.clock_in_latitude && e.clock_in_longitude) || 
@@ -59,10 +59,10 @@ export const TimeEntriesMap: React.FC<TimeEntriesMapProps> = ({ entries, selecte
   };
 
   useEffect(() => {
-    if (!mapContainer.current || !MAPBOX_TOKEN) return;
+    if (!mapContainer.current || !mapboxToken) return;
 
     try {
-      mapboxgl.accessToken = MAPBOX_TOKEN;
+      mapboxgl.accessToken = mapboxToken;
       
       // Calculate bounds from entries
       let bounds: mapboxgl.LngLatBounds | null = null;
@@ -124,7 +124,7 @@ export const TimeEntriesMap: React.FC<TimeEntriesMapProps> = ({ entries, selecte
 
   // Add markers when map is ready
   useEffect(() => {
-    if (!map.current || !MAPBOX_TOKEN) return;
+    if (!map.current || !mapboxToken) return;
 
     const addMarkers = () => {
       // Clear existing markers
@@ -247,7 +247,7 @@ export const TimeEntriesMap: React.FC<TimeEntriesMapProps> = ({ entries, selecte
     }
   }, [entries]);
 
-  if (!MAPBOX_TOKEN) {
+  if (!mapboxToken) {
     return (
       <Card>
         <CardContent className="py-8 text-center text-muted-foreground">
