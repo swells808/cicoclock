@@ -5,6 +5,7 @@ import { useCompany } from "@/contexts/CompanyContext";
 export interface EmployeeProfile {
   id: string;
   user_id: string | null;
+  company_id: string | null;
   display_name: string | null;
   first_name: string | null;
   last_name: string | null;
