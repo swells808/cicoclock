@@ -52,8 +52,9 @@ serve(async (req) => {
       );
     }
 
-    // For employees without user_id, we'll use profile_id as the user_id fallback
-    const effectiveUserId = profile.user_id || profile_id;
+    // Only use user_id if the profile has one (auth account exists)
+    // Otherwise set to null - profile_id is the reliable identifier
+    const effectiveUserId = profile.user_id || null;
 
     if (action === 'clock_in') {
       // Check if already clocked in using profile_id (more reliable)
