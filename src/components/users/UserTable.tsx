@@ -55,6 +55,8 @@ export const UserTable: React.FC<UserTableProps> = ({
         role: user.role,
         status: user.status,
         avatar: user.avatar,
+        department: user.department,
+        employeeId: user.employeeId,
       });
       toast.success("Assets downloaded successfully!");
     } catch (error) {
