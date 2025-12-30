@@ -13,7 +13,7 @@ serve(async (req) => {
   }
 
   try {
-    const { action, profile_id, company_id, photo_url, time_entry_id } = await req.json();
+    const { action, profile_id, company_id, photo_url, time_entry_id, latitude, longitude, address } = await req.json();
 
     console.log('Clock in/out request:', { action, profile_id, company_id, time_entry_id });
 
@@ -82,6 +82,9 @@ serve(async (req) => {
           company_id: company_id,
           start_time: new Date().toISOString(),
           clock_in_photo_url: photo_url || null,
+          clock_in_latitude: latitude || null,
+          clock_in_longitude: longitude || null,
+          clock_in_address: address || null,
         })
         .select()
         .single();
@@ -144,6 +147,9 @@ serve(async (req) => {
           end_time: endTime.toISOString(),
           duration_minutes: durationMinutes,
           clock_out_photo_url: photo_url || null,
+          clock_out_latitude: latitude || null,
+          clock_out_longitude: longitude || null,
+          clock_out_address: address || null,
         })
         .eq('id', entryId)
         .select()
