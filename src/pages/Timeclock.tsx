@@ -258,29 +258,23 @@ const Timeclock = () => {
     if (!authenticatedEmployee || !company) return;
     setIsProcessing(true);
     
-    // Get location data
     const location = await getCurrentLocation();
     
-    // Use profile_id as user_id fallback for employees without auth accounts
-    const userId = authenticatedEmployee.user_id || authenticatedEmployee.id;
-    
-    const { data, error } = await supabase
-      .from('time_entries')
-      .insert({ 
-        user_id: userId,
+    const { data, error } = await supabase.functions.invoke('clock-in-out', {
+      body: {
+        action: 'clock_in',
         profile_id: authenticatedEmployee.id,
-        company_id: company.id, 
-        start_time: new Date().toISOString(), 
-        clock_in_photo_url: photoUrl,
-        clock_in_latitude: location.latitude || null,
-        clock_in_longitude: location.longitude || null,
-        clock_in_address: location.address
-      })
-      .select()
-      .single();
+        company_id: company.id,
+        photo_url: photoUrl,
+        latitude: location.latitude || null,
+        longitude: location.longitude || null,
+        address: location.address
+      }
+    });
     
-    if (error) { 
-      toast({ title: "Clock In Failed", description: "Please try again.", variant: "destructive" }); 
+    if (error || !data?.success) { 
+      console.error('[Timeclock] Clock in failed:', error || data?.error);
+      toast({ title: "Clock In Failed", description: data?.error || "Please try again.", variant: "destructive" }); 
       setIsProcessing(false);
       return; 
     }
@@ -288,7 +282,6 @@ const Timeclock = () => {
     const employeeName = authenticatedEmployee.display_name || authenticatedEmployee.first_name || "Employee";
     toast({ title: "Clocked In!", description: `Welcome, ${employeeName}!` });
     
-    // Reset screen after short delay
     setTimeout(() => {
       resetForNextUser();
     }, 2500);
@@ -304,30 +297,27 @@ const Timeclock = () => {
   };
 
   const performClockOut = async (photoUrl?: string) => {
-    if (!activeTimeEntry || !authenticatedEmployee) return;
+    if (!activeTimeEntry || !authenticatedEmployee || !company) return;
     setIsProcessing(true);
     
-    // Get location data
     const location = await getCurrentLocation();
     
-    const endTime = new Date(); 
-    const startTime = new Date(activeTimeEntry.start_time); 
-    const durationMinutes = Math.floor((endTime.getTime() - startTime.getTime()) / 60000);
+    const { data, error } = await supabase.functions.invoke('clock-in-out', {
+      body: {
+        action: 'clock_out',
+        profile_id: authenticatedEmployee.id,
+        company_id: company.id,
+        time_entry_id: activeTimeEntry.id,
+        photo_url: photoUrl,
+        latitude: location.latitude || null,
+        longitude: location.longitude || null,
+        address: location.address
+      }
+    });
     
-    const { error } = await supabase
-      .from('time_entries')
-      .update({ 
-        end_time: endTime.toISOString(), 
-        duration_minutes: durationMinutes, 
-        clock_out_photo_url: photoUrl,
-        clock_out_latitude: location.latitude || null,
-        clock_out_longitude: location.longitude || null,
-        clock_out_address: location.address
-      })
-      .eq('id', activeTimeEntry.id);
-    
-    if (error) { 
-      toast({ title: "Clock Out Failed", description: "Please try again.", variant: "destructive" }); 
+    if (error || !data?.success) { 
+      console.error('[Timeclock] Clock out failed:', error || data?.error);
+      toast({ title: "Clock Out Failed", description: data?.error || "Please try again.", variant: "destructive" }); 
       setIsProcessing(false);
       return; 
     }
@@ -335,7 +325,6 @@ const Timeclock = () => {
     const employeeName = authenticatedEmployee.display_name || authenticatedEmployee.first_name || "Employee";
     toast({ title: "Clocked Out!", description: `Goodbye, ${employeeName}!` });
     
-    // Reset screen after short delay
     setTimeout(() => {
       resetForNextUser();
     }, 2500);
@@ -352,9 +341,19 @@ const Timeclock = () => {
 
   const handleBreak = async () => {
     if (!authenticatedEmployee || !company) return;
-    const now = new Date().toISOString();
-    const userId = authenticatedEmployee.user_id || authenticatedEmployee.id;
-    await supabase.from('time_entries').insert({ user_id: userId, profile_id: authenticatedEmployee.id, company_id: company.id, start_time: now, end_time: now, duration_minutes: 0, is_break: true });
+    
+    const { data, error } = await supabase.functions.invoke('clock-in-out', {
+      body: {
+        action: 'break',
+        profile_id: authenticatedEmployee.id,
+        company_id: company.id
+      }
+    });
+    
+    if (error || !data?.success) {
+      console.error('[Timeclock] Break failed:', error || data?.error);
+      toast({ title: "Break Failed", description: data?.error || "Please try again.", variant: "destructive" });
+    }
   };
 
   const handleClosePage = () => { setShowPasswordDialog(true); setPasswordError(null); };
