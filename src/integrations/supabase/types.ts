@@ -1071,7 +1071,7 @@ export type Database = {
           project_id: string | null
           start_time: string
           updated_at: string
-          user_id: string
+          user_id: string | null
         }
         Insert: {
           clock_in_address?: string | null
@@ -1093,7 +1093,7 @@ export type Database = {
           project_id?: string | null
           start_time: string
           updated_at?: string
-          user_id: string
+          user_id?: string | null
         }
         Update: {
           clock_in_address?: string | null
@@ -1115,7 +1115,7 @@ export type Database = {
           project_id?: string | null
           start_time?: string
           updated_at?: string
-          user_id?: string
+          user_id?: string | null
         }
         Relationships: [
           {
