@@ -102,7 +102,8 @@ export const EmployeeEditDialog = ({ open, onOpenChange, employee, onSave }: Emp
       // Upload avatar if changed
       let avatarUrl = employee.avatar_url;
       if (avatarFile && employee.company_id) {
-        const fileName = `${employee.company_id}/${Date.now()}-${avatarFile.name}`;
+        const fileExtension = avatarFile.name.split('.').pop()?.toLowerCase() || 'png';
+        const fileName = `${employee.company_id}/${Date.now()}-avatar.${fileExtension}`;
         const { error: uploadError } = await supabase.storage
           .from('avatars')
           .upload(fileName, avatarFile);

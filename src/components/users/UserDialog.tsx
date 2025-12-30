@@ -104,7 +104,8 @@ export const UserDialog = ({ open, onOpenChange, user, onSave }: UserDialogProps
       // Handle avatar upload if there's a new file
       let avatarUrl: string | undefined;
       if (avatarFile && company?.id) {
-        const fileName = `${company.id}/${Date.now()}-${avatarFile.name}`;
+        const fileExtension = avatarFile.name.split('.').pop()?.toLowerCase() || 'png';
+        const fileName = `${company.id}/${Date.now()}-avatar.${fileExtension}`;
         const { error: uploadError } = await supabase.storage
           .from('avatars')
           .upload(fileName, avatarFile);
