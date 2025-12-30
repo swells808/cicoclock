@@ -12,7 +12,7 @@ import { useDepartments } from "@/hooks/useDepartments";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
 import { format } from "date-fns";
-import { CalendarIcon, User, MapPin, Briefcase, Shield, Award } from "lucide-react";
+import { CalendarIcon, User, MapPin, Briefcase, Shield, Award, Camera } from "lucide-react";
 import { cn } from "@/lib/utils";
 import type { EmployeeProfile } from "@/hooks/useEmployeeDetail";
 
@@ -48,6 +48,10 @@ export const EmployeeEditDialog = ({ open, onOpenChange, employee, onSave }: Emp
   const [dateOfHire, setDateOfHire] = useState<Date | undefined>(undefined);
   
   const [role, setRole] = useState("employee");
+  
+  // Avatar state
+  const [avatarFile, setAvatarFile] = useState<File | null>(null);
+  const [avatarPreview, setAvatarPreview] = useState<string | null>(null);
   const [pin, setPin] = useState("");
 
   // Initialize form with employee data
@@ -73,12 +77,43 @@ export const EmployeeEditDialog = ({ open, onOpenChange, employee, onSave }: Emp
       
       setRole(employee.role || "employee");
       setPin(employee.pin || "");
+      
+      // Avatar
+      setAvatarPreview(employee.avatar_url || null);
+      setAvatarFile(null);
     }
   }, [employee, open]);
+
+  const handlePhotoChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (file) {
+      setAvatarFile(file);
+      const reader = new FileReader();
+      reader.onloadend = () => {
+        setAvatarPreview(reader.result as string);
+      };
+      reader.readAsDataURL(file);
+    }
+  };
 
   const handleSave = async () => {
     setSaving(true);
     try {
+      // Upload avatar if changed
+      let avatarUrl = employee.avatar_url;
+      if (avatarFile && employee.company_id) {
+        const fileName = `${employee.company_id}/${Date.now()}-${avatarFile.name}`;
+        const { error: uploadError } = await supabase.storage
+          .from('avatars')
+          .upload(fileName, avatarFile);
+        
+        if (!uploadError) {
+          avatarUrl = supabase.storage.from('avatars').getPublicUrl(fileName).data.publicUrl;
+        } else {
+          console.error("Avatar upload error:", uploadError);
+        }
+      }
+
       // Update profile
       const { error: profileError } = await supabase
         .from("profiles")
@@ -99,6 +134,7 @@ export const EmployeeEditDialog = ({ open, onOpenChange, employee, onSave }: Emp
           trade_number: tradeNumber || null,
           date_of_hire: dateOfHire ? format(dateOfHire, "yyyy-MM-dd") : null,
           pin: pin || null,
+          avatar_url: avatarUrl || null,
         })
         .eq("id", employee.id);
 
@@ -176,6 +212,39 @@ export const EmployeeEditDialog = ({ open, onOpenChange, employee, onSave }: Emp
 
           {/* Personal Information Tab */}
           <TabsContent value="personal" className="space-y-4 mt-4">
+            {/* Photo Upload Section */}
+            <div className="flex flex-col items-center gap-3 pb-4 border-b">
+              <div className="w-24 h-24 rounded-full overflow-hidden bg-muted flex items-center justify-center">
+                {avatarPreview ? (
+                  <img 
+                    src={avatarPreview} 
+                    alt="Employee photo" 
+                    className="w-full h-full object-cover"
+                  />
+                ) : (
+                  <Camera className="h-8 w-8 text-muted-foreground" />
+                )}
+              </div>
+              <div>
+                <input
+                  type="file"
+                  id="avatar-upload-edit"
+                  accept="image/*"
+                  onChange={handlePhotoChange}
+                  className="hidden"
+                />
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  onClick={() => document.getElementById('avatar-upload-edit')?.click()}
+                >
+                  <Camera className="h-4 w-4 mr-2" />
+                  {avatarPreview ? 'Change Photo' : 'Upload Photo'}
+                </Button>
+              </div>
+            </div>
+
             <div className="grid grid-cols-2 gap-4">
               <div className="space-y-2">
                 <Label htmlFor="firstName">First Name</Label>
