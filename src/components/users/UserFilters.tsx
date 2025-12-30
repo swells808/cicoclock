@@ -63,6 +63,7 @@ export const UserFilters: React.FC<UserFiltersProps> = ({
               <SelectItem value="all-roles">All Roles</SelectItem>
               <SelectItem value="Admin">Admin</SelectItem>
               <SelectItem value="Manager">Manager</SelectItem>
+              <SelectItem value="Foreman">Foreman</SelectItem>
               <SelectItem value="Employee">Employee</SelectItem>
             </SelectContent>
           </Select>

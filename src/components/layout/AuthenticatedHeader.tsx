@@ -25,7 +25,7 @@ import { cn } from "@/lib/utils";
 
 export const AuthenticatedHeader = () => {
   const { user, signOut } = useAuth();
-  const { isAdmin, isSupervisor } = useUserRole();
+  const { isAdmin, isSupervisor, isForeman } = useUserRole();
   const { t } = useLanguage();
   const location = useLocation();
   const navigate = useNavigate();
@@ -37,38 +37,42 @@ export const AuthenticatedHeader = () => {
     navigate("/");
   };
 
-  // Desktop nav items (simplified)
-  const desktopNavItems = [
-    { label: "Dashboard", path: "/dashboard" },
-    { label: "Clock", path: "/timeclock" },
-    ...(isAdmin || isSupervisor
-      ? [
-          { label: "Tracking", path: "/time-tracking/admin" },
-          { label: "Projects", path: "/projects" },
-          { label: "Clients", path: "/clients" },
-          { label: "Reports", path: "/reports" },
-          { label: "Users", path: "/users" },
-        ]
-      : []),
-  ];
+  // Foremen only see the Clock link
+  const desktopNavItems = isForeman
+    ? [{ label: "Clock", path: "/timeclock" }]
+    : [
+        { label: "Dashboard", path: "/dashboard" },
+        { label: "Clock", path: "/timeclock" },
+        ...(isAdmin || isSupervisor
+          ? [
+              { label: "Tracking", path: "/time-tracking/admin" },
+              { label: "Projects", path: "/projects" },
+              { label: "Clients", path: "/clients" },
+              { label: "Reports", path: "/reports" },
+              { label: "Users", path: "/users" },
+            ]
+          : []),
+      ];
 
-  // Mobile nav items (full navigation with icons)
-  const mobileNavItems = [
-    { icon: LayoutDashboard, label: t("dashboard") || "Dashboard", path: "/dashboard" },
-    { icon: Clock, label: "Clock", path: "/timeclock" },
-    { icon: ClipboardCheck, label: t("taskCheckin") || "Task Check-in", path: "/task-checkin" },
-    ...(isAdmin || isSupervisor
-      ? [
-          { icon: Clock, label: "Tracking", path: "/time-tracking/admin" },
-          { icon: Users, label: t("users") || "Users", path: "/users" },
-          { icon: FolderKanban, label: t("projects") || "Projects", path: "/projects" },
-          { icon: Building2, label: t("clients") || "Clients", path: "/clients" },
-          { icon: FileText, label: t("reports") || "Reports", path: "/reports" },
-          { icon: IdCard, label: t("badgeDesigner") || "Badge Designer", path: "/badge-designer" },
-        ]
-      : []),
-    { icon: Settings, label: t("settings") || "Settings", path: "/settings" },
-  ];
+  // Mobile nav items - foremen only see Clock
+  const mobileNavItems = isForeman
+    ? [{ icon: Clock, label: "Clock", path: "/timeclock" }]
+    : [
+        { icon: LayoutDashboard, label: t("dashboard") || "Dashboard", path: "/dashboard" },
+        { icon: Clock, label: "Clock", path: "/timeclock" },
+        { icon: ClipboardCheck, label: t("taskCheckin") || "Task Check-in", path: "/task-checkin" },
+        ...(isAdmin || isSupervisor
+          ? [
+              { icon: Clock, label: "Tracking", path: "/time-tracking/admin" },
+              { icon: Users, label: t("users") || "Users", path: "/users" },
+              { icon: FolderKanban, label: t("projects") || "Projects", path: "/projects" },
+              { icon: Building2, label: t("clients") || "Clients", path: "/clients" },
+              { icon: FileText, label: t("reports") || "Reports", path: "/reports" },
+              { icon: IdCard, label: t("badgeDesigner") || "Badge Designer", path: "/badge-designer" },
+            ]
+          : []),
+        { icon: Settings, label: t("settings") || "Settings", path: "/settings" },
+      ];
 
   return (
     <>

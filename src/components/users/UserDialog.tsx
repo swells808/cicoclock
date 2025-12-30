@@ -431,6 +431,7 @@ export const UserDialog = ({ open, onOpenChange, user, onSave }: UserDialogProps
                     </SelectTrigger>
                     <SelectContent>
                       <SelectItem value="employee">Employee</SelectItem>
+                      <SelectItem value="foreman">Foreman</SelectItem>
                       <SelectItem value="supervisor">Manager / Supervisor</SelectItem>
                       <SelectItem value="admin">Administrator</SelectItem>
                     </SelectContent>
