@@ -5,11 +5,15 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import { Calendar } from '@/components/ui/calendar';
+import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { useDepartments } from '@/hooks/useDepartments';
 import { useCompany } from '@/contexts/CompanyContext';
 import { supabase } from '@/integrations/supabase/client';
 import { toast } from 'sonner';
-import { User, Mail, Phone, Building2, Shield, IdCard, KeyRound, Award } from 'lucide-react';
+import { User, Mail, Phone, Building2, Shield, IdCard, KeyRound, CalendarIcon, Camera } from 'lucide-react';
+import { format } from 'date-fns';
+import { cn } from '@/lib/utils';
 import type { User as UserType } from '@/hooks/useUsers';
 import { CertificationsList } from './CertificationsList';
 
@@ -39,6 +43,21 @@ export const UserDialog = ({ open, onOpenChange, user, onSave }: UserDialogProps
   const [loading, setLoading] = useState(false);
   const [createAuthAccount, setCreateAuthAccount] = useState(false);
   const [password, setPassword] = useState('');
+  const [dateOfHire, setDateOfHire] = useState<Date | undefined>(undefined);
+  const [avatarFile, setAvatarFile] = useState<File | null>(null);
+  const [avatarPreview, setAvatarPreview] = useState<string | null>(null);
+
+  const handlePhotoChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (file) {
+      setAvatarFile(file);
+      const reader = new FileReader();
+      reader.onloadend = () => {
+        setAvatarPreview(reader.result as string);
+      };
+      reader.readAsDataURL(file);
+    }
+  };
 
   useEffect(() => {
     if (user) {
@@ -53,6 +72,9 @@ export const UserDialog = ({ open, onOpenChange, user, onSave }: UserDialogProps
         employee_id: user.employeeId || '',
         pin: user.pin || '',
       });
+      setDateOfHire(user.date_of_hire ? new Date(user.date_of_hire) : undefined);
+      setAvatarPreview(user.avatar_url || null);
+      setAvatarFile(null);
     } else {
       setFormData({
         first_name: '',
@@ -67,6 +89,9 @@ export const UserDialog = ({ open, onOpenChange, user, onSave }: UserDialogProps
       });
       setPassword('');
       setCreateAuthAccount(false);
+      setDateOfHire(undefined);
+      setAvatarFile(null);
+      setAvatarPreview(null);
     }
   }, [user, open]);
 
@@ -76,6 +101,18 @@ export const UserDialog = ({ open, onOpenChange, user, onSave }: UserDialogProps
 
     setLoading(true);
     try {
+      // Handle avatar upload if there's a new file
+      let avatarUrl: string | undefined;
+      if (avatarFile && company?.id) {
+        const fileName = `${company.id}/${Date.now()}-${avatarFile.name}`;
+        const { error: uploadError } = await supabase.storage
+          .from('avatars')
+          .upload(fileName, avatarFile);
+
+        if (uploadError) throw uploadError;
+        avatarUrl = supabase.storage.from('avatars').getPublicUrl(fileName).data.publicUrl;
+      }
+
       if (isEditing) {
         // Update existing user profile
         const { error: profileError } = await supabase
@@ -90,6 +127,8 @@ export const UserDialog = ({ open, onOpenChange, user, onSave }: UserDialogProps
             status: formData.status,
             employee_id: formData.employee_id || null,
             pin: formData.pin || null,
+            date_of_hire: dateOfHire ? format(dateOfHire, 'yyyy-MM-dd') : null,
+            ...(avatarUrl && { avatar_url: avatarUrl }),
           })
           .eq('id', user.id);
 
@@ -155,6 +194,8 @@ export const UserDialog = ({ open, onOpenChange, user, onSave }: UserDialogProps
               status: formData.status,
               employee_id: formData.employee_id || null,
               pin: formData.pin || null,
+              date_of_hire: dateOfHire ? format(dateOfHire, 'yyyy-MM-dd') : null,
+              avatar_url: avatarUrl || null,
             })
             .select()
             .single();
@@ -201,6 +242,34 @@ export const UserDialog = ({ open, onOpenChange, user, onSave }: UserDialogProps
             </TabsList>
 
             <TabsContent value="basic" className="space-y-4 mt-4">
+              {/* Photo Upload */}
+              <div className="flex flex-col items-center gap-3">
+                <div className="relative w-24 h-24 rounded-full bg-muted overflow-hidden border-2 border-dashed border-muted-foreground/30">
+                  {avatarPreview ? (
+                    <img src={avatarPreview} alt="Avatar preview" className="w-full h-full object-cover" />
+                  ) : (
+                    <div className="w-full h-full flex items-center justify-center">
+                      <Camera className="h-8 w-8 text-muted-foreground/50" />
+                    </div>
+                  )}
+                </div>
+                <Label htmlFor="avatar-upload" className="cursor-pointer">
+                  <Button type="button" variant="outline" size="sm" asChild>
+                    <span>
+                      <Camera className="h-4 w-4 mr-2" />
+                      {avatarPreview ? 'Change Photo' : 'Upload Photo'}
+                    </span>
+                  </Button>
+                </Label>
+                <input
+                  id="avatar-upload"
+                  type="file"
+                  accept="image/*"
+                  onChange={handlePhotoChange}
+                  className="hidden"
+                />
+              </div>
+
               <div className="grid grid-cols-2 gap-4">
                 <div className="space-y-2">
                   <Label htmlFor="first_name">First Name</Label>
@@ -286,17 +355,46 @@ export const UserDialog = ({ open, onOpenChange, user, onSave }: UserDialogProps
                 </div>
               </div>
 
-              <div className="space-y-2">
-                <Label htmlFor="employee_id">Employee ID</Label>
-                <div className="relative">
-                  <IdCard className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-                  <Input
-                    id="employee_id"
-                    value={formData.employee_id}
-                    onChange={(e) => setFormData({ ...formData, employee_id: e.target.value })}
-                    className="pl-9"
-                    placeholder="EMP-001"
-                  />
+              <div className="grid grid-cols-2 gap-4">
+                <div className="space-y-2">
+                  <Label htmlFor="employee_id">Employee ID</Label>
+                  <div className="relative">
+                    <IdCard className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+                    <Input
+                      id="employee_id"
+                      value={formData.employee_id}
+                      onChange={(e) => setFormData({ ...formData, employee_id: e.target.value })}
+                      className="pl-9"
+                      placeholder="EMP-001"
+                    />
+                  </div>
+                </div>
+
+                <div className="space-y-2">
+                  <Label>Hire Date</Label>
+                  <Popover>
+                    <PopoverTrigger asChild>
+                      <Button
+                        variant="outline"
+                        className={cn(
+                          "w-full justify-start text-left font-normal",
+                          !dateOfHire && "text-muted-foreground"
+                        )}
+                      >
+                        <CalendarIcon className="mr-2 h-4 w-4" />
+                        {dateOfHire ? format(dateOfHire, "PPP") : "Select date"}
+                      </Button>
+                    </PopoverTrigger>
+                    <PopoverContent className="w-auto p-0" align="start">
+                      <Calendar
+                        mode="single"
+                        selected={dateOfHire}
+                        onSelect={setDateOfHire}
+                        initialFocus
+                        className="pointer-events-auto"
+                      />
+                    </PopoverContent>
+                  </Popover>
                 </div>
               </div>
 

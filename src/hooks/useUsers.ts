@@ -10,6 +10,7 @@ export interface User {
   status: string;
   lastActive: string;
   avatar?: string;
+  avatar_url?: string;
   department?: string;
   phone?: string;
   projects?: string[];
@@ -20,6 +21,7 @@ export interface User {
   user_id: string;
   employeeId?: string;
   pin?: string;
+  date_of_hire?: string;
 }
 
 export const useUsers = () => {
@@ -86,6 +88,7 @@ export const useUsers = () => {
           status: profile.status === 'deactivated' ? 'Deactivated' : profile.status === 'inactive' ? 'Inactive' : 'Active',
           lastActive: 'Recently',
           avatar: profile.avatar_url,
+          avatar_url: profile.avatar_url,
           department: profile.departments?.name || 'No Department',
           phone: profile.phone,
           projects: [],
@@ -94,7 +97,8 @@ export const useUsers = () => {
           last_name: profile.last_name,
           display_name: profile.display_name,
           employeeId: profile.employee_id || '',
-          pin: profile.pin || ''
+          pin: profile.pin || '',
+          date_of_hire: profile.date_of_hire || undefined,
         };
       });
 
