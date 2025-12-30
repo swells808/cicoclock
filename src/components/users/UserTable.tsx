@@ -1,6 +1,8 @@
 import React from "react";
 import { useNavigate } from "react-router-dom";
-import { MoreHorizontal, CreditCard, Eye, Edit, Trash2 } from "lucide-react";
+import { MoreHorizontal, CreditCard, Eye, Edit, Trash2, Download } from "lucide-react";
+import { toast } from "sonner";
+import { downloadUserAssets } from "@/utils/reportUtils";
 import {
   Table,
   TableBody,
@@ -42,6 +44,24 @@ export const UserTable: React.FC<UserTableProps> = ({
 }) => {
   const navigate = useNavigate();
   const allSelected = users.length > 0 && selectedUsers.length === users.length;
+
+  const handleDownloadAssets = async (user: User) => {
+    try {
+      toast.info("Preparing download...");
+      await downloadUserAssets({
+        id: user.id,
+        name: user.name,
+        email: user.email,
+        role: user.role,
+        status: user.status,
+        avatar: user.avatar,
+      });
+      toast.success("Assets downloaded successfully!");
+    } catch (error) {
+      console.error("Error downloading assets:", error);
+      toast.error("Failed to download assets");
+    }
+  };
 
   const getRoleBadgeVariant = (role: string): "default" | "secondary" | "destructive" => {
     switch (role) {
@@ -140,6 +160,10 @@ export const UserTable: React.FC<UserTableProps> = ({
                           Generate Badge
                         </DropdownMenuItem>
                       )}
+                      <DropdownMenuItem onClick={() => handleDownloadAssets(user)}>
+                        <Download className="h-4 w-4 mr-2" />
+                        Download Assets
+                      </DropdownMenuItem>
                       <DropdownMenuSeparator />
                       <DropdownMenuItem 
                         onClick={() => onDeleteUser(user)}
