@@ -9,6 +9,7 @@ import { Label } from "@/components/ui/label";
 import { Separator } from "@/components/ui/separator";
 import { useToast } from "@/hooks/use-toast";
 import { useAuth } from "@/contexts/AuthContext";
+import { useUserRole } from "@/hooks/useUserRole";
 import { supabase } from "@/integrations/supabase/client";
 
 const Login = () => {
@@ -18,13 +19,18 @@ const Login = () => {
   const { toast } = useToast();
   const navigate = useNavigate();
   const { signIn, user } = useAuth();
+  const { isForeman, isLoading: rolesLoading } = useUserRole();
 
-  // Redirect if already logged in
+  // Redirect if already logged in - foremen go to timeclock, others to dashboard
   useEffect(() => {
-    if (user) {
-      navigate("/dashboard");
+    if (user && !rolesLoading) {
+      if (isForeman) {
+        navigate("/timeclock");
+      } else {
+        navigate("/dashboard");
+      }
     }
-  }, [user, navigate]);
+  }, [user, isForeman, rolesLoading, navigate]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();

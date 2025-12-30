@@ -440,6 +440,7 @@ export const EmployeeEditDialog = ({ open, onOpenChange, employee, onSave }: Emp
                 </SelectTrigger>
                 <SelectContent>
                   <SelectItem value="employee">Employee</SelectItem>
+                  <SelectItem value="foreman">Foreman</SelectItem>
                   <SelectItem value="supervisor">Supervisor</SelectItem>
                   <SelectItem value="admin">Admin</SelectItem>
                 </SelectContent>
