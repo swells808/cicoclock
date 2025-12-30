@@ -55,14 +55,15 @@ const Timeclock = () => {
       }
       
       // Check active time entry
+      // Query by profile_id to support employees without auth accounts
       const { data, error } = await supabase
         .from('time_entries')
         .select('*')
-        .eq('user_id', authenticatedEmployee.user_id)
+        .eq('profile_id', authenticatedEmployee.id)
         .is('end_time', null)
         .order('start_time', { ascending: false })
         .limit(1)
-        .single();
+        .maybeSingle();
       
       const hasActiveEntry = data && !error;
       setActiveTimeEntry(hasActiveEntry ? data : null);
@@ -194,9 +195,10 @@ const Timeclock = () => {
   const uploadPhoto = async (photoBlob: Blob, action: 'clock_in' | 'clock_out'): Promise<string> => {
     if (!company || !authenticatedEmployee) throw new Error('Company or employee not found');
     const timestamp = new Date().toISOString().replace(/:/g, '-').replace(/\./g, '-');
-    const userId = authenticatedEmployee.user_id.toUpperCase();
+    // Use profile id (always available) instead of user_id (may be null)
+    const identifier = (authenticatedEmployee.id || authenticatedEmployee.user_id || 'unknown').toUpperCase();
     const actionPath = action === 'clock_in' ? 'clock-in' : 'clock-out';
-    const filePath = `${company.id}/${actionPath}/${timestamp}_${userId}.jpg`;
+    const filePath = `${company.id}/${actionPath}/${timestamp}_${identifier}.jpg`;
     const { error } = await supabase.storage.from('timeclock-photos').upload(filePath, photoBlob, { contentType: 'image/jpeg', upsert: false });
     if (error) throw error;
     return filePath;
@@ -259,10 +261,14 @@ const Timeclock = () => {
     // Get location data
     const location = await getCurrentLocation();
     
+    // Use profile_id as user_id fallback for employees without auth accounts
+    const userId = authenticatedEmployee.user_id || authenticatedEmployee.id;
+    
     const { data, error } = await supabase
       .from('time_entries')
       .insert({ 
-        user_id: authenticatedEmployee.user_id, 
+        user_id: userId,
+        profile_id: authenticatedEmployee.id,
         company_id: company.id, 
         start_time: new Date().toISOString(), 
         clock_in_photo_url: photoUrl,
@@ -347,7 +353,8 @@ const Timeclock = () => {
   const handleBreak = async () => {
     if (!authenticatedEmployee || !company) return;
     const now = new Date().toISOString();
-    await supabase.from('time_entries').insert({ user_id: authenticatedEmployee.user_id, company_id: company.id, start_time: now, end_time: now, duration_minutes: 0, is_break: true });
+    const userId = authenticatedEmployee.user_id || authenticatedEmployee.id;
+    await supabase.from('time_entries').insert({ user_id: userId, profile_id: authenticatedEmployee.id, company_id: company.id, start_time: now, end_time: now, duration_minutes: 0, is_break: true });
   };
 
   const handleClosePage = () => { setShowPasswordDialog(true); setPasswordError(null); };
