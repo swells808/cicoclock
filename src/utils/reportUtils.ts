@@ -234,9 +234,164 @@ export async function downloadUserAssets(user: ReportUser): Promise<void> {
   const qrBlob = await qrResponse.blob();
   zip.file(`${sanitizedName}_qrcode.png`, qrBlob);
   
+  // Generate and add badge image
+  const badgeBlob = await generateStandaloneBadge(user, badgeUrl);
+  if (badgeBlob) {
+    zip.file(`${sanitizedName}_badge.png`, badgeBlob);
+  }
+  
   // Download the zip
   const zipBlob = await zip.generateAsync({ type: "blob" });
   saveAs(zipBlob, `${sanitizedName}_assets.zip`);
+}
+
+async function generateStandaloneBadge(user: ReportUser, badgeUrl: string): Promise<Blob | null> {
+  try {
+    // Create badge element
+    const container = document.createElement('div');
+    container.style.cssText = `
+      position: fixed;
+      left: -9999px;
+      top: -9999px;
+      width: 324px;
+      height: 204px;
+      background: linear-gradient(135deg, #1e3a5f 0%, #2d5a87 100%);
+      border-radius: 12px;
+      padding: 16px;
+      font-family: system-ui, -apple-system, sans-serif;
+      color: white;
+      display: flex;
+      flex-direction: column;
+    `;
+    
+    // Header with name
+    const header = document.createElement('div');
+    header.style.cssText = `
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      margin-bottom: 12px;
+    `;
+    
+    // Photo or placeholder
+    const photoContainer = document.createElement('div');
+    photoContainer.style.cssText = `
+      width: 64px;
+      height: 64px;
+      border-radius: 50%;
+      overflow: hidden;
+      background: rgba(255,255,255,0.2);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      flex-shrink: 0;
+    `;
+    
+    if (user.avatar) {
+      const img = document.createElement('img');
+      img.src = user.avatar;
+      img.crossOrigin = 'anonymous';
+      img.style.cssText = 'width: 100%; height: 100%; object-fit: cover;';
+      photoContainer.appendChild(img);
+      // Wait for image to load
+      await new Promise((resolve) => {
+        img.onload = resolve;
+        img.onerror = resolve;
+      });
+    } else {
+      photoContainer.innerHTML = `
+        <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="rgba(255,255,255,0.6)" stroke-width="2">
+          <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"></path>
+          <circle cx="12" cy="7" r="4"></circle>
+        </svg>
+      `;
+    }
+    header.appendChild(photoContainer);
+    
+    // Name and details
+    const info = document.createElement('div');
+    info.style.cssText = 'flex: 1; min-width: 0;';
+    
+    const nameEl = document.createElement('div');
+    nameEl.style.cssText = 'font-size: 18px; font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;';
+    nameEl.textContent = user.name;
+    info.appendChild(nameEl);
+    
+    if (user.department) {
+      const deptEl = document.createElement('div');
+      deptEl.style.cssText = 'font-size: 12px; opacity: 0.8; margin-top: 2px;';
+      deptEl.textContent = user.department;
+      info.appendChild(deptEl);
+    }
+    
+    if (user.employeeId) {
+      const idEl = document.createElement('div');
+      idEl.style.cssText = 'font-size: 11px; opacity: 0.6; margin-top: 2px;';
+      idEl.textContent = `ID: ${user.employeeId}`;
+      info.appendChild(idEl);
+    }
+    
+    header.appendChild(info);
+    container.appendChild(header);
+    
+    // Footer with QR code
+    const footer = document.createElement('div');
+    footer.style.cssText = `
+      display: flex;
+      justify-content: space-between;
+      align-items: flex-end;
+      flex: 1;
+    `;
+    
+    const roleEl = document.createElement('div');
+    roleEl.style.cssText = `
+      background: rgba(255,255,255,0.15);
+      padding: 4px 10px;
+      border-radius: 4px;
+      font-size: 11px;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+    `;
+    roleEl.textContent = user.role;
+    footer.appendChild(roleEl);
+    
+    // QR Code
+    const qrContainer = document.createElement('div');
+    qrContainer.style.cssText = `
+      width: 72px;
+      height: 72px;
+      background: white;
+      border-radius: 6px;
+      padding: 4px;
+    `;
+    const qrDataURL = await generateQRCodeDataURL(badgeUrl);
+    const qrImg = document.createElement('img');
+    qrImg.src = qrDataURL;
+    qrImg.style.cssText = 'width: 100%; height: 100%;';
+    qrContainer.appendChild(qrImg);
+    footer.appendChild(qrContainer);
+    
+    container.appendChild(footer);
+    document.body.appendChild(container);
+    
+    // Render to canvas
+    const canvas = await html2canvas(container, {
+      scale: 2,
+      useCORS: true,
+      allowTaint: true,
+      backgroundColor: null,
+      logging: false,
+    });
+    
+    container.remove();
+    
+    return new Promise((resolve) => {
+      canvas.toBlob((blob) => resolve(blob), 'image/png');
+    });
+  } catch (error) {
+    console.error('Error generating badge:', error);
+    return null;
+  }
 }
 
 export async function exportStandaloneQRCodes(users: ReportUser[], onProgress?: (progress: number) => void) {
