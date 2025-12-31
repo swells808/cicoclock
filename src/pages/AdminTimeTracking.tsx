@@ -78,7 +78,7 @@ interface SignedUrls {
 }
 
 const AdminTimeTracking: React.FC = () => {
-  const { isAdmin, isLoading: roleLoading } = useUserRole();
+  const { isAdmin, isForeman, isLoading: roleLoading } = useUserRole();
   const { company } = useCompany();
   const { data: companyFeatures } = useCompanyFeatures();
   const [selectedDate, setSelectedDate] = useState<Date>(new Date());
@@ -281,7 +281,8 @@ const AdminTimeTracking: React.FC = () => {
     );
   }
 
-  if (!isAdmin) {
+  // Allow admins and foremen (foremen get read-only access)
+  if (!isAdmin && !isForeman) {
     return (
       <DashboardLayout>
         <div className="py-8 px-4">
@@ -289,7 +290,7 @@ const AdminTimeTracking: React.FC = () => {
             <AlertCircle className="h-4 w-4" />
             <AlertTitle>Access Denied</AlertTitle>
             <AlertDescription>
-              You must be an administrator to access this page.
+              You must be an administrator or foreman to access this page.
             </AlertDescription>
           </Alert>
         </div>
@@ -424,23 +425,25 @@ const AdminTimeTracking: React.FC = () => {
                 <TimeEntryTimelineCard
                   key={transformedEntry.id}
                   entry={transformedEntry}
-                  onEdit={() => handleEdit(filteredEntries[index])}
+                  onEdit={isAdmin ? () => handleEdit(filteredEntries[index]) : undefined}
                 />
               ))}
             </div>
           )}
         </div>
 
-        <EditTimeEntryDialog
-          open={editDialogOpen}
-          onOpenChange={setEditDialogOpen}
-          entry={editingEntry}
-          onSuccess={() => {
-            refetchEntries();
-            setEditDialogOpen(false);
-            setEditingEntry(null);
-          }}
-        />
+        {isAdmin && (
+          <EditTimeEntryDialog
+            open={editDialogOpen}
+            onOpenChange={setEditDialogOpen}
+            entry={editingEntry}
+            onSuccess={() => {
+              refetchEntries();
+              setEditDialogOpen(false);
+              setEditingEntry(null);
+            }}
+          />
+        )}
       </div>
     </DashboardLayout>
   );
