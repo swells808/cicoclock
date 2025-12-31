@@ -155,7 +155,7 @@ export const EmployeeEditDialog = ({ open, onOpenChange, employee, onSave }: Emp
           if (existingRole) {
             await supabase
               .from("user_roles")
-              .update({ role: role as "admin" | "supervisor" | "employee" })
+              .update({ role: role as "admin" | "supervisor" | "employee" | "foreman" })
               .eq("id", existingRole.id);
           } else {
             await supabase
@@ -163,7 +163,7 @@ export const EmployeeEditDialog = ({ open, onOpenChange, employee, onSave }: Emp
               .insert({
                 user_id: userId,
                 profile_id: employee.id,
-                role: role as "admin" | "supervisor" | "employee",
+                role: role as "admin" | "supervisor" | "employee" | "foreman",
               });
           }
         }
