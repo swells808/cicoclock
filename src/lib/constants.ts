@@ -1,6 +1,9 @@
 export const APP_NAME = "CICO";
 export const APP_DESCRIPTION = "Time Tracking Made Simple";
 
+// Production base URL for badge QR codes - always use the custom domain
+export const PRODUCTION_BASE_URL = "https://cicotimeclock.com";
+
 export const ROUTES = {
   HOME: "/",
   LOGIN: "/login",
