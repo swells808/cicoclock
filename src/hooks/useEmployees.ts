@@ -58,6 +58,7 @@ export const useEmployees = () => {
     if (!company?.id) return false;
 
     try {
+      // Use the authenticate-pin edge function which verifies PIN for the company
       const { data, error } = await supabase.functions.invoke('authenticate-pin', {
         body: {
           company_id: company.id,
@@ -67,7 +68,8 @@ export const useEmployees = () => {
 
       if (error) throw error;
 
-      return data?.success === true && data?.employee?.profile_id === employeeId;
+      // Check if the authenticated user matches the selected employee
+      return data?.success === true && data?.user?.profile_id === employeeId;
     } catch (err) {
       console.error('PIN authentication error:', err);
       return false;
