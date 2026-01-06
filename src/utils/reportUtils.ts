@@ -3,6 +3,7 @@ import { saveAs } from "file-saver";
 import QRCode from "qrcode";
 import html2canvas from "html2canvas";
 import { format } from "date-fns";
+import { getBadgeUrl } from "./badgeUrlUtils";
 
 // Type definitions to avoid circular imports
 export interface ReportUser {
@@ -228,7 +229,7 @@ export async function downloadUserAssets(user: ReportUser): Promise<void> {
   }
   
   // Generate and add QR code
-  const badgeUrl = `${window.location.origin}/badge/${user.id}`;
+  const badgeUrl = getBadgeUrl(user.id);
   const qrDataURL = await generateQRCodeDataURL(badgeUrl);
   const qrResponse = await fetch(qrDataURL);
   const qrBlob = await qrResponse.blob();
@@ -399,7 +400,7 @@ export async function exportStandaloneQRCodes(users: ReportUser[], onProgress?: 
 
   for (let i = 0; i < users.length; i++) {
     const user = users[i];
-    const badgeUrl = `${window.location.origin}/badge/${user.id}`;
+    const badgeUrl = getBadgeUrl(user.id);
     const qrDataURL = await generateQRCodeDataURL(badgeUrl);
     const response = await fetch(qrDataURL);
     const blob = await response.blob();

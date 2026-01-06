@@ -1,6 +1,7 @@
 import { forwardRef, useEffect, useState } from "react";
 import QRCode from "qrcode";
 import { User } from "lucide-react";
+import { getBadgeUrl } from "@/utils/badgeUrlUtils";
 
 interface BadgeConfig {
   width: number;
@@ -53,7 +54,7 @@ export const BadgePreview = forwardRef<HTMLDivElement, BadgePreviewProps>(
     useEffect(() => {
       const generateQR = async () => {
         try {
-          const badgeUrl = `${window.location.origin}/badge/sample-id`;
+          const badgeUrl = getBadgeUrl("sample-id");
           const dataUrl = await QRCode.toDataURL(badgeUrl, {
             width: config.elements.qrCode.width * 2,
             margin: 1,
