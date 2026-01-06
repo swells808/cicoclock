@@ -181,6 +181,20 @@ export const UserDialog = ({ open, onOpenChange, user, onSave }: UserDialogProps
           if (error) throw error;
           if (data?.error) throw new Error(data.error);
         } else {
+          // Auto-generate PIN if not provided
+          let autoPin = formData.pin;
+          if (!autoPin) {
+            if (formData.phone) {
+              const digitsOnly = formData.phone.replace(/\D/g, '');
+              if (digitsOnly.length >= 4) {
+                autoPin = digitsOnly.slice(-4);
+              }
+            }
+            if (!autoPin && formData.employee_id) {
+              autoPin = formData.employee_id.slice(-4);
+            }
+          }
+
           // Create profile without auth account (for timeclock-only employees)
           const { data: profile, error: profileError } = await supabase
             .from('profiles')
@@ -194,7 +208,7 @@ export const UserDialog = ({ open, onOpenChange, user, onSave }: UserDialogProps
               department_id: formData.department_id || null,
               status: formData.status,
               employee_id: formData.employee_id || null,
-              pin: formData.pin || null,
+              pin: autoPin || null,
               date_of_hire: dateOfHire ? format(dateOfHire, 'yyyy-MM-dd') : null,
               avatar_url: avatarUrl || null,
             })
