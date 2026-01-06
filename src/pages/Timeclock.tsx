@@ -8,6 +8,7 @@ import { TimeclockMainCard } from "@/components/timeclock/TimeclockMainCard";
 import { TimeclockFooter } from "@/components/timeclock/TimeclockFooter";
 import { PinInput } from "@/components/timeclock/PinInput";
 import { QRScanner } from "@/components/task-checkin/QRScanner";
+import { ManualEmployeeInput } from "@/components/timeclock/ManualEmployeeInput";
 import { Button } from "@/components/ui/button";
 import { useEmployees } from "@/hooks/useEmployees";
 import { useCompany } from "@/contexts/CompanyContext";
@@ -27,16 +28,20 @@ const Timeclock = () => {
   const [showPasswordDialog, setShowPasswordDialog] = useState(false);
   const [showPinInput, setShowPinInput] = useState(false);
   const [showBadgeScanner, setShowBadgeScanner] = useState(false);
+  const [showManualInput, setShowManualInput] = useState(false);
   const [checkingPassword, setCheckingPassword] = useState(false);
   const [checkingPin, setCheckingPin] = useState(false);
   const [scanningBadge, setScanningBadge] = useState(false);
+  const [lookingUpEmployee, setLookingUpEmployee] = useState(false);
   const [passwordError, setPasswordError] = useState<string | null>(null);
   const [pinError, setPinError] = useState<string | null>(null);
+  const [lookupError, setLookupError] = useState<string | null>(null);
   const [activeTimeEntry, setActiveTimeEntry] = useState<any>(null);
   const [clockStatus, setClockStatus] = useState<'out' | 'in'>('out');
   const [showPhotoCapture, setShowPhotoCapture] = useState(false);
   const [photoAction, setPhotoAction] = useState<'clock_in' | 'clock_out' | null>(null);
   const [isProcessing, setIsProcessing] = useState(false);
+  const [manualLookupEmployee, setManualLookupEmployee] = useState<any>(null);
   
   // Track if we've already triggered auto-clock for this authenticated employee
   const autoClockTriggeredRef = useRef<string | null>(null);
@@ -101,6 +106,9 @@ const Timeclock = () => {
     setShowPhotoCapture(false);
     setPhotoAction(null);
     setIsProcessing(false);
+    setManualLookupEmployee(null);
+    setShowManualInput(false);
+    setLookupError(null);
     autoClockTriggeredRef.current = null;
   };
 
@@ -118,13 +126,91 @@ const Timeclock = () => {
     setPinError(null);
     try {
       const success = await authenticatePin(selectedEmployee, pin);
-      if (success) { const employee = employees.find(emp => emp.id === selectedEmployee); setAuthenticatedEmployee(employee); setShowPinInput(false); return true; }
+      if (success) { 
+        // If we came from manual lookup, use that employee data
+        if (manualLookupEmployee) {
+          setAuthenticatedEmployee(manualLookupEmployee);
+        } else {
+          const employee = employees.find(emp => emp.id === selectedEmployee); 
+          setAuthenticatedEmployee(employee);
+        }
+        setShowPinInput(false); 
+        return true; 
+      }
       else { setPinError("Invalid PIN. Please try again."); return false; }
     } catch (error) { setPinError("Authentication failed. Please try again."); return false; }
     finally { setCheckingPin(false); }
   };
 
-  const handlePinCancel = () => { setShowPinInput(false); setSelectedEmployee(""); setPinError(null); };
+  const handlePinCancel = () => { 
+    setShowPinInput(false); 
+    setSelectedEmployee(""); 
+    setPinError(null); 
+    setManualLookupEmployee(null);
+    setShowManualInput(false);
+  };
+
+  // Handle manual employee lookup by ID or phone
+  const handleManualLookup = async (identifier: string) => {
+    if (!company?.id) {
+      setLookupError("Company not loaded");
+      return;
+    }
+
+    setLookingUpEmployee(true);
+    setLookupError(null);
+
+    try {
+      console.log('[Timeclock] Looking up employee by identifier:', identifier);
+      
+      const { data, error } = await supabase.functions.invoke('lookup-employee', {
+        body: { company_id: company.id, identifier }
+      });
+
+      if (error) {
+        console.error('[Timeclock] Lookup error:', error);
+        setLookupError("Lookup failed. Please try again.");
+        return;
+      }
+
+      if (!data?.found) {
+        setLookupError("Employee not found. Check your ID or phone number.");
+        return;
+      }
+
+      console.log('[Timeclock] Found employee:', data.employee);
+      
+      // Store the looked up employee for PIN verification
+      const lookupResult = {
+        id: data.employee.id,
+        user_id: data.employee.user_id,
+        display_name: data.employee.display_name,
+        first_name: data.employee.first_name,
+        last_name: data.employee.last_name,
+        has_pin: data.employee.has_pin,
+        pin: data.employee.has_pin ? 'exists' : null // Mark that PIN exists without exposing it
+      };
+      
+      setManualLookupEmployee(lookupResult);
+      setSelectedEmployee(lookupResult.id);
+      setShowManualInput(false);
+      
+      // Always require PIN for manual entry
+      setShowPinInput(true);
+      toast({ title: "Employee Found", description: `Please enter your PIN, ${lookupResult.display_name}` });
+
+    } catch (err) {
+      console.error('[Timeclock] Manual lookup error:', err);
+      setLookupError("An error occurred. Please try again.");
+    } finally {
+      setLookingUpEmployee(false);
+    }
+  };
+
+  const handleManualCancel = () => {
+    setShowManualInput(false);
+    setLookupError(null);
+  };
 
   const handleBadgeScan = async (scannedValue: string) => {
     console.log('[Timeclock] handleBadgeScan called with:', scannedValue);
@@ -400,12 +486,41 @@ const Timeclock = () => {
         {showBadgeScanner ? (
           <section className="max-w-md mx-auto">
             <QRScanner title="Scan Employee Badge" description="Scan your badge QR code or enter badge ID" onScan={handleBadgeScan} isLoading={scanningBadge} placeholder="Enter Badge ID or scan QR code" preferredCamera="user" />
-            <div className="text-center mt-4"><Button variant="ghost" onClick={() => setShowBadgeScanner(false)}>Use Dropdown Instead</Button></div>
+            <div className="text-center mt-4"><Button variant="ghost" onClick={() => setShowBadgeScanner(false)}>Back</Button></div>
           </section>
+        ) : showManualInput ? (
+          <ManualEmployeeInput 
+            onLookup={handleManualLookup} 
+            loading={lookingUpEmployee} 
+            error={lookupError} 
+            onCancel={handleManualCancel} 
+          />
         ) : showPinInput ? (
-          <section className="max-w-md mx-auto"><PinInput onPinEntered={handlePinEntered} employeeName={employees.find(emp => emp.id === selectedEmployee)?.display_name || "Employee"} loading={checkingPin} error={pinError} onCancel={handlePinCancel} /></section>
+          <section className="max-w-md mx-auto">
+            <PinInput 
+              onPinEntered={handlePinEntered} 
+              employeeName={manualLookupEmployee?.display_name || employees.find(emp => emp.id === selectedEmployee)?.display_name || "Employee"} 
+              loading={checkingPin} 
+              error={pinError} 
+              onCancel={handlePinCancel} 
+            />
+          </section>
         ) : (
-          <TimeclockMainCard selectedEmployee={selectedEmployee} setSelectedEmployee={handleEmployeeSelect} isActionEnabled={isActionEnabled} employees={employees} employeesLoading={employeesLoading} authenticatedEmployee={authenticatedEmployee} clockStatus={clockStatus} onClockIn={handleClockIn} onClockOut={handleClockOut} onBreak={handleBreak} onScanBadge={() => setShowBadgeScanner(true)} t={t} />
+          <TimeclockMainCard 
+            selectedEmployee={selectedEmployee} 
+            setSelectedEmployee={handleEmployeeSelect} 
+            isActionEnabled={isActionEnabled} 
+            employees={employees} 
+            employeesLoading={employeesLoading} 
+            authenticatedEmployee={authenticatedEmployee} 
+            clockStatus={clockStatus} 
+            onClockIn={handleClockIn} 
+            onClockOut={handleClockOut} 
+            onBreak={handleBreak} 
+            onScanBadge={() => setShowBadgeScanner(true)} 
+            onManualEntry={() => setShowManualInput(true)}
+            t={t} 
+          />
         )}
       </main>
       <TimeclockFooter onClosePage={handleClosePage} closeDisabled={false} t={t} />

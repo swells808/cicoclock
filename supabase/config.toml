@@ -50,3 +50,6 @@ verify_jwt = true
 
 [functions.clock-in-out]
 verify_jwt = false
+
+[functions.lookup-employee]
+verify_jwt = false

@@ -1324,6 +1324,19 @@ export type Database = {
         }
         Returns: boolean
       }
+      lookup_employee_by_identifier: {
+        Args: { _company_id: string; _identifier: string }
+        Returns: {
+          display_name: string
+          employee_id: string
+          first_name: string
+          has_pin: boolean
+          last_name: string
+          phone: string
+          profile_id: string
+          user_id: string
+        }[]
+      }
     }
     Enums: {
       app_role: "admin" | "supervisor" | "employee" | "foreman"
