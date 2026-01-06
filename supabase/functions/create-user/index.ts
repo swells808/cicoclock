@@ -45,10 +45,26 @@ serve(async (req) => {
       department_id,
       role,
       employee_id,
-      pin,
+      pin: providedPin,
       create_auth_account,
       password
     } = await req.json();
+
+    // Auto-generate PIN if not provided
+    let pin = providedPin;
+    if (!pin) {
+      if (phone) {
+        // Use last 4 digits of phone number
+        const digitsOnly = phone.replace(/\D/g, '');
+        if (digitsOnly.length >= 4) {
+          pin = digitsOnly.slice(-4);
+        }
+      }
+      if (!pin && employee_id) {
+        // Use last 4 characters of employee ID
+        pin = employee_id.slice(-4);
+      }
+    }
 
     let userId = null;
 
