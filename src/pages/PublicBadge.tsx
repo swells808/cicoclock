@@ -65,7 +65,7 @@ const PublicBadge: React.FC = () => {
     try {
       console.log('[PUBLIC_BADGE] Calling generate-badge function...');
       const { data, error: fetchError } = await supabase.functions.invoke('generate-badge', {
-        body: { profileId }
+        body: { profile_id: profileId }
       });
 
       console.log('[PUBLIC_BADGE] Function response:', {
