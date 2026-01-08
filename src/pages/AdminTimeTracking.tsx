@@ -245,7 +245,7 @@ const AdminTimeTracking: React.FC = () => {
 
   // Transform entries to TimeEntryForCard format
   const transformedEntries: TimeEntryForCard[] = useMemo(() => {
-    return filteredEntries.map(entry => ({
+    const entries = filteredEntries.map(entry => ({
       id: entry.id,
       start_time: entry.start_time,
       end_time: entry.end_time,
@@ -264,6 +264,17 @@ const AdminTimeTracking: React.FC = () => {
       signedClockInUrl: signedUrls[entry.id]?.clockIn,
       signedClockOutUrl: signedUrls[entry.id]?.clockOut,
     }));
+
+    // Sort: Active (no end_time) first, then completed, both alphabetically by employee name
+    return entries.sort((a, b) => {
+      const aIsActive = !a.end_time;
+      const bIsActive = !b.end_time;
+      
+      if (aIsActive && !bIsActive) return -1;
+      if (!aIsActive && bIsActive) return 1;
+      
+      return a.employeeName.localeCompare(b.employeeName);
+    });
   }, [filteredEntries, signedUrls]);
 
   const handleEdit = (entry: TimeEntry) => {
@@ -421,11 +432,14 @@ const AdminTimeTracking: React.FC = () => {
             </Card>
           ) : (
             <div className="space-y-4">
-              {transformedEntries.map((transformedEntry, index) => (
+              {transformedEntries.map((transformedEntry) => (
                 <TimeEntryTimelineCard
                   key={transformedEntry.id}
                   entry={transformedEntry}
-                  onEdit={isAdmin ? () => handleEdit(filteredEntries[index]) : undefined}
+                  onEdit={isAdmin ? () => {
+                    const originalEntry = filteredEntries.find(e => e.id === transformedEntry.id);
+                    if (originalEntry) handleEdit(originalEntry);
+                  } : undefined}
                 />
               ))}
             </div>
