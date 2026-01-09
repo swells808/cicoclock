@@ -89,7 +89,7 @@ export const RetroactiveClockoutDialog: React.FC<RetroactiveClockoutDialogProps>
         <div className="grid gap-4 py-4">
           <div className="grid gap-2">
             <Label htmlFor="date">Clock Out Date</Label>
-            <Popover>
+            <Popover modal={true}>
               <PopoverTrigger asChild>
                 <Button
                   id="date"
@@ -109,7 +109,7 @@ export const RetroactiveClockoutDialog: React.FC<RetroactiveClockoutDialogProps>
                   selected={date}
                   onSelect={setDate}
                   disabled={(d) => (minDate ? d < minDate : false) || d > new Date()}
-                  initialFocus
+                  className="pointer-events-auto"
                 />
               </PopoverContent>
             </Popover>
