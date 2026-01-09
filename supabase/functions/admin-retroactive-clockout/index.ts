@@ -47,11 +47,11 @@ serve(async (req) => {
       );
     }
 
-    const { time_entry_id, new_end_time, reason } = await req.json();
+    const { time_entry_id, new_start_time, new_end_time, reason } = await req.json();
 
-    if (!time_entry_id || !new_end_time) {
+    if (!time_entry_id || !new_start_time || !new_end_time) {
       return new Response(
-        JSON.stringify({ error: 'time_entry_id and new_end_time are required' }),
+        JSON.stringify({ error: 'time_entry_id, new_start_time, and new_end_time are required' }),
         { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
       );
     }
@@ -69,13 +69,14 @@ serve(async (req) => {
       );
     }
 
-    const startTime = new Date(timeEntry.start_time);
+    const startTime = new Date(new_start_time);
     const endTime = new Date(new_end_time);
     const durationMinutes = Math.round((endTime.getTime() - startTime.getTime()) / 60000);
 
     const { error: updateError } = await supabase
       .from('time_entries')
       .update({
+        start_time: new_start_time,
         end_time: new_end_time,
         duration_minutes: durationMinutes
       })
@@ -96,9 +97,11 @@ serve(async (req) => {
         affected_user_id: timeEntry.user_id,
         time_entry_id: time_entry_id,
         company_id: timeEntry.company_id,
+        old_start_time: timeEntry.start_time,
+        new_start_time: new_start_time,
         old_end_time: timeEntry.end_time,
         new_end_time: new_end_time,
-        action_type: 'retroactive_clockout',
+        action_type: 'time_entry_edit',
         reason
       });
 

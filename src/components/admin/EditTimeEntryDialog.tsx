@@ -102,10 +102,11 @@ export const EditTimeEntryDialog: React.FC<EditTimeEntryDialogProps> = ({
         durationMinutes = Math.round((newEndTime.getTime() - newStartTime.getTime()) / 60000);
       }
 
-      // Use the edge function for retroactive changes
+      // Use the edge function for time entry edits
       const response = await supabase.functions.invoke("admin-retroactive-clockout", {
         body: {
           time_entry_id: entry.id,
+          new_start_time: newStartTime.toISOString(),
           new_end_time: newEndTime?.toISOString() || new Date().toISOString(),
           reason,
         },
