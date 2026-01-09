@@ -153,7 +153,7 @@ export const EditTimeEntryDialog: React.FC<EditTimeEntryDialogProps> = ({
                     {startDate ? format(startDate, "MMM d, yyyy") : <span>Date</span>}
                   </Button>
                 </PopoverTrigger>
-                <PopoverContent className="w-auto p-0" align="start">
+                <PopoverContent className="w-auto p-0" align="start" onInteractOutside={(e) => e.preventDefault()}>
                   <Calendar
                     mode="single"
                     selected={startDate}
@@ -193,7 +193,7 @@ export const EditTimeEntryDialog: React.FC<EditTimeEntryDialogProps> = ({
                     {endDate ? format(endDate, "MMM d, yyyy") : <span>Date</span>}
                   </Button>
                 </PopoverTrigger>
-                <PopoverContent className="w-auto p-0" align="start">
+                <PopoverContent className="w-auto p-0" align="start" onInteractOutside={(e) => e.preventDefault()}>
                   <Calendar
                     mode="single"
                     selected={endDate}
