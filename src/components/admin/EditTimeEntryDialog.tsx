@@ -16,7 +16,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { Calendar } from "@/components/ui/calendar";
 import {
   Popover,
-  PopoverContentWithoutPortal,
+  PopoverContent,
   PopoverTrigger,
 } from "@/components/ui/popover";
 import { cn } from "@/lib/utils";
@@ -140,7 +140,7 @@ export const EditTimeEntryDialog: React.FC<EditTimeEntryDialogProps> = ({
           <div className="space-y-2">
             <Label className="text-foreground font-medium">Clock In</Label>
             <div className="grid grid-cols-2 gap-2">
-              <Popover>
+              <Popover modal={true}>
                 <PopoverTrigger asChild>
                   <Button
                     variant="outline"
@@ -153,14 +153,15 @@ export const EditTimeEntryDialog: React.FC<EditTimeEntryDialogProps> = ({
                     {startDate ? format(startDate, "MMM d, yyyy") : <span>Date</span>}
                   </Button>
                 </PopoverTrigger>
-                <PopoverContentWithoutPortal className="w-auto p-0" align="start">
+                <PopoverContent className="w-auto p-0" align="start">
                   <Calendar
                     mode="single"
                     selected={startDate}
                     onSelect={setStartDate}
                     disabled={(date) => date > new Date()}
+                    className="pointer-events-auto"
                   />
-                </PopoverContentWithoutPortal>
+                </PopoverContent>
               </Popover>
               <div className="relative">
                 <Clock className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
@@ -178,7 +179,7 @@ export const EditTimeEntryDialog: React.FC<EditTimeEntryDialogProps> = ({
           <div className="space-y-2">
             <Label className="text-foreground font-medium">Clock Out</Label>
             <div className="grid grid-cols-2 gap-2">
-              <Popover>
+              <Popover modal={true}>
                 <PopoverTrigger asChild>
                   <Button
                     variant="outline"
@@ -191,14 +192,15 @@ export const EditTimeEntryDialog: React.FC<EditTimeEntryDialogProps> = ({
                     {endDate ? format(endDate, "MMM d, yyyy") : <span>Date</span>}
                   </Button>
                 </PopoverTrigger>
-                <PopoverContentWithoutPortal className="w-auto p-0" align="start">
+                <PopoverContent className="w-auto p-0" align="start">
                   <Calendar
                     mode="single"
                     selected={endDate}
                     onSelect={setEndDate}
                     disabled={(date) => (startDate ? date < startDate : false) || date > new Date()}
+                    className="pointer-events-auto"
                   />
-                </PopoverContentWithoutPortal>
+                </PopoverContent>
               </Popover>
               <div className="relative">
                 <Clock className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
