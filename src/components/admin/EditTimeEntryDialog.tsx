@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from "react";
 import { format } from "date-fns";
-import { Calendar as CalendarIcon, Clock } from "lucide-react";
+import { Clock } from "lucide-react";
 import {
   Dialog,
   DialogContent,
@@ -13,13 +13,6 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
-import { Calendar } from "@/components/ui/calendar";
-import {
-  Popover,
-  PopoverContent,
-  PopoverTrigger,
-} from "@/components/ui/popover";
-import { cn } from "@/lib/utils";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
 
@@ -49,9 +42,9 @@ export const EditTimeEntryDialog: React.FC<EditTimeEntryDialogProps> = ({
   entry,
   onSuccess,
 }) => {
-  const [startDate, setStartDate] = useState<Date | undefined>();
+  const [startDate, setStartDate] = useState<string>("");
   const [startTime, setStartTime] = useState("");
-  const [endDate, setEndDate] = useState<Date | undefined>();
+  const [endDate, setEndDate] = useState<string>("");
   const [endTime, setEndTime] = useState("");
   const [reason, setReason] = useState("");
   const [isLoading, setIsLoading] = useState(false);
@@ -59,15 +52,15 @@ export const EditTimeEntryDialog: React.FC<EditTimeEntryDialogProps> = ({
   useEffect(() => {
     if (entry) {
       const start = new Date(entry.start_time);
-      setStartDate(start);
+      setStartDate(format(start, "yyyy-MM-dd"));
       setStartTime(format(start, "HH:mm"));
       
       if (entry.end_time) {
         const end = new Date(entry.end_time);
-        setEndDate(end);
+        setEndDate(format(end, "yyyy-MM-dd"));
         setEndTime(format(end, "HH:mm"));
       } else {
-        setEndDate(undefined);
+        setEndDate("");
         setEndTime("");
       }
       setReason("");
@@ -89,17 +82,15 @@ export const EditTimeEntryDialog: React.FC<EditTimeEntryDialogProps> = ({
     setIsLoading(true);
     try {
       const [startHours, startMins] = startTime.split(":").map(Number);
-      const newStartTime = new Date(startDate);
+      const newStartTime = new Date(startDate + "T00:00:00");
       newStartTime.setHours(startHours, startMins, 0, 0);
 
       let newEndTime: Date | null = null;
-      let durationMinutes: number | null = null;
 
       if (endDate && endTime) {
         const [endHours, endMins] = endTime.split(":").map(Number);
-        newEndTime = new Date(endDate);
+        newEndTime = new Date(endDate + "T00:00:00");
         newEndTime.setHours(endHours, endMins, 0, 0);
-        durationMinutes = Math.round((newEndTime.getTime() - newStartTime.getTime()) / 60000);
       }
 
       // Use the edge function for time entry edits
@@ -125,6 +116,8 @@ export const EditTimeEntryDialog: React.FC<EditTimeEntryDialogProps> = ({
     }
   };
 
+  const todayStr = format(new Date(), "yyyy-MM-dd");
+
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="sm:max-w-[500px]">
@@ -140,29 +133,12 @@ export const EditTimeEntryDialog: React.FC<EditTimeEntryDialogProps> = ({
           <div className="space-y-2">
             <Label className="text-foreground font-medium">Clock In</Label>
             <div className="grid grid-cols-2 gap-2">
-              <Popover modal={true}>
-                <PopoverTrigger asChild>
-                  <Button
-                    variant="outline"
-                    className={cn(
-                      "justify-start text-left font-normal",
-                      !startDate && "text-muted-foreground"
-                    )}
-                  >
-                    <CalendarIcon className="mr-2 h-4 w-4" />
-                    {startDate ? format(startDate, "MMM d, yyyy") : <span>Date</span>}
-                  </Button>
-                </PopoverTrigger>
-                <PopoverContent className="w-auto p-0" align="start">
-                  <Calendar
-                    mode="single"
-                    selected={startDate}
-                    onSelect={setStartDate}
-                    disabled={(date) => date > new Date()}
-                    className="pointer-events-auto"
-                  />
-                </PopoverContent>
-              </Popover>
+              <Input
+                type="date"
+                value={startDate}
+                onChange={(e) => setStartDate(e.target.value)}
+                max={todayStr}
+              />
               <div className="relative">
                 <Clock className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
                 <Input
@@ -179,29 +155,13 @@ export const EditTimeEntryDialog: React.FC<EditTimeEntryDialogProps> = ({
           <div className="space-y-2">
             <Label className="text-foreground font-medium">Clock Out</Label>
             <div className="grid grid-cols-2 gap-2">
-              <Popover modal={true}>
-                <PopoverTrigger asChild>
-                  <Button
-                    variant="outline"
-                    className={cn(
-                      "justify-start text-left font-normal",
-                      !endDate && "text-muted-foreground"
-                    )}
-                  >
-                    <CalendarIcon className="mr-2 h-4 w-4" />
-                    {endDate ? format(endDate, "MMM d, yyyy") : <span>Date</span>}
-                  </Button>
-                </PopoverTrigger>
-                <PopoverContent className="w-auto p-0" align="start">
-                  <Calendar
-                    mode="single"
-                    selected={endDate}
-                    onSelect={setEndDate}
-                    disabled={(date) => (startDate ? date < startDate : false) || date > new Date()}
-                    className="pointer-events-auto"
-                  />
-                </PopoverContent>
-              </Popover>
+              <Input
+                type="date"
+                value={endDate}
+                onChange={(e) => setEndDate(e.target.value)}
+                min={startDate || undefined}
+                max={todayStr}
+              />
               <div className="relative">
                 <Clock className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
                 <Input

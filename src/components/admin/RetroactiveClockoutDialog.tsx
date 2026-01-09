@@ -1,6 +1,6 @@
 import React, { useState } from "react";
 import { format } from "date-fns";
-import { Calendar as CalendarIcon, Clock } from "lucide-react";
+import { Clock } from "lucide-react";
 import {
   Dialog,
   DialogContent,
@@ -13,13 +13,6 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
-import { Calendar } from "@/components/ui/calendar";
-import {
-  Popover,
-  PopoverContent,
-  PopoverTrigger,
-} from "@/components/ui/popover";
-import { cn } from "@/lib/utils";
 
 interface TimeEntry {
   id: string;
@@ -46,7 +39,7 @@ export const RetroactiveClockoutDialog: React.FC<RetroactiveClockoutDialogProps>
   onConfirm,
   isLoading,
 }) => {
-  const [date, setDate] = useState<Date | undefined>(new Date());
+  const [date, setDate] = useState(format(new Date(), "yyyy-MM-dd"));
   const [time, setTime] = useState(format(new Date(), "HH:mm"));
   const [reason, setReason] = useState("");
 
@@ -63,13 +56,14 @@ export const RetroactiveClockoutDialog: React.FC<RetroactiveClockoutDialogProps>
     if (!date) return;
 
     const [hours, minutes] = time.split(":").map(Number);
-    const endDateTime = new Date(date);
+    const endDateTime = new Date(date + "T00:00:00");
     endDateTime.setHours(hours, minutes, 0, 0);
 
     onConfirm(endDateTime.toISOString(), reason);
   };
 
-  const minDate = entry ? new Date(entry.start_time) : undefined;
+  const minDate = entry ? format(new Date(entry.start_time), "yyyy-MM-dd") : undefined;
+  const todayStr = format(new Date(), "yyyy-MM-dd");
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
@@ -89,30 +83,14 @@ export const RetroactiveClockoutDialog: React.FC<RetroactiveClockoutDialogProps>
         <div className="grid gap-4 py-4">
           <div className="grid gap-2">
             <Label htmlFor="date">Clock Out Date</Label>
-            <Popover modal={true}>
-              <PopoverTrigger asChild>
-                <Button
-                  id="date"
-                  variant="outline"
-                  className={cn(
-                    "justify-start text-left font-normal",
-                    !date && "text-muted-foreground"
-                  )}
-                >
-                  <CalendarIcon className="mr-2 h-4 w-4" />
-                  {date ? format(date, "PPP") : <span>Pick a date</span>}
-                </Button>
-              </PopoverTrigger>
-              <PopoverContent className="w-auto p-0" align="start">
-                <Calendar
-                  mode="single"
-                  selected={date}
-                  onSelect={setDate}
-                  disabled={(d) => (minDate ? d < minDate : false) || d > new Date()}
-                  className="pointer-events-auto"
-                />
-              </PopoverContent>
-            </Popover>
+            <Input
+              id="date"
+              type="date"
+              value={date}
+              onChange={(e) => setDate(e.target.value)}
+              min={minDate}
+              max={todayStr}
+            />
           </div>
 
           <div className="grid gap-2">
