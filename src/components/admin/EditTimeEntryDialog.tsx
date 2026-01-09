@@ -153,13 +153,17 @@ export const EditTimeEntryDialog: React.FC<EditTimeEntryDialogProps> = ({
                     {startDate ? format(startDate, "MMM d, yyyy") : <span>Date</span>}
                   </Button>
                 </PopoverTrigger>
-                <PopoverContent className="w-auto p-0" align="start" onInteractOutside={(e) => e.preventDefault()}>
+                <PopoverContent 
+                  className="w-auto p-0 pointer-events-auto" 
+                  align="start" 
+                  onInteractOutside={(e) => e.preventDefault()}
+                  onPointerDownOutside={(e) => e.preventDefault()}
+                >
                   <Calendar
                     mode="single"
                     selected={startDate}
                     onSelect={setStartDate}
                     disabled={(date) => date > new Date()}
-                    initialFocus
                     className="pointer-events-auto"
                   />
                 </PopoverContent>
@@ -193,13 +197,17 @@ export const EditTimeEntryDialog: React.FC<EditTimeEntryDialogProps> = ({
                     {endDate ? format(endDate, "MMM d, yyyy") : <span>Date</span>}
                   </Button>
                 </PopoverTrigger>
-                <PopoverContent className="w-auto p-0" align="start" onInteractOutside={(e) => e.preventDefault()}>
+                <PopoverContent 
+                  className="w-auto p-0 pointer-events-auto" 
+                  align="start" 
+                  onInteractOutside={(e) => e.preventDefault()}
+                  onPointerDownOutside={(e) => e.preventDefault()}
+                >
                   <Calendar
                     mode="single"
                     selected={endDate}
                     onSelect={setEndDate}
                     disabled={(date) => (startDate ? date < startDate : false) || date > new Date()}
-                    initialFocus
                     className="pointer-events-auto"
                   />
                 </PopoverContent>
