@@ -140,7 +140,7 @@ export const EditTimeEntryDialog: React.FC<EditTimeEntryDialogProps> = ({
           <div className="space-y-2">
             <Label className="text-foreground font-medium">Clock In</Label>
             <div className="grid grid-cols-2 gap-2">
-              <Popover>
+              <Popover modal={false}>
                 <PopoverTrigger asChild>
                   <Button
                     variant="outline"
@@ -180,7 +180,7 @@ export const EditTimeEntryDialog: React.FC<EditTimeEntryDialogProps> = ({
           <div className="space-y-2">
             <Label className="text-foreground font-medium">Clock Out</Label>
             <div className="grid grid-cols-2 gap-2">
-              <Popover>
+              <Popover modal={false}>
                 <PopoverTrigger asChild>
                   <Button
                     variant="outline"
