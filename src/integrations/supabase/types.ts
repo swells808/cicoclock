@@ -23,7 +23,9 @@ export type Database = {
           created_at: string
           id: string
           new_end_time: string
+          new_start_time: string | null
           old_end_time: string | null
+          old_start_time: string | null
           reason: string | null
           time_entry_id: string
           timestamp: string
@@ -36,7 +38,9 @@ export type Database = {
           created_at?: string
           id?: string
           new_end_time: string
+          new_start_time?: string | null
           old_end_time?: string | null
+          old_start_time?: string | null
           reason?: string | null
           time_entry_id: string
           timestamp?: string
@@ -49,7 +53,9 @@ export type Database = {
           created_at?: string
           id?: string
           new_end_time?: string
+          new_start_time?: string | null
           old_end_time?: string | null
+          old_start_time?: string | null
           reason?: string | null
           time_entry_id?: string
           timestamp?: string
