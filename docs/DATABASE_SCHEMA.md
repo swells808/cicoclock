@@ -776,23 +776,63 @@ WHERE end_time IS NULL;
 
 ## TypeScript Types
 
-The database types are auto-generated and available at:
-`src/integrations/supabase/types.ts`
+The full database types are included in the documentation package:
 
-Key types for mobile app:
+**File:** `docs/SUPABASE_TYPES.ts`
 
-```typescript
-import { Database } from '@/integrations/supabase/types';
+Copy this file to your Expo project at `src/integrations/supabase/types.ts` for type-safe development.
 
-type Profile = Database['public']['Tables']['profiles']['Row'];
-type TimeEntry = Database['public']['Tables']['time_entries']['Row'];
-type Project = Database['public']['Tables']['projects']['Row'];
-type TimeOffRequest = Database['public']['Tables']['time_off_requests']['Row'];
-type TaskActivity = Database['public']['Tables']['task_activities']['Row'];
-
-// Enums
-type AppRole = Database['public']['Enums']['app_role'];
-type TimeOffType = Database['public']['Enums']['time_off_type'];
-type TimeOffStatus = Database['public']['Enums']['time_off_status'];
-type TaskActionType = Database['public']['Enums']['task_action_type'];
+**Installation:**
+```bash
+# Copy to your Expo project
+cp docs/SUPABASE_TYPES.ts your-expo-project/src/integrations/supabase/types.ts
 ```
+
+**Usage:**
+```typescript
+import { 
+  Database, 
+  Tables, 
+  TablesInsert, 
+  Enums,
+  // Pre-exported type aliases
+  Profile,
+  TimeEntry,
+  Project,
+  AppRole,
+  TimeOffType
+} from '@/integrations/supabase/types';
+
+// Option 1: Use pre-exported aliases
+const profile: Profile = { ... };
+const entry: TimeEntry = { ... };
+
+// Option 2: Use helper types
+type MyProfile = Tables<'profiles'>;
+type NewTimeEntry = TablesInsert<'time_entries'>;
+type Role = Enums<'app_role'>;
+
+// Access enum constants for dropdowns
+import { Constants } from '@/integrations/supabase/types';
+
+const roleOptions = Constants.public.Enums.app_role;
+// ['admin', 'supervisor', 'employee', 'foreman']
+
+const timeOffTypes = Constants.public.Enums.time_off_type;
+// ['vacation', 'sick', 'personal', 'bereavement', 'other']
+```
+
+**Key Types for Mobile App:**
+
+| Type | Description |
+|------|-------------|
+| `Profile` | Employee profile data |
+| `TimeEntry` | Clock in/out records |
+| `Project` | Projects for time tracking |
+| `Company` | Company/tenant data |
+| `CompanyFeatures` | Feature flags per company |
+| `TimeOffRequest` | PTO requests |
+| `TaskActivity` | Task check-in records |
+| `AppRole` | User role enum |
+| `TimeOffType` | Time off type enum |
+| `TimeOffStatus` | Request status enum |
