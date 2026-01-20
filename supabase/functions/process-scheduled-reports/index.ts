@@ -417,33 +417,51 @@ function generateWeeklyPayrollHtml(
   `;
 }
 
-function getDateRange(frequency: string): { startDate: Date; endDate: Date; start: string; end: string } {
+function getDateRange(frequency: string, timezone: string): { startDate: Date; endDate: Date; start: string; end: string } {
+  // Get current time in the company's timezone
   const now = new Date();
+  
+  // Calculate offset for the timezone to determine "today" in their local time
+  const formatter = new Intl.DateTimeFormat('en-US', {
+    timeZone: timezone,
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+    hour: '2-digit',
+    minute: '2-digit',
+    hour12: false
+  });
+  
+  const parts = formatter.formatToParts(now);
+  const localYear = parseInt(parts.find(p => p.type === 'year')?.value || '2024');
+  const localMonth = parseInt(parts.find(p => p.type === 'month')?.value || '1') - 1;
+  const localDay = parseInt(parts.find(p => p.type === 'day')?.value || '1');
+  
+  // Create dates in UTC but representing local time boundaries
   let startDate: Date;
   let endDate: Date;
 
   switch (frequency) {
     case 'daily':
-      // Previous day
-      startDate = new Date(now);
-      startDate.setUTCDate(startDate.getUTCDate() - 1);
-      startDate.setUTCHours(0, 0, 0, 0);
-      endDate = new Date(startDate);
-      endDate.setUTCHours(23, 59, 59, 999);
+      // Previous day in local time
+      const yesterday = new Date(Date.UTC(localYear, localMonth, localDay - 1, 0, 0, 0, 0));
+      startDate = yesterday;
+      endDate = new Date(Date.UTC(localYear, localMonth, localDay - 1, 23, 59, 59, 999));
       break;
     case 'weekly':
-      // Previous week (Sunday to Saturday)
-      endDate = new Date(now);
-      endDate.setUTCDate(endDate.getUTCDate() - endDate.getUTCDay() - 1); // Last Saturday
-      endDate.setUTCHours(23, 59, 59, 999);
-      startDate = new Date(endDate);
-      startDate.setUTCDate(startDate.getUTCDate() - 6); // Previous Sunday
-      startDate.setUTCHours(0, 0, 0, 0);
+      // Previous week (Sunday to Saturday) in local time
+      const todayLocal = new Date(Date.UTC(localYear, localMonth, localDay));
+      const dayOfWeek = todayLocal.getUTCDay();
+      const lastSaturday = new Date(Date.UTC(localYear, localMonth, localDay - dayOfWeek - 1, 23, 59, 59, 999));
+      const lastSunday = new Date(Date.UTC(localYear, localMonth, localDay - dayOfWeek - 7, 0, 0, 0, 0));
+      startDate = lastSunday;
+      endDate = lastSaturday;
       break;
     case 'monthly':
-      // Previous month
-      startDate = new Date(now.getUTCFullYear(), now.getUTCMonth() - 1, 1);
-      endDate = new Date(now.getUTCFullYear(), now.getUTCMonth(), 0, 23, 59, 59, 999);
+      // Previous month in local time
+      startDate = new Date(Date.UTC(localYear, localMonth - 1, 1, 0, 0, 0, 0));
+      endDate = new Date(Date.UTC(localYear, localMonth, 0, 23, 59, 59, 999)); // Day 0 = last day of prev month
+      break;
       break;
     default:
       // Default to previous day
@@ -480,12 +498,12 @@ serve(async (req) => {
     console.log(`Processing scheduled reports at ${now.toISOString()}`);
     console.log(`Current UTC hour: ${currentHour}, day of week: ${currentDay}, day of month: ${currentDayOfMonth}`);
 
-    // Get all active scheduled reports with their recipients
+    // Get all active scheduled reports with their recipients and company timezone
     const { data: activeReports, error: reportsError } = await supabase
       .from('scheduled_reports')
       .select(`
         *,
-        companies(company_name),
+        companies(company_name, timezone),
         scheduled_report_recipients(id, email)
       `)
       .eq('is_active', true);
@@ -505,12 +523,39 @@ serve(async (req) => {
 
     console.log(`Found ${activeReports.length} active reports`);
 
-    // Filter reports that should run now
+    // Filter reports that should run now based on company timezone
     const reportsToRun = activeReports.filter(report => {
+      const companyTimezone = (report.companies as { timezone?: string })?.timezone || 'America/Los_Angeles';
+      
+      // Get current hour in the company's timezone
+      const formatter = new Intl.DateTimeFormat('en-US', {
+        timeZone: companyTimezone,
+        hour: '2-digit',
+        hour12: false,
+        weekday: 'short'
+      });
+      
+      const parts = formatter.formatToParts(now);
+      const localHour = parseInt(parts.find(p => p.type === 'hour')?.value || '0', 10);
+      const localDayName = parts.find(p => p.type === 'weekday')?.value || '';
+      
+      // Map weekday name to number (Sunday = 0)
+      const dayMap: Record<string, number> = { Sun: 0, Mon: 1, Tue: 2, Wed: 3, Thu: 4, Fri: 5, Sat: 6 };
+      const localDayOfWeek = dayMap[localDayName] ?? 0;
+      
+      // Get day of month in local timezone
+      const dayFormatter = new Intl.DateTimeFormat('en-US', {
+        timeZone: companyTimezone,
+        day: 'numeric'
+      });
+      const localDayOfMonth = parseInt(dayFormatter.format(now), 10);
+      
       const scheduleHour = parseInt(report.schedule_time.split(':')[0], 10);
       
-      // Check if hour matches
-      if (scheduleHour !== currentHour) {
+      console.log(`Report ${report.name}: schedule=${scheduleHour}:00, local=${localHour}:00 (${companyTimezone})`);
+      
+      // Check if hour matches in company's timezone
+      if (scheduleHour !== localHour) {
         return false;
       }
 
@@ -519,9 +564,9 @@ serve(async (req) => {
         case 'daily':
           return true;
         case 'weekly':
-          return report.schedule_day_of_week === currentDay;
+          return report.schedule_day_of_week === localDayOfWeek;
         case 'monthly':
-          return report.schedule_day_of_month === currentDayOfMonth;
+          return report.schedule_day_of_month === localDayOfMonth;
         default:
           return false;
       }
@@ -551,8 +596,9 @@ serve(async (req) => {
           continue;
         }
 
-        // Get date range based on frequency
-        const dateRange = getDateRange(report.schedule_frequency);
+        // Get date range based on frequency and company timezone
+        const companyTimezone = (report.companies as { timezone?: string })?.timezone || 'America/Los_Angeles';
+        const dateRange = getDateRange(report.schedule_frequency, companyTimezone);
         console.log(`Date range: ${dateRange.start} to ${dateRange.end}`);
 
         // Build time entries query

@@ -4,10 +4,24 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from '@/components/ui/card';
 import { Switch } from '@/components/ui/switch';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { useCompany } from '@/contexts/CompanyContext';
 import { supabase } from '@/integrations/supabase/client';
 import { useToast } from '@/hooks/use-toast';
 import { Upload } from 'lucide-react';
+
+// Common US timezones
+const TIMEZONES = [
+  { value: 'America/New_York', label: 'Eastern Time (ET)' },
+  { value: 'America/Chicago', label: 'Central Time (CT)' },
+  { value: 'America/Denver', label: 'Mountain Time (MT)' },
+  { value: 'America/Phoenix', label: 'Arizona (MST)' },
+  { value: 'America/Los_Angeles', label: 'Pacific Time (PT)' },
+  { value: 'America/Anchorage', label: 'Alaska Time (AKT)' },
+  { value: 'Pacific/Honolulu', label: 'Hawaii Time (HST)' },
+  { value: 'America/Puerto_Rico', label: 'Atlantic Time (AST)' },
+  { value: 'UTC', label: 'UTC' },
+];
 
 export const CompanyForm: React.FC = () => {
   const { company, companyFeatures, refetchCompany } = useCompany();
@@ -25,7 +39,8 @@ export const CompanyForm: React.FC = () => {
     state_province: '',
     postal_code: '',
     country: '',
-    company_logo_url: ''
+    company_logo_url: '',
+    timezone: 'America/Los_Angeles'
   });
 
   const [features, setFeatures] = useState({
@@ -47,7 +62,8 @@ export const CompanyForm: React.FC = () => {
         state_province: company.state_province || '',
         postal_code: company.postal_code || '',
         country: company.country || '',
-        company_logo_url: company.company_logo_url || ''
+        company_logo_url: company.company_logo_url || '',
+        timezone: (company as { timezone?: string }).timezone || 'America/Los_Angeles'
       });
     }
     if (companyFeatures) {
@@ -247,6 +263,27 @@ export const CompanyForm: React.FC = () => {
                   onChange={(e) => handleInputChange('website', e.target.value)}
                   placeholder="https://example.com"
                 />
+              </div>
+              <div>
+                <Label htmlFor="timezone">Timezone</Label>
+                <Select
+                  value={formData.timezone}
+                  onValueChange={(value) => handleInputChange('timezone', value)}
+                >
+                  <SelectTrigger>
+                    <SelectValue placeholder="Select timezone" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {TIMEZONES.map((tz) => (
+                      <SelectItem key={tz.value} value={tz.value}>
+                        {tz.label}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+                <p className="text-xs text-muted-foreground mt-1">
+                  Used for scheduled report delivery times
+                </p>
               </div>
               <div>
                 <Label htmlFor="phone">Phone</Label>
