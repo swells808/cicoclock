@@ -181,6 +181,7 @@ export type Database = {
           postal_code: string
           state_province: string
           street_address: string
+          timezone: string
           updated_at: string
           website: string | null
         }
@@ -197,6 +198,7 @@ export type Database = {
           postal_code: string
           state_province: string
           street_address: string
+          timezone?: string
           updated_at?: string
           website?: string | null
         }
@@ -213,6 +215,7 @@ export type Database = {
           postal_code?: string
           state_province?: string
           street_address?: string
+          timezone?: string
           updated_at?: string
           website?: string | null
         }
