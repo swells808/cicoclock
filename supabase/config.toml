@@ -53,3 +53,6 @@ verify_jwt = false
 
 [functions.lookup-employee]
 verify_jwt = false
+
+[functions.process-scheduled-reports]
+verify_jwt = false
