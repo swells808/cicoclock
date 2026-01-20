@@ -641,32 +641,54 @@ const { data, error } = await supabase
 
 **Purpose**: Store clock in/out verification photos
 
+**Folder Structure:**
+- `{company_id}/` - Root folder per company (multi-tenant isolation)
+  - `clock-in/` - Clock-in photos
+  - `clock-out/` - Clock-out photos
+
+**File Naming:** `{ISO_timestamp}_{PROFILE_ID}.jpg`
+- Timestamp format: `2024-01-15T14-30-00-000Z` (colons/dots replaced with dashes)
+- Profile ID: Uppercase UUID
+
 **Upload Example**:
 ```typescript
 async function uploadClockPhoto(
+  companyId: string,
   profileId: string,
   photoBlob: Blob,
   type: 'clock_in' | 'clock_out'
 ): Promise<string> {
-  const timestamp = Date.now();
-  const fileName = `${profileId}/${type}_${timestamp}.jpg`;
+  // Format timestamp for filename (replace special chars)
+  const timestamp = new Date().toISOString().replace(/:/g, '-').replace(/\./g, '-');
+  
+  // Action subfolder name
+  const actionPath = type === 'clock_in' ? 'clock-in' : 'clock-out';
+  
+  // Full path: company_id/action/timestamp_profileId.jpg
+  const filePath = `${companyId}/${actionPath}/${timestamp}_${profileId.toUpperCase()}.jpg`;
   
   const { data, error } = await supabase.storage
     .from('timeclock-photos')
-    .upload(fileName, photoBlob, {
+    .upload(filePath, photoBlob, {
       contentType: 'image/jpeg',
       upsert: false,
     });
   
   if (error) throw error;
   
-  // Get public URL
-  const { data: urlData } = supabase.storage
-    .from('timeclock-photos')
-    .getPublicUrl(fileName);
-  
-  return urlData.publicUrl;
+  // Return file path (use for signed URLs since bucket is private)
+  return filePath;
 }
+```
+
+**Retrieving Photos (Signed URLs):**
+```typescript
+// Since the bucket is private, always use signed URLs to display photos
+const { data } = await supabase.storage
+  .from('timeclock-photos')
+  .createSignedUrl(filePath, 3600); // 1 hour expiry
+
+const photoUrl = data?.signedUrl;
 ```
 
 ### Bucket: `avatars`
