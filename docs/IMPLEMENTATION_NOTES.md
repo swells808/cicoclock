@@ -447,20 +447,34 @@ export async function recordBreak(
 
 ### src/services/storage.ts
 
+**Folder Structure:**
+- `{company_id}/` - Root folder per company (multi-tenant isolation)
+  - `clock-in/` - Clock-in photos
+  - `clock-out/` - Clock-out photos
+
+**File Naming:** `{ISO_timestamp}_{PROFILE_ID}.jpg`
+
 ```typescript
 import { supabase } from './supabase';
 
 export async function uploadClockPhoto(
+  companyId: string,
   profileId: string,
   photoBlob: Blob,
   type: 'clock_in' | 'clock_out'
 ): Promise<string> {
-  const timestamp = Date.now();
-  const fileName = `${profileId}/${type}_${timestamp}.jpg`;
+  // Format timestamp for filename (replace special chars)
+  const timestamp = new Date().toISOString().replace(/:/g, '-').replace(/\./g, '-');
+  
+  // Action subfolder name
+  const actionPath = type === 'clock_in' ? 'clock-in' : 'clock-out';
+  
+  // Full path: company_id/action/timestamp_profileId.jpg
+  const filePath = `${companyId}/${actionPath}/${timestamp}_${profileId.toUpperCase()}.jpg`;
 
-  const { data, error } = await supabase.storage
+  const { error } = await supabase.storage
     .from('timeclock-photos')
-    .upload(fileName, photoBlob, {
+    .upload(filePath, photoBlob, {
       contentType: 'image/jpeg',
       upsert: false,
     });
@@ -470,13 +484,34 @@ export async function uploadClockPhoto(
     throw new Error('Failed to upload photo');
   }
 
-  // Get public URL
-  const { data: urlData } = supabase.storage
-    .from('timeclock-photos')
-    .getPublicUrl(fileName);
-
-  return urlData.publicUrl;
+  // Return file path for storage in time_entries table
+  // Use signed URLs to display since bucket is private
+  return filePath;
 }
+```
+
+**Usage Example:**
+```typescript
+// In your clock-in handler:
+const filePath = await uploadClockPhoto(
+  company.id,           // Company UUID
+  profile.id,           // Profile UUID  
+  photoBlob,            // Captured photo blob
+  'clock_in'            // Action type
+);
+
+// Pass filePath to clock-in-out edge function
+await supabase.functions.invoke('clock-in-out', {
+  body: {
+    action: 'clock_in',
+    profile_id: profile.id,
+    company_id: company.id,
+    photo_url: filePath,  // Store the path, not a public URL
+    latitude: location.latitude,
+    longitude: location.longitude,
+    address: location.address
+  }
+});
 ```
 
 ### src/components/clock/PhotoCapture.tsx
