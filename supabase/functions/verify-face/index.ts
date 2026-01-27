@@ -7,36 +7,29 @@ const corsHeaders = {
 };
 
 serve(async (req) => {
-  // Handle CORS preflight requests
   if (req.method === 'OPTIONS') {
     return new Response(null, { headers: corsHeaders });
   }
 
+  const supabase = createClient(
+    Deno.env.get('SUPABASE_URL')!,
+    Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!
+  );
+
+  let recordId: string | null = null;
+
   try {
     const { time_entry_id, profile_id, company_id, clock_photo_url, profile_photo_url } = await req.json();
 
-    console.log('Verify face request:', { time_entry_id, profile_id, company_id });
-
-    // Validate required fields
     if (!time_entry_id || !profile_id || !company_id) {
-      return new Response(
-        JSON.stringify({ success: false, error: 'Missing required fields: time_entry_id, profile_id, company_id' }),
-        { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      return jsonResponse(
+        { success: false, error: 'Missing required fields: time_entry_id, profile_id, company_id' },
+        400
       );
     }
 
-    // Read Azure Face API configuration
-    const endpoint = Deno.env.get('AZURE_FACE_ENDPOINT');
-    const key = Deno.env.get('AZURE_FACE_API_KEY');
-
-    // Create Supabase client with service role to bypass RLS
-    const supabaseUrl = Deno.env.get('SUPABASE_URL')!;
-    const serviceRoleKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
-    const supabase = createClient(supabaseUrl, serviceRoleKey);
-
-    // Stub: Insert a pending record into face_verifications
-    // Phase 2 will replace this with actual Azure Face API calls
-    const { data, error } = await supabase
+    // Step 1: Insert pending record
+    const { data: record, error: insertError } = await supabase
       .from('face_verifications')
       .insert({
         time_entry_id,
@@ -49,26 +42,150 @@ serve(async (req) => {
       .select()
       .single();
 
-    if (error) {
-      console.error('Face verification insert error:', error);
-      return new Response(
-        JSON.stringify({ success: false, error: 'Failed to create verification record: ' + error.message }),
-        { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
-      );
+    if (insertError) throw new Error(`Insert failed: ${insertError.message}`);
+    recordId = record.id;
+
+    // Step 2: Check Azure secrets
+    const endpoint = Deno.env.get('AZURE_FACE_ENDPOINT');
+    const apiKey = Deno.env.get('AZURE_FACE_API_KEY');
+
+    if (!endpoint || !apiKey) {
+      await updateRecord(supabase, recordId, { status: 'error', error_message: 'Azure Face API not configured' });
+      return jsonResponse({ success: true, status: 'error', message: 'Azure Face API not configured' });
     }
 
-    console.log('Face verification record created:', data.id);
-    return new Response(
-      JSON.stringify({ success: true, data, azure_configured: !!(endpoint && key) }),
-      { status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
-    );
+    // Step 3: Check photo URLs
+    if (!clock_photo_url) {
+      await updateRecord(supabase, recordId, { status: 'skipped', error_message: 'No clock photo' });
+      return jsonResponse({ success: true, status: 'skipped' });
+    }
+
+    if (!profile_photo_url) {
+      await updateRecord(supabase, recordId, { status: 'skipped', error_message: 'No profile photo' });
+      return jsonResponse({ success: true, status: 'skipped' });
+    }
+
+    // Step 4: Detect faces (binary mode)
+    const clockFaceId = await detectFace(endpoint, apiKey, clock_photo_url);
+    if (!clockFaceId) {
+      await updateRecord(supabase, recordId, { status: 'no_face', error_message: 'No face detected in clock photo' });
+      return jsonResponse({ success: true, status: 'no_face' });
+    }
+
+    const profileFaceId = await detectFace(endpoint, apiKey, profile_photo_url);
+    if (!profileFaceId) {
+      await updateRecord(supabase, recordId, { status: 'no_face', error_message: 'No face detected in profile photo' });
+      return jsonResponse({ success: true, status: 'no_face' });
+    }
+
+    // Step 5: Verify faces
+    const result = await verifyFaces(endpoint, apiKey, clockFaceId, profileFaceId);
+
+    await updateRecord(supabase, recordId, {
+      status: 'verified',
+      confidence_score: result.confidence,
+      is_match: result.isIdentical,
+      verified_at: new Date().toISOString(),
+    });
+
+    return jsonResponse({
+      success: true,
+      status: 'verified',
+      confidence: result.confidence,
+      is_match: result.isIdentical,
+    });
 
   } catch (error) {
-    console.error('Verify face error:', error);
-    const errorMessage = error instanceof Error ? error.message : 'Unknown error occurred';
-    return new Response(
-      JSON.stringify({ success: false, error: errorMessage }),
-      { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
-    );
+    console.error('verify-face error:', error);
+    if (recordId) {
+      await updateRecord(supabase, recordId, {
+        status: 'error',
+        error_message: error instanceof Error ? error.message : 'Unknown error',
+      });
+    }
+    return jsonResponse({
+      success: false,
+      error: error instanceof Error ? error.message : 'Unknown error',
+    });
   }
 });
+
+// Helper: update face_verifications record
+async function updateRecord(supabase: any, id: string, fields: Record<string, any>) {
+  await supabase.from('face_verifications').update(fields).eq('id', id);
+}
+
+// Helper: detect face in image, returns faceId or null
+async function detectFace(endpoint: string, apiKey: string, imageUrl: string): Promise<string | null> {
+  // Download image bytes
+  const imgRes = await fetchWithTimeout(imageUrl, {}, 15000);
+  if (!imgRes.ok) {
+    throw new Error(`Failed to download image (${imgRes.status}): ${imageUrl}`);
+  }
+  const bytes = new Uint8Array(await imgRes.arrayBuffer());
+
+  const detectUrl = `${endpoint}/face/v1.2/detect?detectionModel=detection_03&recognitionModel=recognition_04&returnFaceId=true&faceIdTimeToLive=120`;
+
+  const res = await fetchWithTimeout(
+    detectUrl,
+    {
+      method: "POST",
+      headers: {
+        "Ocp-Apim-Subscription-Key": apiKey,
+        "Content-Type": "application/octet-stream",
+      },
+      body: bytes,
+    },
+    25000
+  );
+
+  if (!res.ok) {
+    const errBody = await res.text();
+    throw new Error(`Azure detect failed (${res.status}): ${errBody}`);
+  }
+
+  const faces = await res.json();
+  return faces.length > 0 ? faces[0].faceId : null;
+}
+
+// Helper: verify two faces
+async function verifyFaces(endpoint: string, apiKey: string, faceId1: string, faceId2: string) {
+  const res = await fetchWithTimeout(
+    `${endpoint}/face/v1.2/verify`,
+    {
+      method: "POST",
+      headers: {
+        "Ocp-Apim-Subscription-Key": apiKey,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({ faceId1, faceId2 }),
+    },
+    25000
+  );
+
+  if (!res.ok) {
+    const errBody = await res.text();
+    throw new Error(`Azure verify failed (${res.status}): ${errBody}`);
+  }
+
+  return res.json(); // { isIdentical: boolean, confidence: number }
+}
+
+// Helper: fetch with AbortController timeout
+async function fetchWithTimeout(url: string, options: RequestInit, timeoutMs: number): Promise<Response> {
+  const controller = new AbortController();
+  const timeoutId = setTimeout(() => controller.abort(), timeoutMs);
+  try {
+    return await fetch(url, { ...options, signal: controller.signal });
+  } finally {
+    clearTimeout(timeoutId);
+  }
+}
+
+// Helper: JSON response with CORS headers
+function jsonResponse(body: any, status = 200) {
+  return new Response(
+    JSON.stringify(body),
+    { status, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+  );
+}
