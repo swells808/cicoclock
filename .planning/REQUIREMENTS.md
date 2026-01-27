@@ -66,25 +66,25 @@
 
 | Requirement | Phase | Status |
 |-------------|-------|--------|
-| VCORE-01 | — | Pending |
-| VCORE-02 | — | Pending |
-| VCORE-03 | — | Pending |
-| VCORE-04 | — | Pending |
-| VCORE-05 | — | Pending |
-| ADMIN-01 | — | Pending |
-| ADMIN-02 | — | Pending |
-| ADMIN-03 | — | Pending |
-| ADMIN-04 | — | Pending |
-| SETT-01 | — | Pending |
-| INFRA-01 | — | Pending |
-| INFRA-02 | — | Pending |
-| INFRA-03 | — | Pending |
+| VCORE-01 | Phase 2 | Pending |
+| VCORE-02 | Phase 2 | Pending |
+| VCORE-03 | Phase 2 | Pending |
+| VCORE-04 | Phase 2 | Pending |
+| VCORE-05 | Phase 2 | Pending |
+| ADMIN-01 | Phase 3 | Pending |
+| ADMIN-02 | Phase 3 | Pending |
+| ADMIN-03 | Phase 3 | Pending |
+| ADMIN-04 | Phase 3 | Pending |
+| SETT-01 | Phase 1 | Pending |
+| INFRA-01 | Phase 1 | Pending |
+| INFRA-02 | Phase 1 | Pending |
+| INFRA-03 | Phase 1 | Pending |
 
 **Coverage:**
 - v1 requirements: 13 total
-- Mapped to phases: 0
-- Unmapped: 13 ⚠️
+- Mapped to phases: 13
+- Unmapped: 0
 
 ---
 *Requirements defined: 2026-01-27*
-*Last updated: 2026-01-27 after initial definition*
+*Last updated: 2026-01-27 after roadmap creation*
