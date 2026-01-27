@@ -62,6 +62,12 @@ Plans:
 
 **Requirements:** ADMIN-01, ADMIN-02, ADMIN-03, ADMIN-04
 
+**Plans:** 2 plans
+
+Plans:
+- [ ] 03-01-PLAN.md -- Flag indicators on timeline cards + flagged count in summary
+- [ ] 03-02-PLAN.md -- Side-by-side photo review dialog with approve/reject actions
+
 **Success Criteria:**
 1. Flagged time entries show a visual indicator (icon/badge) in the admin time tracking view
 2. Admin can open a side-by-side view showing profile photo vs clock photo with the confidence score
@@ -76,7 +82,7 @@ Plans:
 |-------|--------|--------------|
 | 1 - Foundation | ✓ Complete | INFRA-01, INFRA-02, INFRA-03, SETT-01 |
 | 2 - Verification Pipeline | ✓ Complete | VCORE-01, VCORE-02, VCORE-03, VCORE-04, VCORE-05 |
-| 3 - Admin Review | Not Started | ADMIN-01, ADMIN-02, ADMIN-03, ADMIN-04 |
+| 3 - Admin Review | In Progress | ADMIN-01, ADMIN-02, ADMIN-03, ADMIN-04 |
 
 ---
 *Roadmap created: 2026-01-27*
