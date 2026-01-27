@@ -22,13 +22,13 @@
 
 ### Settings
 
-- [ ] **SETT-01**: Company-level toggle to enable/disable face verification
+- [x] **SETT-01**: Company-level toggle to enable/disable face verification
 
 ### Infrastructure
 
-- [ ] **INFRA-01**: New `verify-face` Supabase Edge Function calling Azure Face API
-- [ ] **INFRA-02**: New `face_verifications` database table with RLS policies
-- [ ] **INFRA-03**: Azure Face API secrets configured as Supabase Edge Function secrets
+- [x] **INFRA-01**: New `verify-face` Supabase Edge Function calling Azure Face API
+- [x] **INFRA-02**: New `face_verifications` database table with RLS policies
+- [x] **INFRA-03**: Azure Face API secrets configured as Supabase Edge Function secrets
 
 ## v2 Requirements
 
@@ -75,10 +75,10 @@
 | ADMIN-02 | Phase 3 | Pending |
 | ADMIN-03 | Phase 3 | Pending |
 | ADMIN-04 | Phase 3 | Pending |
-| SETT-01 | Phase 1 | Pending |
-| INFRA-01 | Phase 1 | Pending |
-| INFRA-02 | Phase 1 | Pending |
-| INFRA-03 | Phase 1 | Pending |
+| SETT-01 | Phase 1 | Complete |
+| INFRA-01 | Phase 1 | Complete |
+| INFRA-02 | Phase 1 | Complete |
+| INFRA-03 | Phase 1 | Complete |
 
 **Coverage:**
 - v1 requirements: 13 total
