@@ -47,6 +47,7 @@ export const CompanyForm: React.FC = () => {
     photo_capture: true,
     geolocation: true,
     employee_pin: false,
+    face_verification: false,
     mapbox_public_token: '',
   });
 
@@ -71,6 +72,7 @@ export const CompanyForm: React.FC = () => {
         photo_capture: companyFeatures.photo_capture,
         geolocation: companyFeatures.geolocation,
         employee_pin: companyFeatures.employee_pin,
+        face_verification: companyFeatures.face_verification ?? false,
         mapbox_public_token: companyFeatures.mapbox_public_token || '',
       });
     }
@@ -157,6 +159,7 @@ export const CompanyForm: React.FC = () => {
           photo_capture: features.photo_capture,
           geolocation: features.geolocation,
           employee_pin: features.employee_pin,
+          face_verification: features.face_verification,
           mapbox_public_token: features.mapbox_public_token,
           updated_at: new Date().toISOString(),
         })
@@ -390,7 +393,17 @@ export const CompanyForm: React.FC = () => {
               onCheckedChange={(checked) => setFeatures({ ...features, employee_pin: checked })}
             />
           </div>
-          
+          <div className="flex items-center justify-between">
+            <div className="space-y-0.5">
+              <Label>Face Verification</Label>
+              <p className="text-sm text-muted-foreground">Verify employee identity by comparing clock photo to profile photo</p>
+            </div>
+            <Switch
+              checked={features.face_verification}
+              onCheckedChange={(checked) => setFeatures({ ...features, face_verification: checked })}
+            />
+          </div>
+
           <div className="space-y-2 pt-4 border-t">
             <Label htmlFor="mapbox_token">Mapbox Public Token</Label>
             <p className="text-sm text-muted-foreground">Required for location maps on time entries</p>
