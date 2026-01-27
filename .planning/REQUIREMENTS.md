@@ -7,11 +7,11 @@
 
 ### Verification Core
 
-- [ ] **VCORE-01**: System compares clock-in/out photo against employee profile photo using Azure AI Face API
-- [ ] **VCORE-02**: Verification runs asynchronously after clock action (non-blocking, fire-and-forget)
-- [ ] **VCORE-03**: Confidence score and match status stored per time entry verification
-- [ ] **VCORE-04**: Clock-in/out always succeeds regardless of verification result
-- [ ] **VCORE-05**: System gracefully handles API errors, timeouts, and missing photos (marks as "unverified")
+- [x] **VCORE-01**: System compares clock-in/out photo against employee profile photo using Azure AI Face API
+- [x] **VCORE-02**: Verification runs asynchronously after clock action (non-blocking, fire-and-forget)
+- [x] **VCORE-03**: Confidence score and match status stored per time entry verification
+- [x] **VCORE-04**: Clock-in/out always succeeds regardless of verification result
+- [x] **VCORE-05**: System gracefully handles API errors, timeouts, and missing photos (marks as "unverified")
 
 ### Admin Review
 
@@ -66,11 +66,11 @@
 
 | Requirement | Phase | Status |
 |-------------|-------|--------|
-| VCORE-01 | Phase 2 | Pending |
-| VCORE-02 | Phase 2 | Pending |
-| VCORE-03 | Phase 2 | Pending |
-| VCORE-04 | Phase 2 | Pending |
-| VCORE-05 | Phase 2 | Pending |
+| VCORE-01 | Phase 2 | Complete |
+| VCORE-02 | Phase 2 | Complete |
+| VCORE-03 | Phase 2 | Complete |
+| VCORE-04 | Phase 2 | Complete |
+| VCORE-05 | Phase 2 | Complete |
 | ADMIN-01 | Phase 3 | Pending |
 | ADMIN-02 | Phase 3 | Pending |
 | ADMIN-03 | Phase 3 | Pending |

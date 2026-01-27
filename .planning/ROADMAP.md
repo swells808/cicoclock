@@ -43,8 +43,8 @@ Plans:
 **Plans:** 2 plans
 
 Plans:
-- [ ] 02-01-PLAN.md -- Azure Face API integration in verify-face edge function
-- [ ] 02-02-PLAN.md -- Fire-and-forget frontend wiring in Timeclock.tsx
+- [x] 02-01-PLAN.md -- Azure Face API integration in verify-face edge function
+- [x] 02-02-PLAN.md -- Fire-and-forget frontend wiring in Timeclock.tsx
 
 **Success Criteria:**
 1. After clocking in/out with a photo, a verification record appears in `face_verifications` with a confidence score and match status
@@ -75,7 +75,7 @@ Plans:
 | Phase | Status | Requirements |
 |-------|--------|--------------|
 | 1 - Foundation | ✓ Complete | INFRA-01, INFRA-02, INFRA-03, SETT-01 |
-| 2 - Verification Pipeline | Planned | VCORE-01, VCORE-02, VCORE-03, VCORE-04, VCORE-05 |
+| 2 - Verification Pipeline | ✓ Complete | VCORE-01, VCORE-02, VCORE-03, VCORE-04, VCORE-05 |
 | 3 - Admin Review | Not Started | ADMIN-01, ADMIN-02, ADMIN-03, ADMIN-04 |
 
 ---
