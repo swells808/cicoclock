@@ -21,12 +21,13 @@ import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { AlertCircle } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { supabase } from "@/integrations/supabase/client";
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useCompany } from "@/contexts/CompanyContext";
 import { useUserRole } from "@/hooks/useUserRole";
 import { useCompanyFeatures } from "@/hooks/useCompanyFeatures";
-import { useFaceVerifications, useFlaggedCount } from "@/hooks/useFaceVerifications";
+import { useFaceVerifications, useFlaggedCount, FaceVerification } from "@/hooks/useFaceVerifications";
 import { EditTimeEntryDialog } from "@/components/admin/EditTimeEntryDialog";
+import { FaceReviewDialog } from "@/components/admin/FaceReviewDialog";
 import { TimeEntryTimelineCard, TimeEntryForCard } from "@/components/reports/TimeEntryTimelineCard";
 import { TimeEntriesMap } from "@/components/admin/TimeEntriesMap";
 import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
@@ -88,6 +89,10 @@ const AdminTimeTracking: React.FC = () => {
   const [editingEntry, setEditingEntry] = useState<TimeEntry | null>(null);
   const [editDialogOpen, setEditDialogOpen] = useState(false);
   const [signedUrls, setSignedUrls] = useState<SignedUrls>({});
+  const [reviewDialogOpen, setReviewDialogOpen] = useState(false);
+  const [reviewingVerification, setReviewingVerification] = useState<FaceVerification | null>(null);
+  const [reviewingEmployeeName, setReviewingEmployeeName] = useState<string>('');
+  const queryClient = useQueryClient();
 
   // Set mapbox token in localStorage when available
   useEffect(() => {
@@ -299,6 +304,15 @@ const AdminTimeTracking: React.FC = () => {
     setEditDialogOpen(true);
   };
 
+  const handleReviewClick = (entryId: string) => {
+    const verification = verificationMap?.get(entryId);
+    if (!verification) return;
+    const entry = filteredEntries.find(e => e.id === entryId);
+    setReviewingVerification(verification);
+    setReviewingEmployeeName(getProfileDisplayName(entry?.profiles || null));
+    setReviewDialogOpen(true);
+  };
+
   if (roleLoading) {
     return (
       <DashboardLayout>
@@ -459,6 +473,11 @@ const AdminTimeTracking: React.FC = () => {
                 <TimeEntryTimelineCard
                   key={transformedEntry.id}
                   entry={transformedEntry}
+                  onReviewClick={
+                    transformedEntry.flagStatus === 'flagged' && isAdmin && companyFeatures?.face_verification
+                      ? () => handleReviewClick(transformedEntry.id)
+                      : undefined
+                  }
                   onEdit={isAdmin ? () => {
                     const originalEntry = filteredEntries.find(e => e.id === transformedEntry.id);
                     if (originalEntry) handleEdit(originalEntry);
@@ -478,6 +497,21 @@ const AdminTimeTracking: React.FC = () => {
               refetchEntries();
               setEditDialogOpen(false);
               setEditingEntry(null);
+            }}
+          />
+        )}
+
+        {isAdmin && companyFeatures?.face_verification && (
+          <FaceReviewDialog
+            open={reviewDialogOpen}
+            onOpenChange={setReviewDialogOpen}
+            verification={reviewingVerification}
+            employeeName={reviewingEmployeeName}
+            onSuccess={() => {
+              queryClient.invalidateQueries({ queryKey: ['face-verifications'] });
+              queryClient.invalidateQueries({ queryKey: ['flagged-count'] });
+              setReviewDialogOpen(false);
+              setReviewingVerification(null);
             }}
           />
         )}
