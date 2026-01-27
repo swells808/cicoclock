@@ -226,6 +226,7 @@ export type Database = {
           company_id: string
           created_at: string
           employee_pin: boolean
+          face_verification: boolean
           geolocation: boolean
           id: string
           mapbox_public_token: string | null
@@ -236,6 +237,7 @@ export type Database = {
           company_id: string
           created_at?: string
           employee_pin?: boolean
+          face_verification?: boolean
           geolocation?: boolean
           id?: string
           mapbox_public_token?: string | null
@@ -246,6 +248,7 @@ export type Database = {
           company_id?: string
           created_at?: string
           employee_pin?: boolean
+          face_verification?: boolean
           geolocation?: boolean
           id?: string
           mapbox_public_token?: string | null
@@ -453,6 +456,85 @@ export type Database = {
             columns: ["profile_id"]
             isOneToOne: false
             referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      face_verifications: {
+        Row: {
+          clock_photo_url: string | null
+          company_id: string
+          confidence_score: number | null
+          created_at: string
+          error_message: string | null
+          id: string
+          is_match: boolean | null
+          profile_id: string
+          profile_photo_url: string | null
+          review_decision: string | null
+          reviewed_at: string | null
+          reviewed_by: string | null
+          status: string
+          time_entry_id: string
+          updated_at: string
+          verified_at: string | null
+        }
+        Insert: {
+          clock_photo_url?: string | null
+          company_id: string
+          confidence_score?: number | null
+          created_at?: string
+          error_message?: string | null
+          id?: string
+          is_match?: boolean | null
+          profile_id: string
+          profile_photo_url?: string | null
+          review_decision?: string | null
+          reviewed_at?: string | null
+          reviewed_by?: string | null
+          status?: string
+          time_entry_id: string
+          updated_at?: string
+          verified_at?: string | null
+        }
+        Update: {
+          clock_photo_url?: string | null
+          company_id?: string
+          confidence_score?: number | null
+          created_at?: string
+          error_message?: string | null
+          id?: string
+          is_match?: boolean | null
+          profile_id?: string
+          profile_photo_url?: string | null
+          review_decision?: string | null
+          reviewed_at?: string | null
+          reviewed_by?: string | null
+          status?: string
+          time_entry_id?: string
+          updated_at?: string
+          verified_at?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "face_verifications_company_id_fkey"
+            columns: ["company_id"]
+            isOneToOne: false
+            referencedRelation: "companies"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "face_verifications_profile_id_fkey"
+            columns: ["profile_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "face_verifications_time_entry_id_fkey"
+            columns: ["time_entry_id"]
+            isOneToOne: false
+            referencedRelation: "time_entries"
             referencedColumns: ["id"]
           },
         ]
