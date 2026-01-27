@@ -1,6 +1,6 @@
 import { useState, useEffect } from "react";
 import { format, parseISO } from "date-fns";
-import { CheckCircle, AlertTriangle, XCircle, Clock, Map, Image, Edit } from "lucide-react";
+import { CheckCircle, AlertTriangle, XCircle, Clock, Map, Image, Edit, ShieldAlert, ShieldCheck, ShieldX } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { supabase } from "@/integrations/supabase/client";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
@@ -147,6 +147,7 @@ export interface TimeEntryForCard {
   projectName: string | null;
   signedClockInUrl?: string | null;
   signedClockOutUrl?: string | null;
+  flagStatus?: 'flagged' | 'approved' | 'rejected' | null;
 }
 
 interface TimeEntryTimelineCardProps {
@@ -154,13 +155,15 @@ interface TimeEntryTimelineCardProps {
   scheduledStart?: string;
   scheduledEnd?: string;
   onEdit?: () => void;
+  onReviewClick?: () => void;
 }
 
-export const TimeEntryTimelineCard = ({ 
+export const TimeEntryTimelineCard = ({
   entry,
-  scheduledStart = "08:00", 
+  scheduledStart = "08:00",
   scheduledEnd = "17:00",
-  onEdit
+  onEdit,
+  onReviewClick
 }: TimeEntryTimelineCardProps) => {
   const { 
     start_time, 
@@ -341,6 +344,25 @@ export const TimeEntryTimelineCard = ({
             {is_break ? 'Break' : 'Work'}
           </Badge>
           {getStatusBadge()}
+          {entry.flagStatus === 'flagged' && (
+            <Badge
+              variant="destructive"
+              className="text-xs gap-1 cursor-pointer"
+              onClick={onReviewClick}
+            >
+              <ShieldAlert className="h-3 w-3" /> Flagged
+            </Badge>
+          )}
+          {entry.flagStatus === 'approved' && (
+            <Badge variant="outline" className="text-xs gap-1 text-green-600 border-green-600">
+              <ShieldCheck className="h-3 w-3" /> Cleared
+            </Badge>
+          )}
+          {entry.flagStatus === 'rejected' && (
+            <Badge variant="outline" className="text-xs gap-1 text-destructive border-destructive">
+              <ShieldX className="h-3 w-3" /> Rejected
+            </Badge>
+          )}
         </div>
         <div className="flex items-center gap-2">
           <span className="text-sm font-medium">

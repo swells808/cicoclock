@@ -25,6 +25,7 @@ import { useQuery } from "@tanstack/react-query";
 import { useCompany } from "@/contexts/CompanyContext";
 import { useUserRole } from "@/hooks/useUserRole";
 import { useCompanyFeatures } from "@/hooks/useCompanyFeatures";
+import { useFaceVerifications, useFlaggedCount } from "@/hooks/useFaceVerifications";
 import { EditTimeEntryDialog } from "@/components/admin/EditTimeEntryDialog";
 import { TimeEntryTimelineCard, TimeEntryForCard } from "@/components/reports/TimeEntryTimelineCard";
 import { TimeEntriesMap } from "@/components/admin/TimeEntriesMap";
@@ -213,6 +214,11 @@ const AdminTimeTracking: React.FC = () => {
     fetchSignedUrls();
   }, [timeEntries]);
 
+  // Face verification data
+  const entryIds = useMemo(() => timeEntries.map(e => e.id), [timeEntries]);
+  const { data: verificationMap } = useFaceVerifications(entryIds, !!companyFeatures?.face_verification);
+  const { data: flaggedCount = 0 } = useFlaggedCount(company?.id, !!companyFeatures?.face_verification);
+
   // Filter entries by selected employee
   const filteredEntries = useMemo(() => {
     if (selectedEmployee === "all") return timeEntries;
@@ -245,25 +251,36 @@ const AdminTimeTracking: React.FC = () => {
 
   // Transform entries to TimeEntryForCard format
   const transformedEntries: TimeEntryForCard[] = useMemo(() => {
-    const entries = filteredEntries.map(entry => ({
-      id: entry.id,
-      start_time: entry.start_time,
-      end_time: entry.end_time,
-      duration_minutes: entry.duration_minutes,
-      clock_in_photo_url: entry.clock_in_photo_url,
-      clock_out_photo_url: entry.clock_out_photo_url,
-      clock_in_latitude: entry.clock_in_latitude,
-      clock_in_longitude: entry.clock_in_longitude,
-      clock_out_latitude: entry.clock_out_latitude,
-      clock_out_longitude: entry.clock_out_longitude,
-      clock_in_address: entry.clock_in_address,
-      clock_out_address: entry.clock_out_address,
-      is_break: entry.is_break || false,
-      employeeName: getProfileDisplayName(entry.profiles),
-      projectName: entry.project?.name || null,
-      signedClockInUrl: signedUrls[entry.id]?.clockIn,
-      signedClockOutUrl: signedUrls[entry.id]?.clockOut,
-    }));
+    const entries = filteredEntries.map(entry => {
+      const verification = verificationMap?.get(entry.id);
+      let flagStatus: 'flagged' | 'approved' | 'rejected' | null = null;
+      if (verification) {
+        if (!verification.is_match && !verification.review_decision) flagStatus = 'flagged';
+        else if (verification.review_decision === 'approved') flagStatus = 'approved';
+        else if (verification.review_decision === 'rejected') flagStatus = 'rejected';
+      }
+
+      return {
+        id: entry.id,
+        start_time: entry.start_time,
+        end_time: entry.end_time,
+        duration_minutes: entry.duration_minutes,
+        clock_in_photo_url: entry.clock_in_photo_url,
+        clock_out_photo_url: entry.clock_out_photo_url,
+        clock_in_latitude: entry.clock_in_latitude,
+        clock_in_longitude: entry.clock_in_longitude,
+        clock_out_latitude: entry.clock_out_latitude,
+        clock_out_longitude: entry.clock_out_longitude,
+        clock_in_address: entry.clock_in_address,
+        clock_out_address: entry.clock_out_address,
+        is_break: entry.is_break || false,
+        employeeName: getProfileDisplayName(entry.profiles),
+        projectName: entry.project?.name || null,
+        signedClockInUrl: signedUrls[entry.id]?.clockIn,
+        signedClockOutUrl: signedUrls[entry.id]?.clockOut,
+        flagStatus,
+      };
+    });
 
     // Sort: Active (no end_time) first, then completed, both alphabetically by employee name
     return entries.sort((a, b) => {
@@ -275,7 +292,7 @@ const AdminTimeTracking: React.FC = () => {
       
       return a.employeeName.localeCompare(b.employeeName);
     });
-  }, [filteredEntries, signedUrls]);
+  }, [filteredEntries, signedUrls, verificationMap]);
 
   const handleEdit = (entry: TimeEntry) => {
     setEditingEntry(entry);
@@ -401,6 +418,12 @@ const AdminTimeTracking: React.FC = () => {
                   <span className="text-muted-foreground">Completed:</span>
                   <span className="font-medium text-foreground">{summary.completed}</span>
                 </div>
+                {companyFeatures?.face_verification && flaggedCount > 0 && (
+                  <div className="flex justify-between text-sm">
+                    <span className="text-muted-foreground">Flagged:</span>
+                    <span className="font-medium text-destructive">{flaggedCount}</span>
+                  </div>
+                )}
               </div>
             </CardContent>
           </Card>
