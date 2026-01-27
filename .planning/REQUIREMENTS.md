@@ -15,10 +15,10 @@
 
 ### Admin Review
 
-- [ ] **ADMIN-01**: Flagged time entries display visual indicator in admin time tracking view
-- [ ] **ADMIN-02**: Admin can view side-by-side profile photo vs clock photo with confidence score
-- [ ] **ADMIN-03**: Admin can approve (dismiss) or reject (confirm fraud) flagged entries
-- [ ] **ADMIN-04**: Summary count of unreviewed flagged entries shown to admins
+- [x] **ADMIN-01**: Flagged time entries display visual indicator in admin time tracking view
+- [x] **ADMIN-02**: Admin can view side-by-side profile photo vs clock photo with confidence score
+- [x] **ADMIN-03**: Admin can approve (dismiss) or reject (confirm fraud) flagged entries
+- [x] **ADMIN-04**: Summary count of unreviewed flagged entries shown to admins
 
 ### Settings
 
@@ -71,10 +71,10 @@
 | VCORE-03 | Phase 2 | Complete |
 | VCORE-04 | Phase 2 | Complete |
 | VCORE-05 | Phase 2 | Complete |
-| ADMIN-01 | Phase 3 | Pending |
-| ADMIN-02 | Phase 3 | Pending |
-| ADMIN-03 | Phase 3 | Pending |
-| ADMIN-04 | Phase 3 | Pending |
+| ADMIN-01 | Phase 3 | Complete |
+| ADMIN-02 | Phase 3 | Complete |
+| ADMIN-03 | Phase 3 | Complete |
+| ADMIN-04 | Phase 3 | Complete |
 | SETT-01 | Phase 1 | Complete |
 | INFRA-01 | Phase 1 | Complete |
 | INFRA-02 | Phase 1 | Complete |
