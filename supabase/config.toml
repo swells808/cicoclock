@@ -56,3 +56,6 @@ verify_jwt = false
 
 [functions.process-scheduled-reports]
 verify_jwt = false
+
+[functions.verify-face]
+verify_jwt = false
