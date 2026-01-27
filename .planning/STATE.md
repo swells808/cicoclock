@@ -8,21 +8,21 @@
 ## Current Position
 
 **Phase:** 2 of 3 (Verification Pipeline)
-**Plan:** 1 of 2 complete
-**Status:** In progress
-**Last activity:** 2026-01-27 - Completed 02-01-PLAN.md
+**Plan:** 2 of 2 complete
+**Status:** Phase complete
+**Last activity:** 2026-01-27 - Completed 02-02-PLAN.md
 
 ```
-[####......] Phase 2 in progress (plan 1/2)
+[#######...] Phase 2 complete (plan 2/2), overall 4/5 plans
 ```
 
 ## Performance Metrics
 
 | Metric | Value |
 |--------|-------|
-| Phases complete | 1/3 |
-| Requirements done | 5/13 |
-| Plans executed | 3 |
+| Phases complete | 1/3 (Phase 2 plans done, awaiting Phase 3) |
+| Requirements done | 7/13 |
+| Plans executed | 4 |
 
 ## Accumulated Context
 
@@ -37,12 +37,15 @@
 | Migration via Management API | 01 | 01 | CLI pooler connection failed; REST API workaround |
 | verify-face verify_jwt=false | 01 | 02 | Called from client with anon key |
 | Binary mode image upload | 02 | 01 | Works regardless of storage bucket policy |
+| Skip break verification | 02 | 02 | Breaks don't capture photos |
+| data.data.id for time_entry_id | 02 | 02 | clock-in-out response shape wrapped by invoke |
 
 ### Known Issues
 
 - Supabase CLI v2.72.7 pooler connection unreliable (SCRAM auth failures, timeouts). Use Management API for DB operations if CLI fails.
 - Azure Face API secrets are placeholders -- must be updated with real credentials before testing.
 - Supabase CLI not authenticated -- run `supabase login` before deploying edge functions.
+- Edge function deployment pending (02-01 Task 2 blocked by CLI auth).
 
 ### Blockers
 (none)
@@ -50,9 +53,9 @@
 ## Session Continuity
 
 **Last session:** 2026-01-27
-**Stopped at:** Completed 02-01-PLAN.md (Azure Face API integration)
+**Stopped at:** Completed 02-02-PLAN.md (Frontend fire-and-forget wiring)
 **Resume file:** None
-**Next action:** Execute 02-02-PLAN.md (Frontend fire-and-forget integration)
+**Next action:** Execute Phase 3 (Admin Review UI)
 
 ---
 *State initialized: 2026-01-27*
