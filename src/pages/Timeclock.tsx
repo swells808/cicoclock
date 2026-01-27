@@ -387,9 +387,22 @@ const Timeclock = () => {
       return; 
     }
     
+    // Fire-and-forget face verification
+    if (companyFeatures?.face_verification && photoUrl && authenticatedEmployee?.avatar_url) {
+      supabase.functions.invoke('verify-face', {
+        body: {
+          time_entry_id: data.data.id,
+          profile_id: authenticatedEmployee.id,
+          company_id: company.id,
+          clock_photo_url: photoUrl,
+          profile_photo_url: authenticatedEmployee.avatar_url,
+        },
+      }).catch(() => {}); // Suppress unhandled rejection
+    }
+
     const employeeName = authenticatedEmployee.display_name || authenticatedEmployee.first_name || "Employee";
     toast({ title: "Clocked In!", description: `Welcome, ${employeeName}!` });
-    
+
     setTimeout(() => {
       resetForNextUser();
     }, 2500);
@@ -431,9 +444,22 @@ const Timeclock = () => {
       return; 
     }
     
+    // Fire-and-forget face verification
+    if (companyFeatures?.face_verification && photoUrl && authenticatedEmployee?.avatar_url) {
+      supabase.functions.invoke('verify-face', {
+        body: {
+          time_entry_id: data.data.id,
+          profile_id: authenticatedEmployee.id,
+          company_id: company.id,
+          clock_photo_url: photoUrl,
+          profile_photo_url: authenticatedEmployee.avatar_url,
+        },
+      }).catch(() => {}); // Suppress unhandled rejection
+    }
+
     const employeeName = authenticatedEmployee.display_name || authenticatedEmployee.first_name || "Employee";
     toast({ title: "Clocked Out!", description: `Goodbye, ${employeeName}!` });
-    
+
     setTimeout(() => {
       resetForNextUser();
     }, 2500);
