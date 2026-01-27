@@ -18,6 +18,12 @@ Three phases deliver face verification end-to-end: infrastructure and configurat
 
 **Requirements:** INFRA-01, INFRA-02, INFRA-03, SETT-01
 
+**Plans:** 2 plans
+
+Plans:
+- [ ] 01-01-PLAN.md -- Database migration (face_verifications table, company_features column, RLS, types)
+- [ ] 01-02-PLAN.md -- Edge function stub, Azure secrets, admin toggle UI
+
 **Success Criteria:**
 1. `face_verifications` table exists with RLS policies that scope data to the correct company
 2. `verify-face` edge function is deployed and responds to invocations (even if verification logic is stubbed)
@@ -62,7 +68,7 @@ Three phases deliver face verification end-to-end: infrastructure and configurat
 
 | Phase | Status | Requirements |
 |-------|--------|--------------|
-| 1 - Foundation | Not Started | INFRA-01, INFRA-02, INFRA-03, SETT-01 |
+| 1 - Foundation | Planned | INFRA-01, INFRA-02, INFRA-03, SETT-01 |
 | 2 - Verification Pipeline | Not Started | VCORE-01, VCORE-02, VCORE-03, VCORE-04, VCORE-05 |
 | 3 - Admin Review | Not Started | ADMIN-01, ADMIN-02, ADMIN-03, ADMIN-04 |
 
