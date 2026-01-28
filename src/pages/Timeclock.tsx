@@ -389,15 +389,28 @@ const Timeclock = () => {
     
     // Fire-and-forget face verification
     if (companyFeatures?.face_verification && photoUrl && authenticatedEmployee?.avatar_url) {
+      console.log('[FaceVerify] Invoking verify-face with:', {
+        time_entry_id: data.data?.id,
+        profile_id: authenticatedEmployee.id,
+        company_id: company.id,
+        clock_photo_url: photoUrl,
+        profile_photo_url: authenticatedEmployee.avatar_url,
+      });
       supabase.functions.invoke('verify-face', {
         body: {
-          time_entry_id: data.data.id,
+          time_entry_id: data.data?.id,
           profile_id: authenticatedEmployee.id,
           company_id: company.id,
           clock_photo_url: photoUrl,
           profile_photo_url: authenticatedEmployee.avatar_url,
         },
-      }).catch(() => {}); // Suppress unhandled rejection
+      }).then((res) => {
+        console.log('[FaceVerify] Response:', res);
+      }).catch((err) => {
+        console.error('[FaceVerify] Error:', err);
+      });
+    } else {
+      console.log('[FaceVerify] Skipped:', { face_verification: companyFeatures?.face_verification, photoUrl: !!photoUrl, avatar_url: !!authenticatedEmployee?.avatar_url });
     }
 
     const employeeName = authenticatedEmployee.display_name || authenticatedEmployee.first_name || "Employee";

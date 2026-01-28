@@ -65,14 +65,31 @@ serve(async (req) => {
       return jsonResponse({ success: true, status: 'skipped' });
     }
 
-    // Step 4: Detect faces (binary mode)
-    const clockFaceId = await detectFace(endpoint, apiKey, clock_photo_url);
+    // Step 4: Resolve photo URLs (timeclock-photos is private, avatars is public)
+    const fullClockPhotoUrl = clock_photo_url.startsWith('http')
+      ? clock_photo_url
+      : await getSignedUrl(supabase, 'timeclock-photos', clock_photo_url);
+    const fullProfilePhotoUrl = profile_photo_url.startsWith('http')
+      ? profile_photo_url
+      : await getSignedUrl(supabase, 'avatars', profile_photo_url);
+
+    if (!fullClockPhotoUrl) {
+      await updateRecord(supabase, recordId, { status: 'error', error_message: 'Failed to generate signed URL for clock photo' });
+      return jsonResponse({ success: true, status: 'error' });
+    }
+    if (!fullProfilePhotoUrl) {
+      await updateRecord(supabase, recordId, { status: 'error', error_message: 'Failed to generate signed URL for profile photo' });
+      return jsonResponse({ success: true, status: 'error' });
+    }
+
+    // Detect faces (binary mode)
+    const clockFaceId = await detectFace(endpoint, apiKey, fullClockPhotoUrl);
     if (!clockFaceId) {
       await updateRecord(supabase, recordId, { status: 'no_face', error_message: 'No face detected in clock photo' });
       return jsonResponse({ success: true, status: 'no_face' });
     }
 
-    const profileFaceId = await detectFace(endpoint, apiKey, profile_photo_url);
+    const profileFaceId = await detectFace(endpoint, apiKey, fullProfilePhotoUrl);
     if (!profileFaceId) {
       await updateRecord(supabase, recordId, { status: 'no_face', error_message: 'No face detected in profile photo' });
       return jsonResponse({ success: true, status: 'no_face' });
@@ -109,6 +126,16 @@ serve(async (req) => {
     });
   }
 });
+
+// Helper: generate a signed URL for a private storage bucket
+async function getSignedUrl(supabase: any, bucket: string, path: string): Promise<string | null> {
+  const { data, error } = await supabase.storage.from(bucket).createSignedUrl(path, 300);
+  if (error) {
+    console.error(`Failed to sign ${bucket}/${path}:`, error.message);
+    return null;
+  }
+  return data.signedUrl;
+}
 
 // Helper: update face_verifications record
 async function updateRecord(supabase: any, id: string, fields: Record<string, any>) {

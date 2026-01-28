@@ -9,6 +9,7 @@ export interface Employee {
   first_name: string;
   last_name: string;
   pin: string | null;
+  avatar_url: string | null;
 }
 
 export const useEmployees = () => {
@@ -33,7 +34,8 @@ export const useEmployees = () => {
           display_name,
           first_name,
           last_name,
-          pin
+          pin,
+          avatar_url
         `)
         .eq('company_id', company.id)
         .eq('status', 'active')
