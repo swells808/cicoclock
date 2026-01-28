@@ -21,7 +21,7 @@ import {
 } from '@/components/ui/alert-dialog';
 
 export const ScheduledReportsManager = () => {
-  const { reports, loading, deleteReport, toggleReportStatus, sendTestEmail } = useScheduledReports();
+  const { reports, loading, deleteReport, toggleReportStatus, sendTestEmail, refetch } = useScheduledReports();
   const [dialogOpen, setDialogOpen] = useState(false);
   const [editingReport, setEditingReport] = useState<ScheduledReport | null>(null);
   const [historyReportId, setHistoryReportId] = useState<string | null>(null);
@@ -220,6 +220,7 @@ export const ScheduledReportsManager = () => {
         open={dialogOpen}
         onOpenChange={setDialogOpen}
         report={editingReport}
+        onSuccess={refetch}
       />
 
       {historyReportId && (

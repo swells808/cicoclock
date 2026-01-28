@@ -19,6 +19,7 @@ interface ScheduledReportDialogProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   report: ScheduledReport | null;
+  onSuccess?: () => void;
 }
 
 interface Recipient {
@@ -44,7 +45,7 @@ const DAYS_OF_WEEK = [
   { value: '6', label: 'Saturday' },
 ];
 
-export const ScheduledReportDialog = ({ open, onOpenChange, report }: ScheduledReportDialogProps) => {
+export const ScheduledReportDialog = ({ open, onOpenChange, report, onSuccess }: ScheduledReportDialogProps) => {
   const { data: profile } = useProfile();
   const { createReport, updateReport } = useScheduledReports();
   const { recipients: existingRecipients, refetch: fetchRecipients, addRecipient, removeRecipient } = useReportRecipients(report?.id || '');
@@ -217,6 +218,7 @@ export const ScheduledReportDialog = ({ open, onOpenChange, report }: ScheduledR
       }
       
       onOpenChange(false);
+      onSuccess?.();
     } catch (err) {
       console.error('Error saving report:', err);
       toast.error('Failed to save scheduled report');
