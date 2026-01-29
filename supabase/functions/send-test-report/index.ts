@@ -316,7 +316,7 @@ async function generateTimeEntryDetailsPDF(
     badgeX -= 8;
     
     // Complete/Active badge
-    const statusText = isComplete ? '✓ Complete' : '● Active';
+    const statusText = isComplete ? 'Complete' : 'Active';
     const statusWidth = font.widthOfTextAtSize(statusText, 8) + 12;
     badgeX -= statusWidth;
     page.drawRectangle({
