@@ -9,6 +9,8 @@ import { format } from 'date-fns';
 import { cn } from '@/lib/utils';
 import { supabase } from '@/integrations/supabase/client';
 import { useCompany } from '@/contexts/CompanyContext';
+import { useUserRole } from '@/hooks/useUserRole';
+import { useProfile } from '@/hooks/useProfile';
 
 export interface ReportFiltersValues {
   reportType: 'employee' | 'project' | 'daily' | 'timecard';
@@ -37,6 +39,12 @@ interface ReportFiltersProps {
 
 export const ReportFilters: React.FC<ReportFiltersProps> = ({ onApply, loading }) => {
   const { company } = useCompany();
+  const { isAdmin, isSupervisor, isLoading: rolesLoading } = useUserRole();
+  const { data: currentUserProfile, isLoading: profileLoading } = useProfile();
+  
+  // Determine if user can view all employees or just themselves
+  const canViewAllEmployees = isAdmin || isSupervisor;
+  
   const [reportType, setReportType] = useState<'employee' | 'project' | 'daily' | 'timecard'>('employee');
   const [startDate, setStartDate] = useState<Date | undefined>(
     new Date(new Date().getFullYear(), new Date().getMonth(), 1)
@@ -48,40 +56,55 @@ export const ReportFilters: React.FC<ReportFiltersProps> = ({ onApply, loading }
   const [employees, setEmployees] = useState<Employee[]>([]);
   const [departments, setDepartments] = useState<Department[]>([]);
 
-  // Fetch employees and departments
+  // Fetch employees and departments (only for admins/supervisors)
   useEffect(() => {
     const fetchData = async () => {
       if (!company?.id) return;
 
-      const [employeesRes, departmentsRes] = await Promise.all([
-        supabase
-          .from('profiles')
-          .select('id, display_name, first_name, last_name')
-          .eq('company_id', company.id)
-          .eq('status', 'active')
-          .order('first_name'),
-        supabase
-          .from('departments')
-          .select('id, name')
-          .eq('company_id', company.id)
-          .eq('is_active', true)
-          .order('name')
-      ]);
+      // Only fetch all employees if user has permission
+      if (canViewAllEmployees) {
+        const [employeesRes, departmentsRes] = await Promise.all([
+          supabase
+            .from('profiles')
+            .select('id, display_name, first_name, last_name')
+            .eq('company_id', company.id)
+            .eq('status', 'active')
+            .order('first_name'),
+          supabase
+            .from('departments')
+            .select('id, name')
+            .eq('company_id', company.id)
+            .eq('is_active', true)
+            .order('name')
+        ]);
 
-      if (employeesRes.data) setEmployees(employeesRes.data);
-      if (departmentsRes.data) setDepartments(departmentsRes.data);
+        if (employeesRes.data) setEmployees(employeesRes.data);
+        if (departmentsRes.data) setDepartments(departmentsRes.data);
+      }
     };
 
     fetchData();
-  }, [company?.id]);
+  }, [company?.id, canViewAllEmployees]);
+
+  // Auto-set employee filter for regular employees
+  useEffect(() => {
+    if (!canViewAllEmployees && currentUserProfile?.id) {
+      setSelectedEmployeeId(currentUserProfile.id);
+    }
+  }, [canViewAllEmployees, currentUserProfile?.id]);
 
   const handleApply = () => {
     onApply({
       reportType,
       startDate,
       endDate,
-      employeeId: selectedEmployeeId === 'all' ? undefined : selectedEmployeeId,
-      departmentId: selectedDepartmentId === 'all' ? undefined : selectedDepartmentId,
+      // For non-privileged users, always use their own profile ID
+      employeeId: canViewAllEmployees 
+        ? (selectedEmployeeId === 'all' ? undefined : selectedEmployeeId)
+        : currentUserProfile?.id,
+      departmentId: canViewAllEmployees
+        ? (selectedDepartmentId === 'all' ? undefined : selectedDepartmentId)
+        : undefined,
     });
   };
 
@@ -92,6 +115,18 @@ export const ReportFilters: React.FC<ReportFiltersProps> = ({ onApply, loading }
 
   const showEmployeeFilter = reportType === 'employee';
   const showDepartmentFilter = reportType === 'employee';
+
+  // Show loading state while checking roles
+  if (rolesLoading || profileLoading) {
+    return (
+      <div className="bg-card p-6 rounded-xl shadow-sm border border-border">
+        <div className="flex items-center gap-2">
+          <Filter className="h-5 w-5 text-muted-foreground" />
+          <span className="text-muted-foreground">Loading filters...</span>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="bg-card p-6 rounded-xl shadow-sm border border-border space-y-4">
@@ -168,7 +203,7 @@ export const ReportFilters: React.FC<ReportFiltersProps> = ({ onApply, loading }
           </Popover>
         </div>
 
-        {showDepartmentFilter && (
+        {showDepartmentFilter && canViewAllEmployees && (
           <div className="space-y-2">
             <Label>Department</Label>
             <Select value={selectedDepartmentId} onValueChange={setSelectedDepartmentId}>
@@ -187,7 +222,7 @@ export const ReportFilters: React.FC<ReportFiltersProps> = ({ onApply, loading }
           </div>
         )}
 
-        {showEmployeeFilter && (
+        {showEmployeeFilter && canViewAllEmployees && (
           <div className="space-y-2">
             <Label>Employee</Label>
             <Select value={selectedEmployeeId} onValueChange={setSelectedEmployeeId}>
