@@ -44,30 +44,33 @@ function formatDuration(minutes: number | null): string {
   return `${hours}h ${mins}m`;
 }
 
-function formatTime(dateString: string): string {
+function formatTime(dateString: string, timezone: string = 'America/Los_Angeles'): string {
   const date = new Date(dateString);
   return date.toLocaleTimeString('en-US', { 
     hour: '2-digit', 
     minute: '2-digit',
-    hour12: true 
+    hour12: true,
+    timeZone: timezone
   });
 }
 
-function formatDate(dateString: string): string {
+function formatDate(dateString: string, timezone: string = 'America/Los_Angeles'): string {
   const date = new Date(dateString);
   return date.toLocaleDateString('en-US', { 
     weekday: 'short',
     month: 'short', 
     day: 'numeric',
-    year: 'numeric'
+    year: 'numeric',
+    timeZone: timezone
   });
 }
 
-function formatShortDate(dateString: string): string {
+function formatShortDate(dateString: string, timezone: string = 'America/Los_Angeles'): string {
   const date = new Date(dateString);
   return date.toLocaleDateString('en-US', { 
     month: 'short', 
-    day: 'numeric'
+    day: 'numeric',
+    timeZone: timezone
   });
 }
 
@@ -89,16 +92,16 @@ function getEmployeeName(entry: TimeEntry): string {
 
 // ============= CSV Generation Functions =============
 
-function generateEmployeeTimecardCSV(entries: TimeEntry[]): string {
+function generateEmployeeTimecardCSV(entries: TimeEntry[], timezone: string): string {
   let csv = 'Employee,Employee Number,Project,Date,Clock In,Clock Out,Duration\n';
   
   for (const entry of entries) {
     const name = getEmployeeName(entry);
     const employeeNumber = entry.profiles.employee_id || '';
     const projectName = entry.projects?.name || 'No Project';
-    const date = formatDate(entry.start_time);
-    const clockIn = formatTime(entry.start_time);
-    const clockOut = entry.end_time ? formatTime(entry.end_time) : 'Open';
+    const date = formatDate(entry.start_time, timezone);
+    const clockIn = formatTime(entry.start_time, timezone);
+    const clockOut = entry.end_time ? formatTime(entry.end_time, timezone) : 'Open';
     const duration = formatDuration(entry.duration_minutes);
     
     const escapeCsv = (val: string) => `"${val.replace(/"/g, '""')}"`;
@@ -109,16 +112,16 @@ function generateEmployeeTimecardCSV(entries: TimeEntry[]): string {
   return csv;
 }
 
-function generateProjectTimecardCSV(entries: TimeEntry[]): string {
+function generateProjectTimecardCSV(entries: TimeEntry[], timezone: string): string {
   let csv = 'Project,Employee,Employee Number,Date,Clock In,Clock Out,Duration\n';
   
   for (const entry of entries) {
     const name = getEmployeeName(entry);
     const employeeNumber = entry.profiles.employee_id || '';
     const projectName = entry.projects?.name || 'No Project';
-    const date = formatDate(entry.start_time);
-    const clockIn = formatTime(entry.start_time);
-    const clockOut = entry.end_time ? formatTime(entry.end_time) : 'Open';
+    const date = formatDate(entry.start_time, timezone);
+    const clockIn = formatTime(entry.start_time, timezone);
+    const clockOut = entry.end_time ? formatTime(entry.end_time, timezone) : 'Open';
     const duration = formatDuration(entry.duration_minutes);
     
     const escapeCsv = (val: string) => `"${val.replace(/"/g, '""')}"`;
@@ -171,7 +174,8 @@ async function generateEmployeeTimecardPDF(
   entries: TimeEntry[], 
   companyName: string, 
   reportName: string,
-  dateRange: { start: string; end: string }
+  dateRange: { start: string; end: string },
+  timezone: string
 ): Promise<Uint8Array> {
   const pdfDoc = await PDFDocument.create();
   const font = await pdfDoc.embedFont(StandardFonts.Helvetica);
@@ -242,9 +246,9 @@ async function generateEmployeeTimecardPDF(
     const name = getEmployeeName(entry);
     const empNumber = entry.profiles.employee_id || '-';
     const projectName = entry.projects?.name || 'No Project';
-    const date = formatShortDate(entry.start_time);
-    const clockIn = formatTime(entry.start_time);
-    const clockOut = entry.end_time ? formatTime(entry.end_time) : 'Open';
+    const date = formatShortDate(entry.start_time, timezone);
+    const clockIn = formatTime(entry.start_time, timezone);
+    const clockOut = entry.end_time ? formatTime(entry.end_time, timezone) : 'Open';
     const duration = formatDuration(entry.duration_minutes);
     
     const rowData = [
@@ -297,7 +301,8 @@ async function generateProjectTimecardPDF(
   entries: TimeEntry[], 
   companyName: string, 
   reportName: string,
-  dateRange: { start: string; end: string }
+  dateRange: { start: string; end: string },
+  timezone: string
 ): Promise<Uint8Array> {
   const pdfDoc = await PDFDocument.create();
   const font = await pdfDoc.embedFont(StandardFonts.Helvetica);
@@ -397,9 +402,9 @@ async function generateProjectTimecardPDF(
       
       const name = getEmployeeName(entry);
       const empNumber = entry.profiles.employee_id || '-';
-      const date = formatShortDate(entry.start_time);
-      const clockIn = formatTime(entry.start_time);
-      const clockOut = entry.end_time ? formatTime(entry.end_time) : 'Open';
+      const date = formatShortDate(entry.start_time, timezone);
+      const clockIn = formatTime(entry.start_time, timezone);
+      const clockOut = entry.end_time ? formatTime(entry.end_time, timezone) : 'Open';
       const duration = formatDuration(entry.duration_minutes);
       
       const rowData = [
@@ -454,7 +459,8 @@ async function generateWeeklyPayrollPDF(
   entries: TimeEntry[], 
   companyName: string, 
   reportName: string,
-  dateRange: { start: string; end: string }
+  dateRange: { start: string; end: string },
+  _timezone: string
 ): Promise<Uint8Array> {
   const pdfDoc = await PDFDocument.create();
   const font = await pdfDoc.embedFont(StandardFonts.Helvetica);
@@ -619,7 +625,8 @@ function generateEmployeeTimecardHtml(
   entries: TimeEntry[], 
   companyName: string, 
   reportName: string,
-  dateRange: { start: string; end: string }
+  dateRange: { start: string; end: string },
+  timezone: string
 ): string {
   const byEmployee = new Map<string, { name: string; entries: TimeEntry[]; totalMinutes: number }>();
   
@@ -644,15 +651,15 @@ function generateEmployeeTimecardHtml(
     
     for (const entry of emp.entries) {
       const projectName = entry.projects?.name || 'No Project';
-      const clockIn = formatTime(entry.start_time);
-      const clockOut = entry.end_time ? formatTime(entry.end_time) : 'Open';
+      const clockIn = formatTime(entry.start_time, timezone);
+      const clockOut = entry.end_time ? formatTime(entry.end_time, timezone) : 'Open';
       const duration = formatDuration(entry.duration_minutes);
       
       tableRows += `
         <tr>
           <td style="padding: 12px; border-bottom: 1px solid #e5e7eb;">${emp.name}</td>
           <td style="padding: 12px; border-bottom: 1px solid #e5e7eb;">${projectName}</td>
-          <td style="padding: 12px; border-bottom: 1px solid #e5e7eb;">${formatDate(entry.start_time)}</td>
+          <td style="padding: 12px; border-bottom: 1px solid #e5e7eb;">${formatDate(entry.start_time, timezone)}</td>
           <td style="padding: 12px; border-bottom: 1px solid #e5e7eb;">${clockIn}</td>
           <td style="padding: 12px; border-bottom: 1px solid #e5e7eb;">${clockOut}</td>
           <td style="padding: 12px; border-bottom: 1px solid #e5e7eb; font-weight: 500;">${duration}</td>
@@ -733,7 +740,8 @@ function generateProjectTimecardHtml(
   entries: TimeEntry[], 
   companyName: string, 
   reportName: string,
-  dateRange: { start: string; end: string }
+  dateRange: { start: string; end: string },
+  timezone: string
 ): string {
   const byProject = new Map<string, { name: string; entries: TimeEntry[]; totalMinutes: number }>();
   
@@ -766,14 +774,14 @@ function generateProjectTimecardHtml(
     
     for (const entry of proj.entries) {
       const empName = getEmployeeName(entry);
-      const clockIn = formatTime(entry.start_time);
-      const clockOut = entry.end_time ? formatTime(entry.end_time) : 'Open';
+      const clockIn = formatTime(entry.start_time, timezone);
+      const clockOut = entry.end_time ? formatTime(entry.end_time, timezone) : 'Open';
       const duration = formatDuration(entry.duration_minutes);
       
       tableRows += `
         <tr>
           <td style="padding: 12px; border-bottom: 1px solid #e5e7eb; padding-left: 24px;">${empName}</td>
-          <td style="padding: 12px; border-bottom: 1px solid #e5e7eb;">${formatDate(entry.start_time)}</td>
+          <td style="padding: 12px; border-bottom: 1px solid #e5e7eb;">${formatDate(entry.start_time, timezone)}</td>
           <td style="padding: 12px; border-bottom: 1px solid #e5e7eb;">${clockIn}</td>
           <td style="padding: 12px; border-bottom: 1px solid #e5e7eb;">${clockOut}</td>
           <td style="padding: 12px; border-bottom: 1px solid #e5e7eb; font-weight: 500;">${duration}</td>
@@ -853,7 +861,8 @@ function generateWeeklyPayrollHtml(
   entries: TimeEntry[], 
   companyName: string, 
   reportName: string,
-  dateRange: { start: string; end: string }
+  dateRange: { start: string; end: string },
+  _timezone: string
 ): string {
   const byEmployee = new Map<string, { name: string; totalMinutes: number; days: Set<string> }>();
   
@@ -1141,28 +1150,28 @@ serve(async (req) => {
 
     switch (report.report_type) {
       case 'employee_timecard':
-        html = generateEmployeeTimecardHtml(typedEntries, companyName, report.name, dateRange);
-        csvContent = generateEmployeeTimecardCSV(typedEntries);
-        pdfBytes = await generateEmployeeTimecardPDF(typedEntries, companyName, report.name, dateRange);
+        html = generateEmployeeTimecardHtml(typedEntries, companyName, report.name, dateRange, companyTimezone);
+        csvContent = generateEmployeeTimecardCSV(typedEntries, companyTimezone);
+        pdfBytes = await generateEmployeeTimecardPDF(typedEntries, companyName, report.name, dateRange, companyTimezone);
         attachmentPrefix = 'employee-timecard';
         break;
       case 'project_timecard':
-        html = generateProjectTimecardHtml(typedEntries, companyName, report.name, dateRange);
-        csvContent = generateProjectTimecardCSV(typedEntries);
-        pdfBytes = await generateProjectTimecardPDF(typedEntries, companyName, report.name, dateRange);
+        html = generateProjectTimecardHtml(typedEntries, companyName, report.name, dateRange, companyTimezone);
+        csvContent = generateProjectTimecardCSV(typedEntries, companyTimezone);
+        pdfBytes = await generateProjectTimecardPDF(typedEntries, companyName, report.name, dateRange, companyTimezone);
         attachmentPrefix = 'project-timecard';
         break;
       case 'weekly_payroll':
       case 'monthly_project_billing':
-        html = generateWeeklyPayrollHtml(typedEntries, companyName, report.name, dateRange);
+        html = generateWeeklyPayrollHtml(typedEntries, companyName, report.name, dateRange, companyTimezone);
         csvContent = generateWeeklyPayrollCSV(typedEntries);
-        pdfBytes = await generateWeeklyPayrollPDF(typedEntries, companyName, report.name, dateRange);
+        pdfBytes = await generateWeeklyPayrollPDF(typedEntries, companyName, report.name, dateRange, companyTimezone);
         attachmentPrefix = 'payroll';
         break;
       default:
-        html = generateEmployeeTimecardHtml(typedEntries, companyName, report.name, dateRange);
-        csvContent = generateEmployeeTimecardCSV(typedEntries);
-        pdfBytes = await generateEmployeeTimecardPDF(typedEntries, companyName, report.name, dateRange);
+        html = generateEmployeeTimecardHtml(typedEntries, companyName, report.name, dateRange, companyTimezone);
+        csvContent = generateEmployeeTimecardCSV(typedEntries, companyTimezone);
+        pdfBytes = await generateEmployeeTimecardPDF(typedEntries, companyName, report.name, dateRange, companyTimezone);
         attachmentPrefix = 'timecard';
     }
 
