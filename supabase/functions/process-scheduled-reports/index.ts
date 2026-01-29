@@ -18,10 +18,18 @@ interface ReportConfig {
 
 interface TimeEntry {
   id: string;
-  clock_in: string;
-  clock_out: string | null;
+  start_time: string;
+  end_time: string | null;
   duration_minutes: number | null;
-  break_duration_minutes: number | null;
+  is_break: boolean;
+  clock_in_photo_url: string | null;
+  clock_out_photo_url: string | null;
+  clock_in_latitude: number | null;
+  clock_in_longitude: number | null;
+  clock_in_address: string | null;
+  clock_out_latitude: number | null;
+  clock_out_longitude: number | null;
+  clock_out_address: string | null;
   profiles: {
     id: string;
     first_name: string | null;
@@ -36,6 +44,8 @@ interface TimeEntry {
   } | null;
 }
 
+// ============= Utility Functions =============
+
 function formatDuration(minutes: number | null): string {
   if (!minutes) return '0h 0m';
   const hours = Math.floor(minutes / 60);
@@ -43,30 +53,44 @@ function formatDuration(minutes: number | null): string {
   return `${hours}h ${mins}m`;
 }
 
-function formatTime(dateString: string): string {
+function formatTime(dateString: string, timezone: string = 'America/Los_Angeles'): string {
   const date = new Date(dateString);
   return date.toLocaleTimeString('en-US', { 
     hour: '2-digit', 
     minute: '2-digit',
-    hour12: true 
+    hour12: true,
+    timeZone: timezone
   });
 }
 
-function formatDate(dateString: string): string {
+function formatDate(dateString: string, timezone: string = 'America/Los_Angeles'): string {
   const date = new Date(dateString);
   return date.toLocaleDateString('en-US', { 
     weekday: 'short',
     month: 'short', 
     day: 'numeric',
-    year: 'numeric'
+    year: 'numeric',
+    timeZone: timezone
   });
 }
 
-function formatShortDate(dateString: string): string {
+function formatShortDate(dateString: string, timezone: string = 'America/Los_Angeles'): string {
   const date = new Date(dateString);
   return date.toLocaleDateString('en-US', { 
     month: 'short', 
-    day: 'numeric'
+    day: 'numeric',
+    timeZone: timezone
+  });
+}
+
+function formatLongDate(dateString: string, timezone: string = 'America/Los_Angeles'): string {
+  const date = new Date(dateString);
+  return date.toLocaleDateString('en-US', { 
+    weekday: 'long',
+    month: 'long', 
+    day: 'numeric',
+    year: 'numeric',
+    timeZone: timezone
   });
 }
 
@@ -88,44 +112,44 @@ function getEmployeeName(entry: TimeEntry): string {
 
 // ============= CSV Generation Functions =============
 
-function generateEmployeeTimecardCSV(entries: TimeEntry[]): string {
-  let csv = 'Employee,Employee Number,Project,Date,Clock In,Clock Out,Break,Duration\n';
+function generateEmployeeTimecardCSV(entries: TimeEntry[], timezone: string): string {
+  let csv = 'Employee,Employee Number,Project,Date,Clock In,Clock Out,Duration,Type,Clock In Address,Clock Out Address\n';
   
   for (const entry of entries) {
     const name = getEmployeeName(entry);
     const employeeNumber = entry.profiles.employee_id || '';
     const projectName = entry.projects?.name || 'No Project';
-    const date = formatDate(entry.clock_in);
-    const clockIn = formatTime(entry.clock_in);
-    const clockOut = entry.clock_out ? formatTime(entry.clock_out) : 'Open';
-    const breakTime = formatDuration(entry.break_duration_minutes);
+    const date = formatDate(entry.start_time, timezone);
+    const clockIn = formatTime(entry.start_time, timezone);
+    const clockOut = entry.end_time ? formatTime(entry.end_time, timezone) : 'Open';
     const duration = formatDuration(entry.duration_minutes);
+    const entryType = entry.is_break ? 'Break' : 'Work';
+    const clockInAddr = entry.clock_in_address || '';
+    const clockOutAddr = entry.clock_out_address || '';
     
-    // Escape quotes in values
     const escapeCsv = (val: string) => `"${val.replace(/"/g, '""')}"`;
     
-    csv += `${escapeCsv(name)},${escapeCsv(employeeNumber)},${escapeCsv(projectName)},${escapeCsv(date)},${escapeCsv(clockIn)},${escapeCsv(clockOut)},${escapeCsv(breakTime)},${escapeCsv(duration)}\n`;
+    csv += `${escapeCsv(name)},${escapeCsv(employeeNumber)},${escapeCsv(projectName)},${escapeCsv(date)},${escapeCsv(clockIn)},${escapeCsv(clockOut)},${escapeCsv(duration)},${escapeCsv(entryType)},${escapeCsv(clockInAddr)},${escapeCsv(clockOutAddr)}\n`;
   }
   
   return csv;
 }
 
-function generateProjectTimecardCSV(entries: TimeEntry[]): string {
-  let csv = 'Project,Employee,Employee Number,Date,Clock In,Clock Out,Break,Duration\n';
+function generateProjectTimecardCSV(entries: TimeEntry[], timezone: string): string {
+  let csv = 'Project,Employee,Employee Number,Date,Clock In,Clock Out,Duration\n';
   
   for (const entry of entries) {
     const name = getEmployeeName(entry);
     const employeeNumber = entry.profiles.employee_id || '';
     const projectName = entry.projects?.name || 'No Project';
-    const date = formatDate(entry.clock_in);
-    const clockIn = formatTime(entry.clock_in);
-    const clockOut = entry.clock_out ? formatTime(entry.clock_out) : 'Open';
-    const breakTime = formatDuration(entry.break_duration_minutes);
+    const date = formatDate(entry.start_time, timezone);
+    const clockIn = formatTime(entry.start_time, timezone);
+    const clockOut = entry.end_time ? formatTime(entry.end_time, timezone) : 'Open';
     const duration = formatDuration(entry.duration_minutes);
     
     const escapeCsv = (val: string) => `"${val.replace(/"/g, '""')}"`;
     
-    csv += `${escapeCsv(projectName)},${escapeCsv(name)},${escapeCsv(employeeNumber)},${escapeCsv(date)},${escapeCsv(clockIn)},${escapeCsv(clockOut)},${escapeCsv(breakTime)},${escapeCsv(duration)}\n`;
+    csv += `${escapeCsv(projectName)},${escapeCsv(name)},${escapeCsv(employeeNumber)},${escapeCsv(date)},${escapeCsv(clockIn)},${escapeCsv(clockOut)},${escapeCsv(duration)}\n`;
   }
   
   return csv;
@@ -136,7 +160,6 @@ function generateWeeklyPayrollCSV(entries: TimeEntry[]): string {
     name: string; 
     employeeNumber: string;
     totalMinutes: number; 
-    breakMinutes: number; 
     days: Set<string> 
   }>();
   
@@ -146,16 +169,15 @@ function generateWeeklyPayrollCSV(entries: TimeEntry[]): string {
     const employeeNumber = entry.profiles.employee_id || '';
     
     if (!byEmployee.has(profileId)) {
-      byEmployee.set(profileId, { name, employeeNumber, totalMinutes: 0, breakMinutes: 0, days: new Set() });
+      byEmployee.set(profileId, { name, employeeNumber, totalMinutes: 0, days: new Set() });
     }
     
     const emp = byEmployee.get(profileId)!;
     emp.totalMinutes += entry.duration_minutes || 0;
-    emp.breakMinutes += entry.break_duration_minutes || 0;
-    emp.days.add(entry.clock_in.split('T')[0]);
+    emp.days.add(entry.start_time.split('T')[0]);
   }
   
-  let csv = 'Employee,Employee Number,Days Worked,Regular Hours,Overtime,Breaks,Total Hours\n';
+  let csv = 'Employee,Employee Number,Days Worked,Regular Hours,Overtime,Total Hours\n';
   
   const escapeCsv = (val: string) => `"${val.replace(/"/g, '""')}"`;
   
@@ -163,19 +185,20 @@ function generateWeeklyPayrollCSV(entries: TimeEntry[]): string {
     const regularMinutes = Math.min(emp.totalMinutes, 40 * 60);
     const overtimeMinutes = Math.max(0, emp.totalMinutes - 40 * 60);
     
-    csv += `${escapeCsv(emp.name)},${escapeCsv(emp.employeeNumber)},${emp.days.size},${escapeCsv(formatDuration(regularMinutes))},${escapeCsv(formatDuration(overtimeMinutes))},${escapeCsv(formatDuration(emp.breakMinutes))},${escapeCsv(formatDuration(emp.totalMinutes))}\n`;
+    csv += `${escapeCsv(emp.name)},${escapeCsv(emp.employeeNumber)},${emp.days.size},${escapeCsv(formatDuration(regularMinutes))},${escapeCsv(formatDuration(overtimeMinutes))},${escapeCsv(formatDuration(emp.totalMinutes))}\n`;
   }
   
   return csv;
 }
 
-// ============= PDF Generation Functions =============
+// ============= Time Entry Details PDF Generation (Card-based layout) =============
 
-async function generateEmployeeTimecardPDF(
+async function generateTimeEntryDetailsPDF(
   entries: TimeEntry[], 
   companyName: string, 
   reportName: string,
-  dateRange: { start: string; end: string }
+  dateRange: { start: string; end: string },
+  timezone: string
 ): Promise<Uint8Array> {
   const pdfDoc = await PDFDocument.create();
   const font = await pdfDoc.embedFont(StandardFonts.Helvetica);
@@ -183,12 +206,16 @@ async function generateEmployeeTimecardPDF(
   
   const pageWidth = 612;
   const pageHeight = 792;
-  let page = pdfDoc.addPage([pageWidth, pageHeight]);
-  let yPosition = pageHeight - 50;
+  const margin = 40;
+  const cardHeight = 140;
+  const cardSpacing = 12;
   
-  // Title
-  page.drawText(reportName || 'Employee Timecard Report', {
-    x: 50,
+  let page = pdfDoc.addPage([pageWidth, pageHeight]);
+  let yPosition = pageHeight - margin;
+  
+  // Page Header
+  page.drawText(reportName || 'Time Entry Details Report', {
+    x: margin,
     y: yPosition,
     size: 18,
     font: boldFont,
@@ -196,9 +223,8 @@ async function generateEmployeeTimecardPDF(
   });
   yPosition -= 22;
   
-  // Company name
   page.drawText(companyName, {
-    x: 50,
+    x: margin,
     y: yPosition,
     size: 12,
     font: font,
@@ -206,9 +232,8 @@ async function generateEmployeeTimecardPDF(
   });
   yPosition -= 18;
   
-  // Date range
   page.drawText(`Period: ${dateRange.start} - ${dateRange.end}`, {
-    x: 50,
+    x: margin,
     y: yPosition,
     size: 10,
     font: font,
@@ -216,99 +241,369 @@ async function generateEmployeeTimecardPDF(
   });
   yPosition -= 30;
   
-  // Table headers
-  const headers = ['Employee', 'Emp #', 'Project', 'Date', 'In', 'Out', 'Hours'];
-  const colWidths = [100, 50, 90, 75, 50, 50, 50];
-  let xPos = 50;
-  
-  for (let i = 0; i < headers.length; i++) {
-    page.drawText(headers[i], {
-      x: xPos,
-      y: yPosition,
-      size: 9,
+  // Draw Time Entry Cards
+  for (const entry of entries) {
+    if (yPosition - cardHeight < margin + 30) {
+      page = pdfDoc.addPage([pageWidth, pageHeight]);
+      yPosition = pageHeight - margin;
+    }
+    
+    const cardTop = yPosition;
+    const cardWidth = pageWidth - (margin * 2);
+    
+    // Card Border
+    page.drawRectangle({
+      x: margin,
+      y: cardTop - cardHeight,
+      width: cardWidth,
+      height: cardHeight,
+      borderColor: rgb(0.85, 0.85, 0.85),
+      borderWidth: 1,
+      color: rgb(1, 1, 1),
+    });
+    
+    // Card Header Background
+    page.drawRectangle({
+      x: margin,
+      y: cardTop - 28,
+      width: cardWidth,
+      height: 28,
+      color: rgb(0.97, 0.97, 0.98),
+    });
+    
+    // Header Content
+    const employeeName = getEmployeeName(entry);
+    const projectName = entry.projects?.name || 'No Project';
+    const dateStr = formatLongDate(entry.start_time, timezone);
+    const isComplete = entry.end_time !== null;
+    const isBreak = entry.is_break;
+    const duration = formatDuration(entry.duration_minutes);
+    
+    page.drawText(`${dateStr}  •  ${employeeName}  •  ${projectName}`, {
+      x: margin + 10,
+      y: cardTop - 18,
+      size: 10,
       font: boldFont,
       color: rgb(0.2, 0.2, 0.2),
     });
-    xPos += colWidths[i];
-  }
-  yPosition -= 15;
-  
-  // Draw line under headers
-  page.drawLine({
-    start: { x: 50, y: yPosition + 5 },
-    end: { x: pageWidth - 50, y: yPosition + 5 },
-    thickness: 1,
-    color: rgb(0.8, 0.8, 0.8),
-  });
-  yPosition -= 8;
-  
-  // Table rows
-  for (const entry of entries) {
-    if (yPosition < 60) {
-      page = pdfDoc.addPage([pageWidth, pageHeight]);
-      yPosition = pageHeight - 50;
-    }
     
-    const name = getEmployeeName(entry);
-    const empNumber = entry.profiles.employee_id || '-';
-    const projectName = entry.projects?.name || 'No Project';
-    const date = formatShortDate(entry.clock_in);
-    const clockIn = formatTime(entry.clock_in);
-    const clockOut = entry.clock_out ? formatTime(entry.clock_out) : 'Open';
-    const duration = formatDuration(entry.duration_minutes);
+    // Status badges
+    const badgeY = cardTop - 20;
+    let badgeX = margin + cardWidth - 10;
     
-    const rowData = [
-      name.substring(0, 16),
-      empNumber.substring(0, 8),
-      projectName.substring(0, 14),
-      date,
-      clockIn,
-      clockOut,
-      duration
-    ];
+    // Duration badge
+    const durationText = `Duration: ${duration}`;
+    const durationWidth = font.widthOfTextAtSize(durationText, 8) + 12;
+    badgeX -= durationWidth;
+    page.drawRectangle({
+      x: badgeX,
+      y: badgeY - 5,
+      width: durationWidth,
+      height: 14,
+      color: rgb(0.9, 0.95, 1),
+      borderColor: rgb(0.7, 0.85, 1),
+      borderWidth: 0.5,
+    });
+    page.drawText(durationText, {
+      x: badgeX + 6,
+      y: badgeY,
+      size: 8,
+      font: font,
+      color: rgb(0.2, 0.4, 0.8),
+    });
+    badgeX -= 8;
     
-    xPos = 50;
-    for (let i = 0; i < rowData.length; i++) {
-      page.drawText(rowData[i], {
-        x: xPos,
-        y: yPosition,
-        size: 8,
-        font: font,
-        color: rgb(0.2, 0.2, 0.2),
-      });
-      xPos += colWidths[i];
-    }
-    yPosition -= 14;
+    // Complete/Active badge
+    const statusText = isComplete ? '✓ Complete' : '● Active';
+    const statusWidth = font.widthOfTextAtSize(statusText, 8) + 12;
+    badgeX -= statusWidth;
+    page.drawRectangle({
+      x: badgeX,
+      y: badgeY - 5,
+      width: statusWidth,
+      height: 14,
+      color: isComplete ? rgb(0.9, 1, 0.9) : rgb(1, 0.95, 0.9),
+      borderColor: isComplete ? rgb(0.6, 0.9, 0.6) : rgb(1, 0.8, 0.6),
+      borderWidth: 0.5,
+    });
+    page.drawText(statusText, {
+      x: badgeX + 6,
+      y: badgeY,
+      size: 8,
+      font: font,
+      color: isComplete ? rgb(0.2, 0.6, 0.2) : rgb(0.8, 0.5, 0.2),
+    });
+    badgeX -= 8;
+    
+    // Work/Break badge
+    const typeText = isBreak ? 'Break' : 'Work';
+    const typeWidth = font.widthOfTextAtSize(typeText, 8) + 12;
+    badgeX -= typeWidth;
+    page.drawRectangle({
+      x: badgeX,
+      y: badgeY - 5,
+      width: typeWidth,
+      height: 14,
+      color: isBreak ? rgb(1, 0.95, 0.85) : rgb(0.85, 0.9, 1),
+      borderColor: isBreak ? rgb(0.9, 0.7, 0.4) : rgb(0.6, 0.7, 1),
+      borderWidth: 0.5,
+    });
+    page.drawText(typeText, {
+      x: badgeX + 6,
+      y: badgeY,
+      size: 8,
+      font: font,
+      color: isBreak ? rgb(0.7, 0.4, 0.1) : rgb(0.3, 0.4, 0.8),
+    });
+    
+    // Main Content Area
+    const contentTop = cardTop - 38;
+    const panelWidth = 130;
+    const panelHeight = 85;
+    const timelineWidth = cardWidth - (panelWidth * 2) - 40;
+    
+    // Clock In Panel
+    const clockInX = margin + 10;
+    const clockInY = contentTop - panelHeight;
+    
+    page.drawRectangle({
+      x: clockInX,
+      y: clockInY,
+      width: panelWidth,
+      height: panelHeight,
+      color: rgb(0.94, 0.97, 1),
+      borderColor: rgb(0.8, 0.9, 1),
+      borderWidth: 0.5,
+    });
+    
+    page.drawText('CLOCK IN', {
+      x: clockInX + 8,
+      y: clockInY + panelHeight - 14,
+      size: 8,
+      font: boldFont,
+      color: rgb(0.3, 0.5, 0.8),
+    });
+    
+    const clockInTime = formatTime(entry.start_time, timezone);
+    page.drawText(clockInTime, {
+      x: clockInX + 8,
+      y: clockInY + panelHeight - 30,
+      size: 14,
+      font: boldFont,
+      color: rgb(0.1, 0.1, 0.1),
+    });
+    
+    // Photo placeholder
+    page.drawRectangle({
+      x: clockInX + 8,
+      y: clockInY + 28,
+      width: 35,
+      height: 25,
+      color: rgb(0.9, 0.9, 0.9),
+      borderColor: rgb(0.7, 0.7, 0.7),
+      borderWidth: 0.5,
+    });
+    page.drawText(entry.clock_in_photo_url ? '📷' : '-', {
+      x: clockInX + 18,
+      y: clockInY + 36,
+      size: 10,
+      font: font,
+      color: rgb(0.5, 0.5, 0.5),
+    });
+    
+    // Map placeholder
+    page.drawRectangle({
+      x: clockInX + 48,
+      y: clockInY + 28,
+      width: 35,
+      height: 25,
+      color: rgb(0.92, 0.96, 0.92),
+      borderColor: rgb(0.7, 0.85, 0.7),
+      borderWidth: 0.5,
+    });
+    page.drawText(entry.clock_in_latitude ? '🗺️' : '-', {
+      x: clockInX + 58,
+      y: clockInY + 36,
+      size: 10,
+      font: font,
+      color: rgb(0.4, 0.6, 0.4),
+    });
+    
+    // Address
+    const clockInAddr = entry.clock_in_address || 'No address';
+    const truncatedInAddr = clockInAddr.length > 22 ? clockInAddr.substring(0, 20) + '...' : clockInAddr;
+    page.drawText(truncatedInAddr, {
+      x: clockInX + 8,
+      y: clockInY + 12,
+      size: 7,
+      font: font,
+      color: rgb(0.4, 0.4, 0.4),
+    });
+    
+    // Timeline Bar
+    const timelineX = clockInX + panelWidth + 15;
+    const timelineY = clockInY + (panelHeight / 2) - 5;
+    const timelineHeight = 20;
+    
+    page.drawRectangle({
+      x: timelineX,
+      y: timelineY,
+      width: timelineWidth,
+      height: timelineHeight,
+      color: rgb(0.95, 0.95, 0.95),
+      borderColor: rgb(0.85, 0.85, 0.85),
+      borderWidth: 0.5,
+    });
+    
+    const fillColor = isBreak ? rgb(1, 0.85, 0.6) : rgb(0.6, 0.8, 1);
+    page.drawRectangle({
+      x: timelineX + 2,
+      y: timelineY + 2,
+      width: timelineWidth - 4,
+      height: timelineHeight - 4,
+      color: fillColor,
+    });
+    
+    const timelineLabel = isBreak ? 'Break Period' : 'Work Period';
+    page.drawText(timelineLabel, {
+      x: timelineX + (timelineWidth / 2) - 20,
+      y: timelineY + 6,
+      size: 8,
+      font: font,
+      color: rgb(0.3, 0.3, 0.3),
+    });
+    
+    page.drawText(clockInTime, {
+      x: timelineX,
+      y: timelineY - 12,
+      size: 7,
+      font: font,
+      color: rgb(0.5, 0.5, 0.5),
+    });
+    
+    const clockOutTime = entry.end_time ? formatTime(entry.end_time, timezone) : 'Active';
+    page.drawText(clockOutTime, {
+      x: timelineX + timelineWidth - 30,
+      y: timelineY - 12,
+      size: 7,
+      font: font,
+      color: rgb(0.5, 0.5, 0.5),
+    });
+    
+    // Clock Out Panel
+    const clockOutX = timelineX + timelineWidth + 15;
+    
+    const clockOutBg = isComplete ? rgb(0.94, 0.98, 0.94) : rgb(0.98, 0.96, 0.94);
+    page.drawRectangle({
+      x: clockOutX,
+      y: clockInY,
+      width: panelWidth,
+      height: panelHeight,
+      color: clockOutBg,
+      borderColor: isComplete ? rgb(0.8, 0.9, 0.8) : rgb(0.9, 0.85, 0.8),
+      borderWidth: 0.5,
+    });
+    
+    page.drawText('CLOCK OUT', {
+      x: clockOutX + 8,
+      y: clockInY + panelHeight - 14,
+      size: 8,
+      font: boldFont,
+      color: isComplete ? rgb(0.3, 0.6, 0.3) : rgb(0.6, 0.5, 0.4),
+    });
+    
+    page.drawText(clockOutTime, {
+      x: clockOutX + 8,
+      y: clockInY + panelHeight - 30,
+      size: 14,
+      font: boldFont,
+      color: rgb(0.1, 0.1, 0.1),
+    });
+    
+    // Photo placeholder
+    page.drawRectangle({
+      x: clockOutX + 8,
+      y: clockInY + 28,
+      width: 35,
+      height: 25,
+      color: rgb(0.9, 0.9, 0.9),
+      borderColor: rgb(0.7, 0.7, 0.7),
+      borderWidth: 0.5,
+    });
+    page.drawText(entry.clock_out_photo_url ? '📷' : '-', {
+      x: clockOutX + 18,
+      y: clockInY + 36,
+      size: 10,
+      font: font,
+      color: rgb(0.5, 0.5, 0.5),
+    });
+    
+    // Map placeholder
+    page.drawRectangle({
+      x: clockOutX + 48,
+      y: clockInY + 28,
+      width: 35,
+      height: 25,
+      color: rgb(0.92, 0.96, 0.92),
+      borderColor: rgb(0.7, 0.85, 0.7),
+      borderWidth: 0.5,
+    });
+    page.drawText(entry.clock_out_latitude ? '🗺️' : '-', {
+      x: clockOutX + 58,
+      y: clockInY + 36,
+      size: 10,
+      font: font,
+      color: rgb(0.4, 0.6, 0.4),
+    });
+    
+    // Address
+    const clockOutAddr = entry.clock_out_address || (isComplete ? 'No address' : '-');
+    const truncatedOutAddr = clockOutAddr.length > 22 ? clockOutAddr.substring(0, 20) + '...' : clockOutAddr;
+    page.drawText(truncatedOutAddr, {
+      x: clockOutX + 8,
+      y: clockInY + 12,
+      size: 7,
+      font: font,
+      color: rgb(0.4, 0.4, 0.4),
+    });
+    
+    yPosition = cardTop - cardHeight - cardSpacing;
   }
   
   if (entries.length === 0) {
     page.drawText('No time entries found for this period.', {
-      x: 50,
+      x: margin,
       y: yPosition,
-      size: 10,
+      size: 12,
       font: font,
       color: rgb(0.5, 0.5, 0.5),
     });
   }
   
-  // Footer on last page
-  const lastPage = pdfDoc.getPages()[pdfDoc.getPageCount() - 1];
-  lastPage.drawText(`Generated by CICO on ${new Date().toLocaleString()}`, {
-    x: 50,
-    y: 30,
-    size: 8,
-    font: font,
-    color: rgb(0.6, 0.6, 0.6),
-  });
+  // Footer on all pages
+  const pages = pdfDoc.getPages();
+  for (let i = 0; i < pages.length; i++) {
+    const p = pages[i];
+    p.drawText(`Generated by CICO on ${new Date().toLocaleString()} | Page ${i + 1} of ${pages.length}`, {
+      x: margin,
+      y: 20,
+      size: 8,
+      font: font,
+      color: rgb(0.6, 0.6, 0.6),
+    });
+  }
   
   return await pdfDoc.save();
 }
+
+// ============= Other PDF Generation Functions =============
 
 async function generateProjectTimecardPDF(
   entries: TimeEntry[], 
   companyName: string, 
   reportName: string,
-  dateRange: { start: string; end: string }
+  dateRange: { start: string; end: string },
+  timezone: string
 ): Promise<Uint8Array> {
   const pdfDoc = await PDFDocument.create();
   const font = await pdfDoc.embedFont(StandardFonts.Helvetica);
@@ -319,7 +614,6 @@ async function generateProjectTimecardPDF(
   let page = pdfDoc.addPage([pageWidth, pageHeight]);
   let yPosition = pageHeight - 50;
   
-  // Title
   page.drawText(reportName || 'Project Timecard Report', {
     x: 50,
     y: yPosition,
@@ -329,7 +623,6 @@ async function generateProjectTimecardPDF(
   });
   yPosition -= 22;
   
-  // Company name
   page.drawText(companyName, {
     x: 50,
     y: yPosition,
@@ -339,7 +632,6 @@ async function generateProjectTimecardPDF(
   });
   yPosition -= 18;
   
-  // Date range
   page.drawText(`Period: ${dateRange.start} - ${dateRange.end}`, {
     x: 50,
     y: yPosition,
@@ -349,7 +641,6 @@ async function generateProjectTimecardPDF(
   });
   yPosition -= 30;
   
-  // Group by project
   const byProject = new Map<string, { name: string; entries: TimeEntry[]; totalMinutes: number }>();
   
   for (const entry of entries) {
@@ -365,18 +656,15 @@ async function generateProjectTimecardPDF(
     proj.totalMinutes += entry.duration_minutes || 0;
   }
   
-  // Table headers
-  const headers = ['Employee', 'Emp #', 'Date', 'In', 'Out', 'Break', 'Hours'];
-  const colWidths = [110, 55, 80, 55, 55, 55, 55];
+  const headers = ['Employee', 'Emp #', 'Date', 'In', 'Out', 'Hours'];
+  const colWidths = [120, 60, 90, 60, 60, 65];
   
   for (const [, proj] of byProject) {
-    // Check if we need a new page for project header
     if (yPosition < 100) {
       page = pdfDoc.addPage([pageWidth, pageHeight]);
       yPosition = pageHeight - 50;
     }
     
-    // Project header
     page.drawRectangle({
       x: 50,
       y: yPosition - 4,
@@ -394,7 +682,6 @@ async function generateProjectTimecardPDF(
     });
     yPosition -= 25;
     
-    // Column headers
     let xPos = 50;
     for (let i = 0; i < headers.length; i++) {
       page.drawText(headers[i], {
@@ -408,7 +695,6 @@ async function generateProjectTimecardPDF(
     }
     yPosition -= 14;
     
-    // Entries
     for (const entry of proj.entries) {
       if (yPosition < 60) {
         page = pdfDoc.addPage([pageWidth, pageHeight]);
@@ -417,19 +703,17 @@ async function generateProjectTimecardPDF(
       
       const name = getEmployeeName(entry);
       const empNumber = entry.profiles.employee_id || '-';
-      const date = formatShortDate(entry.clock_in);
-      const clockIn = formatTime(entry.clock_in);
-      const clockOut = entry.clock_out ? formatTime(entry.clock_out) : 'Open';
-      const breakTime = formatDuration(entry.break_duration_minutes);
+      const date = formatShortDate(entry.start_time, timezone);
+      const clockIn = formatTime(entry.start_time, timezone);
+      const clockOut = entry.end_time ? formatTime(entry.end_time, timezone) : 'Open';
       const duration = formatDuration(entry.duration_minutes);
       
       const rowData = [
-        name.substring(0, 18),
+        name.substring(0, 20),
         empNumber.substring(0, 8),
         date,
         clockIn,
         clockOut,
-        breakTime,
         duration
       ];
       
@@ -447,7 +731,7 @@ async function generateProjectTimecardPDF(
       yPosition -= 13;
     }
     
-    yPosition -= 10; // Space between projects
+    yPosition -= 10;
   }
   
   if (entries.length === 0) {
@@ -460,7 +744,6 @@ async function generateProjectTimecardPDF(
     });
   }
   
-  // Footer
   const lastPage = pdfDoc.getPages()[pdfDoc.getPageCount() - 1];
   lastPage.drawText(`Generated by CICO on ${new Date().toLocaleString()}`, {
     x: 50,
@@ -477,7 +760,8 @@ async function generateWeeklyPayrollPDF(
   entries: TimeEntry[], 
   companyName: string, 
   reportName: string,
-  dateRange: { start: string; end: string }
+  dateRange: { start: string; end: string },
+  _timezone: string
 ): Promise<Uint8Array> {
   const pdfDoc = await PDFDocument.create();
   const font = await pdfDoc.embedFont(StandardFonts.Helvetica);
@@ -488,7 +772,6 @@ async function generateWeeklyPayrollPDF(
   let page = pdfDoc.addPage([pageWidth, pageHeight]);
   let yPosition = pageHeight - 50;
   
-  // Title
   page.drawText(reportName || 'Weekly Payroll Report', {
     x: 50,
     y: yPosition,
@@ -498,7 +781,6 @@ async function generateWeeklyPayrollPDF(
   });
   yPosition -= 22;
   
-  // Company name
   page.drawText(companyName, {
     x: 50,
     y: yPosition,
@@ -508,7 +790,6 @@ async function generateWeeklyPayrollPDF(
   });
   yPosition -= 18;
   
-  // Date range
   page.drawText(`Pay Period: ${dateRange.start} - ${dateRange.end}`, {
     x: 50,
     y: yPosition,
@@ -518,14 +799,7 @@ async function generateWeeklyPayrollPDF(
   });
   yPosition -= 30;
   
-  // Group by employee
-  const byEmployee = new Map<string, { 
-    name: string; 
-    employeeNumber: string;
-    totalMinutes: number; 
-    breakMinutes: number; 
-    days: Set<string> 
-  }>();
+  const byEmployee = new Map<string, { name: string; employeeNumber: string; totalMinutes: number; days: Set<string> }>();
   
   for (const entry of entries) {
     const profileId = entry.profiles.id;
@@ -533,18 +807,16 @@ async function generateWeeklyPayrollPDF(
     const employeeNumber = entry.profiles.employee_id || '';
     
     if (!byEmployee.has(profileId)) {
-      byEmployee.set(profileId, { name, employeeNumber, totalMinutes: 0, breakMinutes: 0, days: new Set() });
+      byEmployee.set(profileId, { name, employeeNumber, totalMinutes: 0, days: new Set() });
     }
     
     const emp = byEmployee.get(profileId)!;
     emp.totalMinutes += entry.duration_minutes || 0;
-    emp.breakMinutes += entry.break_duration_minutes || 0;
-    emp.days.add(entry.clock_in.split('T')[0]);
+    emp.days.add(entry.start_time.split('T')[0]);
   }
   
-  // Table headers
-  const headers = ['Employee', 'Emp #', 'Days', 'Regular', 'Overtime', 'Breaks', 'Total'];
-  const colWidths = [130, 60, 45, 65, 65, 60, 60];
+  const headers = ['Employee', 'Emp #', 'Days', 'Regular', 'Overtime', 'Total'];
+  const colWidths = [140, 70, 50, 80, 80, 80];
   let xPos = 50;
   
   for (let i = 0; i < headers.length; i++) {
@@ -559,7 +831,6 @@ async function generateWeeklyPayrollPDF(
   }
   yPosition -= 15;
   
-  // Draw line under headers
   page.drawLine({
     start: { x: 50, y: yPosition + 5 },
     end: { x: pageWidth - 50, y: yPosition + 5 },
@@ -570,9 +841,7 @@ async function generateWeeklyPayrollPDF(
   
   let grandTotalMinutes = 0;
   
-  const sortedEmployees = Array.from(byEmployee.entries()).sort((a, b) => a[1].name.localeCompare(b[1].name));
-  
-  for (const [, emp] of sortedEmployees) {
+  for (const [, emp] of byEmployee) {
     if (yPosition < 60) {
       page = pdfDoc.addPage([pageWidth, pageHeight]);
       yPosition = pageHeight - 50;
@@ -584,41 +853,46 @@ async function generateWeeklyPayrollPDF(
     
     const rowData = [
       emp.name.substring(0, 22),
-      emp.employeeNumber.substring(0, 10) || '-',
-      String(emp.days.size),
+      emp.employeeNumber.substring(0, 10),
+      emp.days.size.toString(),
       formatDuration(regularMinutes),
       formatDuration(overtimeMinutes),
-      formatDuration(emp.breakMinutes),
       formatDuration(emp.totalMinutes)
     ];
     
     xPos = 50;
     for (let i = 0; i < rowData.length; i++) {
-      const isOvertime = i === 4 && overtimeMinutes > 0;
       page.drawText(rowData[i], {
         x: xPos,
         y: yPosition,
         size: 8,
-        font: i === 6 ? boldFont : font,
-        color: isOvertime ? rgb(0.86, 0.15, 0.15) : rgb(0.2, 0.2, 0.2),
+        font: font,
+        color: rgb(0.2, 0.2, 0.2),
       });
       xPos += colWidths[i];
     }
     yPosition -= 14;
   }
   
-  // Total row
   yPosition -= 5;
   page.drawLine({
     start: { x: 50, y: yPosition + 10 },
     end: { x: pageWidth - 50, y: yPosition + 10 },
     thickness: 1,
-    color: rgb(0.6, 0.6, 0.6),
+    color: rgb(0.8, 0.8, 0.8),
   });
   
-  page.drawText(`Grand Total: ${formatDuration(grandTotalMinutes)}`, {
+  page.drawText('Grand Total:', {
     x: 50,
-    y: yPosition - 5,
+    y: yPosition,
+    size: 10,
+    font: boldFont,
+    color: rgb(0.2, 0.2, 0.2),
+  });
+  
+  page.drawText(formatDuration(grandTotalMinutes), {
+    x: 50 + colWidths[0] + colWidths[1] + colWidths[2] + colWidths[3] + colWidths[4],
+    y: yPosition,
     size: 10,
     font: boldFont,
     color: rgb(0.2, 0.2, 0.2),
@@ -634,7 +908,6 @@ async function generateWeeklyPayrollPDF(
     });
   }
   
-  // Footer
   const lastPage = pdfDoc.getPages()[pdfDoc.getPageCount() - 1];
   lastPage.drawText(`Generated by CICO on ${new Date().toLocaleString()}`, {
     x: 50,
@@ -653,49 +926,34 @@ function generateEmployeeTimecardHtml(
   entries: TimeEntry[], 
   companyName: string, 
   reportName: string,
-  dateRange: { start: string; end: string }
+  dateRange: { start: string; end: string },
+  timezone: string
 ): string {
-  // Group entries by employee
-  const byEmployee = new Map<string, { name: string; entries: TimeEntry[]; totalMinutes: number }>();
-  
-  for (const entry of entries) {
-    const profileId = entry.profiles.id;
-    const name = getEmployeeName(entry);
-    
-    if (!byEmployee.has(profileId)) {
-      byEmployee.set(profileId, { name, entries: [], totalMinutes: 0 });
-    }
-    
-    const emp = byEmployee.get(profileId)!;
-    emp.entries.push(entry);
-    emp.totalMinutes += entry.duration_minutes || 0;
-  }
-
   let tableRows = '';
-  let grandTotalMinutes = 0;
+  let totalMinutes = 0;
 
-  for (const [, emp] of byEmployee) {
-    grandTotalMinutes += emp.totalMinutes;
+  for (const entry of entries) {
+    const name = getEmployeeName(entry);
+    const projectName = entry.projects?.name || 'No Project';
+    const date = formatShortDate(entry.start_time, timezone);
+    const clockIn = formatTime(entry.start_time, timezone);
+    const clockOut = entry.end_time ? formatTime(entry.end_time, timezone) : 'Open';
+    const duration = formatDuration(entry.duration_minutes);
+    const entryType = entry.is_break ? 'Break' : 'Work';
+    const typeColor = entry.is_break ? '#f59e0b' : '#3b82f6';
+    totalMinutes += entry.duration_minutes || 0;
     
-    for (const entry of emp.entries) {
-      const projectName = entry.projects?.name || 'No Project';
-      const clockIn = formatTime(entry.clock_in);
-      const clockOut = entry.clock_out ? formatTime(entry.clock_out) : 'Open';
-      const duration = formatDuration(entry.duration_minutes);
-      const breakTime = formatDuration(entry.break_duration_minutes);
-      
-      tableRows += `
-        <tr>
-          <td style="padding: 12px; border-bottom: 1px solid #e5e7eb;">${emp.name}</td>
-          <td style="padding: 12px; border-bottom: 1px solid #e5e7eb;">${projectName}</td>
-          <td style="padding: 12px; border-bottom: 1px solid #e5e7eb;">${formatDate(entry.clock_in)}</td>
-          <td style="padding: 12px; border-bottom: 1px solid #e5e7eb;">${clockIn}</td>
-          <td style="padding: 12px; border-bottom: 1px solid #e5e7eb;">${clockOut}</td>
-          <td style="padding: 12px; border-bottom: 1px solid #e5e7eb;">${breakTime}</td>
-          <td style="padding: 12px; border-bottom: 1px solid #e5e7eb; font-weight: 500;">${duration}</td>
-        </tr>
-      `;
-    }
+    tableRows += `
+      <tr>
+        <td style="padding: 12px; border-bottom: 1px solid #e5e7eb;">${name}</td>
+        <td style="padding: 12px; border-bottom: 1px solid #e5e7eb;">${projectName}</td>
+        <td style="padding: 12px; border-bottom: 1px solid #e5e7eb;">${date}</td>
+        <td style="padding: 12px; border-bottom: 1px solid #e5e7eb;">${clockIn}</td>
+        <td style="padding: 12px; border-bottom: 1px solid #e5e7eb;">${clockOut}</td>
+        <td style="padding: 12px; border-bottom: 1px solid #e5e7eb;"><span style="color: ${typeColor}; font-weight: 500;">${entryType}</span></td>
+        <td style="padding: 12px; border-bottom: 1px solid #e5e7eb; font-weight: 600;">${duration}</td>
+      </tr>
+    `;
   }
 
   if (entries.length === 0) {
@@ -717,30 +975,26 @@ function generateEmployeeTimecardHtml(
     </head>
     <body style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; margin: 0; padding: 20px; background-color: #f3f4f6;">
       <div style="max-width: 800px; margin: 0 auto; background: white; border-radius: 8px; overflow: hidden; box-shadow: 0 1px 3px rgba(0,0,0,0.1);">
-        <!-- Header -->
         <div style="background: linear-gradient(135deg, #3b82f6, #1d4ed8); padding: 24px; color: white;">
           <h1 style="margin: 0 0 8px 0; font-size: 24px;">${reportName || 'Employee Timecard Report'}</h1>
           <p style="margin: 0; opacity: 0.9;">${companyName}</p>
         </div>
         
-        <!-- Report Info -->
         <div style="padding: 16px 24px; background: #f9fafb; border-bottom: 1px solid #e5e7eb;">
           <p style="margin: 0; color: #6b7280; font-size: 14px;">
             <strong>Period:</strong> ${dateRange.start} - ${dateRange.end}
           </p>
           <p style="margin: 4px 0 0 0; color: #6b7280; font-size: 14px;">
-            <strong>Total Hours:</strong> ${formatDuration(grandTotalMinutes)}
+            <strong>Total Hours:</strong> ${formatDuration(totalMinutes)}
           </p>
         </div>
         
-        <!-- Attachment Notice -->
-        <div style="padding: 12px 24px; background: #eff6ff; border-bottom: 1px solid #dbeafe;">
-          <p style="margin: 0; color: #1e40af; font-size: 13px;">
-            📎 <strong>Attachments:</strong> PDF and CSV files are attached to this email for download.
+        <div style="padding: 12px 24px; background: #eff6ff; border-bottom: 1px solid #bfdbfe;">
+          <p style="margin: 0; color: #1d4ed8; font-size: 13px;">
+            📎 <strong>Attachments:</strong> Detailed PDF (Time Entry Cards) and CSV files are attached.
           </p>
         </div>
         
-        <!-- Table -->
         <div style="padding: 0; overflow-x: auto;">
           <table style="width: 100%; border-collapse: collapse; font-size: 14px;">
             <thead>
@@ -748,9 +1002,9 @@ function generateEmployeeTimecardHtml(
                 <th style="padding: 12px; text-align: left; font-weight: 600; border-bottom: 2px solid #e5e7eb;">Employee</th>
                 <th style="padding: 12px; text-align: left; font-weight: 600; border-bottom: 2px solid #e5e7eb;">Project</th>
                 <th style="padding: 12px; text-align: left; font-weight: 600; border-bottom: 2px solid #e5e7eb;">Date</th>
-                <th style="padding: 12px; text-align: left; font-weight: 600; border-bottom: 2px solid #e5e7eb;">Clock In</th>
-                <th style="padding: 12px; text-align: left; font-weight: 600; border-bottom: 2px solid #e5e7eb;">Clock Out</th>
-                <th style="padding: 12px; text-align: left; font-weight: 600; border-bottom: 2px solid #e5e7eb;">Break</th>
+                <th style="padding: 12px; text-align: left; font-weight: 600; border-bottom: 2px solid #e5e7eb;">In</th>
+                <th style="padding: 12px; text-align: left; font-weight: 600; border-bottom: 2px solid #e5e7eb;">Out</th>
+                <th style="padding: 12px; text-align: left; font-weight: 600; border-bottom: 2px solid #e5e7eb;">Type</th>
                 <th style="padding: 12px; text-align: left; font-weight: 600; border-bottom: 2px solid #e5e7eb;">Hours</th>
               </tr>
             </thead>
@@ -760,7 +1014,6 @@ function generateEmployeeTimecardHtml(
           </table>
         </div>
         
-        <!-- Footer -->
         <div style="padding: 16px 24px; background: #f9fafb; border-top: 1px solid #e5e7eb; text-align: center;">
           <p style="margin: 0; color: #9ca3af; font-size: 12px;">
             Generated by CICO on ${new Date().toLocaleString()}
@@ -776,9 +1029,9 @@ function generateProjectTimecardHtml(
   entries: TimeEntry[], 
   companyName: string, 
   reportName: string,
-  dateRange: { start: string; end: string }
+  dateRange: { start: string; end: string },
+  timezone: string
 ): string {
-  // Group entries by project
   const byProject = new Map<string, { name: string; entries: TimeEntry[]; totalMinutes: number }>();
   
   for (const entry of entries) {
@@ -794,47 +1047,60 @@ function generateProjectTimecardHtml(
     proj.totalMinutes += entry.duration_minutes || 0;
   }
 
-  let tableRows = '';
+  let projectSections = '';
   let grandTotalMinutes = 0;
 
   for (const [, proj] of byProject) {
     grandTotalMinutes += proj.totalMinutes;
     
-    // Project header row
-    tableRows += `
-      <tr style="background: #f0f9ff;">
-        <td colspan="6" style="padding: 12px; font-weight: 600; border-bottom: 1px solid #e5e7eb;">
-          ${proj.name} - Total: ${formatDuration(proj.totalMinutes)}
-        </td>
-      </tr>
-    `;
-    
+    let rows = '';
     for (const entry of proj.entries) {
-      const empName = getEmployeeName(entry);
-      const clockIn = formatTime(entry.clock_in);
-      const clockOut = entry.clock_out ? formatTime(entry.clock_out) : 'Open';
+      const name = getEmployeeName(entry);
+      const date = formatShortDate(entry.start_time, timezone);
+      const clockIn = formatTime(entry.start_time, timezone);
+      const clockOut = entry.end_time ? formatTime(entry.end_time, timezone) : 'Open';
       const duration = formatDuration(entry.duration_minutes);
       
-      tableRows += `
+      rows += `
         <tr>
-          <td style="padding: 12px; border-bottom: 1px solid #e5e7eb; padding-left: 24px;">${empName}</td>
-          <td style="padding: 12px; border-bottom: 1px solid #e5e7eb;">${formatDate(entry.clock_in)}</td>
-          <td style="padding: 12px; border-bottom: 1px solid #e5e7eb;">${clockIn}</td>
-          <td style="padding: 12px; border-bottom: 1px solid #e5e7eb;">${clockOut}</td>
-          <td style="padding: 12px; border-bottom: 1px solid #e5e7eb;">${formatDuration(entry.break_duration_minutes)}</td>
-          <td style="padding: 12px; border-bottom: 1px solid #e5e7eb; font-weight: 500;">${duration}</td>
+          <td style="padding: 10px; border-bottom: 1px solid #e5e7eb;">${name}</td>
+          <td style="padding: 10px; border-bottom: 1px solid #e5e7eb;">${date}</td>
+          <td style="padding: 10px; border-bottom: 1px solid #e5e7eb;">${clockIn}</td>
+          <td style="padding: 10px; border-bottom: 1px solid #e5e7eb;">${clockOut}</td>
+          <td style="padding: 10px; border-bottom: 1px solid #e5e7eb; font-weight: 600;">${duration}</td>
         </tr>
       `;
     }
+
+    projectSections += `
+      <div style="margin-bottom: 24px;">
+        <div style="background: #f0fdf4; padding: 12px 16px; border-radius: 6px 6px 0 0; border: 1px solid #bbf7d0;">
+          <h3 style="margin: 0; font-size: 16px; color: #166534;">${proj.name}</h3>
+          <p style="margin: 4px 0 0 0; font-size: 13px; color: #15803d;">Total: ${formatDuration(proj.totalMinutes)}</p>
+        </div>
+        <table style="width: 100%; border-collapse: collapse; font-size: 14px; border: 1px solid #e5e7eb; border-top: none;">
+          <thead>
+            <tr style="background: #f9fafb;">
+              <th style="padding: 10px; text-align: left; font-weight: 600; border-bottom: 1px solid #e5e7eb;">Employee</th>
+              <th style="padding: 10px; text-align: left; font-weight: 600; border-bottom: 1px solid #e5e7eb;">Date</th>
+              <th style="padding: 10px; text-align: left; font-weight: 600; border-bottom: 1px solid #e5e7eb;">In</th>
+              <th style="padding: 10px; text-align: left; font-weight: 600; border-bottom: 1px solid #e5e7eb;">Out</th>
+              <th style="padding: 10px; text-align: left; font-weight: 600; border-bottom: 1px solid #e5e7eb;">Hours</th>
+            </tr>
+          </thead>
+          <tbody>
+            ${rows}
+          </tbody>
+        </table>
+      </div>
+    `;
   }
 
   if (entries.length === 0) {
-    tableRows = `
-      <tr>
-        <td colspan="6" style="padding: 24px; text-align: center; color: #6b7280;">
-          No time entries found for this period.
-        </td>
-      </tr>
+    projectSections = `
+      <div style="padding: 24px; text-align: center; color: #6b7280;">
+        No time entries found for this period.
+      </div>
     `;
   }
 
@@ -861,29 +1127,14 @@ function generateProjectTimecardHtml(
           </p>
         </div>
         
-        <!-- Attachment Notice -->
-        <div style="padding: 12px 24px; background: #ecfdf5; border-bottom: 1px solid #d1fae5;">
-          <p style="margin: 0; color: #065f46; font-size: 13px;">
+        <div style="padding: 12px 24px; background: #ecfdf5; border-bottom: 1px solid #a7f3d0;">
+          <p style="margin: 0; color: #047857; font-size: 13px;">
             📎 <strong>Attachments:</strong> PDF and CSV files are attached to this email for download.
           </p>
         </div>
         
-        <div style="padding: 0; overflow-x: auto;">
-          <table style="width: 100%; border-collapse: collapse; font-size: 14px;">
-            <thead>
-              <tr style="background: #f9fafb;">
-                <th style="padding: 12px; text-align: left; font-weight: 600; border-bottom: 2px solid #e5e7eb;">Employee</th>
-                <th style="padding: 12px; text-align: left; font-weight: 600; border-bottom: 2px solid #e5e7eb;">Date</th>
-                <th style="padding: 12px; text-align: left; font-weight: 600; border-bottom: 2px solid #e5e7eb;">Clock In</th>
-                <th style="padding: 12px; text-align: left; font-weight: 600; border-bottom: 2px solid #e5e7eb;">Clock Out</th>
-                <th style="padding: 12px; text-align: left; font-weight: 600; border-bottom: 2px solid #e5e7eb;">Break</th>
-                <th style="padding: 12px; text-align: left; font-weight: 600; border-bottom: 2px solid #e5e7eb;">Hours</th>
-              </tr>
-            </thead>
-            <tbody>
-              ${tableRows}
-            </tbody>
-          </table>
+        <div style="padding: 24px;">
+          ${projectSections}
         </div>
         
         <div style="padding: 16px 24px; background: #f9fafb; border-top: 1px solid #e5e7eb; text-align: center;">
@@ -901,23 +1152,22 @@ function generateWeeklyPayrollHtml(
   entries: TimeEntry[], 
   companyName: string, 
   reportName: string,
-  dateRange: { start: string; end: string }
+  dateRange: { start: string; end: string },
+  _timezone: string
 ): string {
-  // Group entries by employee and sum totals
-  const byEmployee = new Map<string, { name: string; totalMinutes: number; breakMinutes: number; days: Set<string> }>();
+  const byEmployee = new Map<string, { name: string; totalMinutes: number; days: Set<string> }>();
   
   for (const entry of entries) {
     const profileId = entry.profiles.id;
     const name = getEmployeeName(entry);
     
     if (!byEmployee.has(profileId)) {
-      byEmployee.set(profileId, { name, totalMinutes: 0, breakMinutes: 0, days: new Set() });
+      byEmployee.set(profileId, { name, totalMinutes: 0, days: new Set() });
     }
     
     const emp = byEmployee.get(profileId)!;
     emp.totalMinutes += entry.duration_minutes || 0;
-    emp.breakMinutes += entry.break_duration_minutes || 0;
-    emp.days.add(entry.clock_in.split('T')[0]);
+    emp.days.add(entry.start_time.split('T')[0]);
   }
 
   let tableRows = '';
@@ -936,7 +1186,6 @@ function generateWeeklyPayrollHtml(
         <td style="padding: 12px; border-bottom: 1px solid #e5e7eb; text-align: center;">${emp.days.size}</td>
         <td style="padding: 12px; border-bottom: 1px solid #e5e7eb;">${formatDuration(regularHours)}</td>
         <td style="padding: 12px; border-bottom: 1px solid #e5e7eb; color: ${overtimeMinutes > 0 ? '#dc2626' : '#6b7280'};">${formatDuration(overtimeMinutes)}</td>
-        <td style="padding: 12px; border-bottom: 1px solid #e5e7eb;">${formatDuration(emp.breakMinutes)}</td>
         <td style="padding: 12px; border-bottom: 1px solid #e5e7eb; font-weight: 600;">${formatDuration(emp.totalMinutes)}</td>
       </tr>
     `;
@@ -945,7 +1194,7 @@ function generateWeeklyPayrollHtml(
   if (entries.length === 0) {
     tableRows = `
       <tr>
-        <td colspan="6" style="padding: 24px; text-align: center; color: #6b7280;">
+        <td colspan="5" style="padding: 24px; text-align: center; color: #6b7280;">
           No time entries found for this period.
         </td>
       </tr>
@@ -971,13 +1220,12 @@ function generateWeeklyPayrollHtml(
             <strong>Pay Period:</strong> ${dateRange.start} - ${dateRange.end}
           </p>
           <p style="margin: 4px 0 0 0; color: #6b7280; font-size: 14px;">
-            <strong>Total Payable Hours:</strong> ${formatDuration(grandTotalMinutes)}
+            <strong>Total Hours:</strong> ${formatDuration(grandTotalMinutes)}
           </p>
         </div>
         
-        <!-- Attachment Notice -->
-        <div style="padding: 12px 24px; background: #f5f3ff; border-bottom: 1px solid #ede9fe;">
-          <p style="margin: 0; color: #5b21b6; font-size: 13px;">
+        <div style="padding: 12px 24px; background: #f5f3ff; border-bottom: 1px solid #e9d5ff;">
+          <p style="margin: 0; color: #6d28d9; font-size: 13px;">
             📎 <strong>Attachments:</strong> PDF and CSV files are attached to this email for download.
           </p>
         </div>
@@ -987,16 +1235,21 @@ function generateWeeklyPayrollHtml(
             <thead>
               <tr style="background: #f9fafb;">
                 <th style="padding: 12px; text-align: left; font-weight: 600; border-bottom: 2px solid #e5e7eb;">Employee</th>
-                <th style="padding: 12px; text-align: center; font-weight: 600; border-bottom: 2px solid #e5e7eb;">Days Worked</th>
-                <th style="padding: 12px; text-align: left; font-weight: 600; border-bottom: 2px solid #e5e7eb;">Regular Hours</th>
+                <th style="padding: 12px; text-align: center; font-weight: 600; border-bottom: 2px solid #e5e7eb;">Days</th>
+                <th style="padding: 12px; text-align: left; font-weight: 600; border-bottom: 2px solid #e5e7eb;">Regular</th>
                 <th style="padding: 12px; text-align: left; font-weight: 600; border-bottom: 2px solid #e5e7eb;">Overtime</th>
-                <th style="padding: 12px; text-align: left; font-weight: 600; border-bottom: 2px solid #e5e7eb;">Breaks</th>
                 <th style="padding: 12px; text-align: left; font-weight: 600; border-bottom: 2px solid #e5e7eb;">Total</th>
               </tr>
             </thead>
             <tbody>
               ${tableRows}
             </tbody>
+            <tfoot>
+              <tr style="background: #f9fafb;">
+                <td colspan="4" style="padding: 12px; font-weight: 600; border-top: 2px solid #e5e7eb;">Grand Total</td>
+                <td style="padding: 12px; font-weight: 700; border-top: 2px solid #e5e7eb;">${formatDuration(grandTotalMinutes)}</td>
+              </tr>
+            </tfoot>
           </table>
         </div>
         
@@ -1011,11 +1264,11 @@ function generateWeeklyPayrollHtml(
   `;
 }
 
+// ============= Date Range Function =============
+
 function getDateRange(frequency: string, timezone: string): { startDate: Date; endDate: Date; start: string; end: string } {
-  // Get current time in the company's timezone
   const now = new Date();
   
-  // Calculate offset for the timezone to determine "today" in their local time
   const formatter = new Intl.DateTimeFormat('en-US', {
     timeZone: timezone,
     year: 'numeric',
@@ -1031,19 +1284,16 @@ function getDateRange(frequency: string, timezone: string): { startDate: Date; e
   const localMonth = parseInt(parts.find(p => p.type === 'month')?.value || '1') - 1;
   const localDay = parseInt(parts.find(p => p.type === 'day')?.value || '1');
   
-  // Create dates in UTC but representing local time boundaries
   let startDate: Date;
   let endDate: Date;
 
   switch (frequency) {
     case 'daily':
-      // Previous day in local time
       const yesterday = new Date(Date.UTC(localYear, localMonth, localDay - 1, 0, 0, 0, 0));
       startDate = yesterday;
       endDate = new Date(Date.UTC(localYear, localMonth, localDay - 1, 23, 59, 59, 999));
       break;
     case 'weekly':
-      // Previous week (Sunday to Saturday) in local time
       const todayLocal = new Date(Date.UTC(localYear, localMonth, localDay));
       const dayOfWeek = todayLocal.getUTCDay();
       const lastSaturday = new Date(Date.UTC(localYear, localMonth, localDay - dayOfWeek - 1, 23, 59, 59, 999));
@@ -1052,12 +1302,10 @@ function getDateRange(frequency: string, timezone: string): { startDate: Date; e
       endDate = lastSaturday;
       break;
     case 'monthly':
-      // Previous month in local time
       startDate = new Date(Date.UTC(localYear, localMonth - 1, 1, 0, 0, 0, 0));
-      endDate = new Date(Date.UTC(localYear, localMonth, 0, 23, 59, 59, 999)); // Day 0 = last day of prev month
+      endDate = new Date(Date.UTC(localYear, localMonth, 0, 23, 59, 59, 999));
       break;
     default:
-      // Default to previous day
       startDate = new Date(now);
       startDate.setUTCDate(startDate.getUTCDate() - 1);
       startDate.setUTCHours(0, 0, 0, 0);
@@ -1073,7 +1321,7 @@ function getDateRange(frequency: string, timezone: string): { startDate: Date; e
   };
 }
 
-// Helper to encode binary data to base64 (Deno compatible)
+// Helper to encode binary data to base64
 function uint8ArrayToBase64(bytes: Uint8Array): string {
   let binary = '';
   for (let i = 0; i < bytes.length; i++) {
@@ -1081,6 +1329,8 @@ function uint8ArrayToBase64(bytes: Uint8Array): string {
   }
   return btoa(binary);
 }
+
+// ============= Main Handler =============
 
 serve(async (req) => {
   if (req.method === 'OPTIONS') {
@@ -1094,7 +1344,7 @@ serve(async (req) => {
 
     const now = new Date();
     const currentHour = now.getUTCHours();
-    const currentDay = now.getUTCDay(); // 0 = Sunday
+    const currentDay = now.getUTCDay();
     const currentDayOfMonth = now.getUTCDate();
 
     console.log(`Processing scheduled reports at ${now.toISOString()}`);
@@ -1129,7 +1379,6 @@ serve(async (req) => {
     const reportsToRun = activeReports.filter(report => {
       const companyTimezone = (report.companies as { timezone?: string })?.timezone || 'America/Los_Angeles';
       
-      // Get current hour in the company's timezone
       const formatter = new Intl.DateTimeFormat('en-US', {
         timeZone: companyTimezone,
         hour: '2-digit',
@@ -1141,11 +1390,9 @@ serve(async (req) => {
       const localHour = parseInt(parts.find(p => p.type === 'hour')?.value || '0', 10);
       const localDayName = parts.find(p => p.type === 'weekday')?.value || '';
       
-      // Map weekday name to number (Sunday = 0)
       const dayMap: Record<string, number> = { Sun: 0, Mon: 1, Tue: 2, Wed: 3, Thu: 4, Fri: 5, Sat: 6 };
       const localDayOfWeek = dayMap[localDayName] ?? 0;
       
-      // Get day of month in local timezone
       const dayFormatter = new Intl.DateTimeFormat('en-US', {
         timeZone: companyTimezone,
         day: 'numeric'
@@ -1156,12 +1403,10 @@ serve(async (req) => {
       
       console.log(`Report ${report.name}: schedule=${scheduleHour}:00, local=${localHour}:00 (${companyTimezone})`);
       
-      // Check if hour matches in company's timezone
       if (scheduleHour !== localHour) {
         return false;
       }
 
-      // Check frequency-specific conditions
       switch (report.schedule_frequency) {
         case 'daily':
           return true;
@@ -1182,7 +1427,7 @@ serve(async (req) => {
       console.log(`Processing report: ${report.name || report.id} (${report.report_type})`);
 
       try {
-        // Check if this report already ran today (prevent duplicates)
+        // Check if this report already ran today
         const todayStart = new Date(now);
         todayStart.setUTCHours(0, 0, 0, 0);
         
@@ -1203,16 +1448,24 @@ serve(async (req) => {
         const dateRange = getDateRange(report.schedule_frequency, companyTimezone);
         console.log(`Date range: ${dateRange.start} to ${dateRange.end}`);
 
-        // Build time entries query - now including employee_id
+        // Build time entries query with expanded fields
         let query = supabase
           .from('time_entries')
           .select(`
             id,
-            clock_in,
-            clock_out,
+            start_time,
+            end_time,
             duration_minutes,
-            break_duration_minutes,
-            profiles!inner(
+            is_break,
+            clock_in_photo_url,
+            clock_out_photo_url,
+            clock_in_latitude,
+            clock_in_longitude,
+            clock_in_address,
+            clock_out_latitude,
+            clock_out_longitude,
+            clock_out_address,
+            profiles!time_entries_profile_id_fkey(
               id,
               first_name,
               last_name,
@@ -1226,9 +1479,9 @@ serve(async (req) => {
             )
           `)
           .eq('company_id', report.company_id)
-          .gte('clock_in', dateRange.startDate.toISOString())
-          .lte('clock_in', dateRange.endDate.toISOString())
-          .order('clock_in', { ascending: true });
+          .gte('start_time', dateRange.startDate.toISOString())
+          .lte('start_time', dateRange.endDate.toISOString())
+          .order('start_time', { ascending: true });
 
         // Apply department filter if scope is "department"
         const config = report.report_config as ReportConfig;
@@ -1261,28 +1514,29 @@ serve(async (req) => {
 
         switch (report.report_type) {
           case 'employee_timecard':
-            html = generateEmployeeTimecardHtml(typedEntries, companyName, report.name, dateRange);
-            csvContent = generateEmployeeTimecardCSV(typedEntries);
-            pdfBytes = await generateEmployeeTimecardPDF(typedEntries, companyName, report.name, dateRange);
+            html = generateEmployeeTimecardHtml(typedEntries, companyName, report.name, dateRange, companyTimezone);
+            csvContent = generateEmployeeTimecardCSV(typedEntries, companyTimezone);
+            // Use the new Time Entry Details PDF generator
+            pdfBytes = await generateTimeEntryDetailsPDF(typedEntries, companyName, report.name, dateRange, companyTimezone);
             attachmentPrefix = 'employee-timecard';
             break;
           case 'project_timecard':
-            html = generateProjectTimecardHtml(typedEntries, companyName, report.name, dateRange);
-            csvContent = generateProjectTimecardCSV(typedEntries);
-            pdfBytes = await generateProjectTimecardPDF(typedEntries, companyName, report.name, dateRange);
+            html = generateProjectTimecardHtml(typedEntries, companyName, report.name, dateRange, companyTimezone);
+            csvContent = generateProjectTimecardCSV(typedEntries, companyTimezone);
+            pdfBytes = await generateProjectTimecardPDF(typedEntries, companyName, report.name, dateRange, companyTimezone);
             attachmentPrefix = 'project-timecard';
             break;
           case 'weekly_payroll':
           case 'monthly_project_billing':
-            html = generateWeeklyPayrollHtml(typedEntries, companyName, report.name, dateRange);
+            html = generateWeeklyPayrollHtml(typedEntries, companyName, report.name, dateRange, companyTimezone);
             csvContent = generateWeeklyPayrollCSV(typedEntries);
-            pdfBytes = await generateWeeklyPayrollPDF(typedEntries, companyName, report.name, dateRange);
+            pdfBytes = await generateWeeklyPayrollPDF(typedEntries, companyName, report.name, dateRange, companyTimezone);
             attachmentPrefix = 'payroll';
             break;
           default:
-            html = generateEmployeeTimecardHtml(typedEntries, companyName, report.name, dateRange);
-            csvContent = generateEmployeeTimecardCSV(typedEntries);
-            pdfBytes = await generateEmployeeTimecardPDF(typedEntries, companyName, report.name, dateRange);
+            html = generateEmployeeTimecardHtml(typedEntries, companyName, report.name, dateRange, companyTimezone);
+            csvContent = generateEmployeeTimecardCSV(typedEntries, companyTimezone);
+            pdfBytes = await generateTimeEntryDetailsPDF(typedEntries, companyName, report.name, dateRange, companyTimezone);
             attachmentPrefix = 'timecard';
         }
 
@@ -1301,7 +1555,6 @@ serve(async (req) => {
         if (recipientEmails.length === 0) {
           console.log(`No recipients for report ${report.id}, skipping email`);
           
-          // Log execution anyway
           await supabase.from('report_execution_log').insert({
             scheduled_report_id: report.id,
             recipients_count: 0,
@@ -1333,14 +1586,13 @@ serve(async (req) => {
           ],
         });
 
-        console.log('Email sent with attachments:', emailResponse);
+        console.log('Email sent successfully:', emailResponse);
 
         // Log successful execution
         await supabase.from('report_execution_log').insert({
           scheduled_report_id: report.id,
           recipients_count: recipientEmails.length,
-          status: 'success',
-          error_message: null
+          status: 'success'
         });
 
         results.push({
@@ -1348,31 +1600,29 @@ serve(async (req) => {
           report_name: report.name,
           status: 'success',
           recipients: recipientEmails.length,
-          entries: entries?.length || 0,
-          attachments: [csvFilename, pdfFilename]
+          entries: entries?.length || 0
         });
 
-      } catch (reportError) {
-        console.error(`Error processing report ${report.id}:`, reportError);
+      } catch (error) {
+        console.error(`Error processing report ${report.id}:`, error);
         
-        // Log failed execution
+        const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+        
         await supabase.from('report_execution_log').insert({
           scheduled_report_id: report.id,
           recipients_count: 0,
-          status: 'failed',
-          error_message: reportError instanceof Error ? reportError.message : 'Unknown error'
+          status: 'error',
+          error_message: errorMessage
         });
 
         results.push({
           report_id: report.id,
           report_name: report.name,
-          status: 'failed',
-          error: reportError instanceof Error ? reportError.message : 'Unknown error'
+          status: 'error',
+          error: errorMessage
         });
       }
     }
-
-    console.log(`Finished processing. Results:`, results);
 
     return new Response(
       JSON.stringify({ 
