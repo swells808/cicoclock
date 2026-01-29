@@ -1,61 +1,150 @@
 
-# Fix: Employee Hours Report Returns Empty for Single Day Selection
+# Update Employee Hours Report to Show Selected Date Range Hours
 
-## Problem Identified
-When a user selects a single date (e.g., `01/28/26`) for both start and end dates, the report returns no data even though there are 18+ time entries for that day.
+## Problem
+The current report always displays "Week" and "Month" columns regardless of what date range the user selects. When the user picks a specific date (e.g., 01/28/26), they expect to see hours for **that date only** — not unrelated "last 7 days" and "month" buckets.
 
-## Root Cause
-The date picker returns dates at midnight (`2026-01-28T00:00:00`). When used in the query:
+## Solution Overview
+Modify the report to show a single "Hours" column that reflects **only** the hours worked within the selected date range. Also display the date range in the report title/header so it's clear what period the data covers.
 
-```
-start_time >= 2026-01-28T00:00:00Z
-start_time <= 2026-01-28T00:00:00Z
-```
+---
 
-This range only matches entries at exactly midnight, not the actual work hours (e.g., `13:07:23`).
-
-**Database evidence:** Time entries for Jan 28, 2026 have `start_time` values like:
-- `2026-01-28 13:07:23` (Anthony Giron Carias)
-- `2026-01-28 13:06:15` (Felipe Salazar)
-- `2026-01-28 12:58:59` (18 employees total)
-
-All of these fall outside the midnight-to-midnight window because the end time isn't being adjusted.
-
-## Solution
-Adjust the end date to include the full day by setting it to `23:59:59.999` of the selected date.
+## Technical Changes
 
 ### File: `src/pages/Reports.tsx`
 
-**Change location:** Lines 96-97
+**Change 1: Simplify data structure** (lines ~154-186)
 
-**Current code:**
+Replace the "week/month" accumulation with a single "hours" field:
+
 ```typescript
-const start = filters.startDate || new Date(new Date().getFullYear(), new Date().getMonth(), 1);
-const end = filters.endDate || new Date(new Date().getFullYear(), new Date().getMonth() + 1, 0, 23, 59, 59);
+// Before
+acc[entryKey] = {
+  name,
+  week: 0,
+  month: 0,
+  odId: entryKey,
+  departmentId: profile?.department_id
+};
+acc[entryKey].month += hours;
+// plus week calculation logic
+
+// After
+acc[entryKey] = {
+  name,
+  hours: 0,
+  odId: entryKey,
+  departmentId: profile?.department_id
+};
+acc[entryKey].hours += hours;
+// Remove the week logic entirely
 ```
 
-**Problem:** The time adjustment only happens for the fallback (when no date is selected). When the user picks a date, it stays at midnight.
+**Change 2: Update data mapping** (lines ~188-194)
 
-**Fixed code:**
 ```typescript
-const start = filters.startDate 
-  ? new Date(filters.startDate.getFullYear(), filters.startDate.getMonth(), filters.startDate.getDate(), 0, 0, 0)
-  : new Date(new Date().getFullYear(), new Date().getMonth(), 1);
+// Before
+.map((data: any) => ({
+  name: data.name,
+  week: Math.round(data.week),
+  month: Math.round(data.month),
+  ...
+}))
 
-const end = filters.endDate 
-  ? new Date(filters.endDate.getFullYear(), filters.endDate.getMonth(), filters.endDate.getDate(), 23, 59, 59, 999)
-  : new Date(new Date().getFullYear(), new Date().getMonth() + 1, 0, 23, 59, 59, 999);
+// After
+.map((data: any) => ({
+  name: data.name,
+  hours: Math.round(data.hours * 10) / 10,  // One decimal for precision
+  ...
+}))
 ```
 
-This ensures:
-- Start date uses `00:00:00` (beginning of day)
-- End date uses `23:59:59.999` (end of day)
+**Change 3: Apply same changes for project reports** (lines ~209-245)
 
-## Summary
+Same pattern: replace week/month with single "hours" field.
 
-| Item | Details |
-|------|---------|
-| **Bug** | Single-day report returns empty because end time is midnight, not end-of-day |
-| **Fix** | Adjust end date to `23:59:59.999` of selected day |
-| **Files Changed** | `src/pages/Reports.tsx` (lines 96-97) |
-| **Impact** | All report types (employee hours, project hours) will now work correctly for single-day and multi-day date ranges |
+**Change 4: Update title to include date range** (lines ~249-252)
+
+```typescript
+// Before
+const title = filters.reportType === "employee"
+  ? "Work Hours Per Employee"
+  : "Project Time Distribution";
+
+// After  
+const formatDate = (d: Date) => d.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
+const dateRangeStr = start.toDateString() === end.toDateString()
+  ? formatDate(start)
+  : `${formatDate(start)} - ${formatDate(end)}`;
+  
+const title = filters.reportType === "employee"
+  ? `Work Hours Per Employee — ${dateRangeStr}`
+  : `Project Time Distribution — ${dateRangeStr}`;
+```
+
+---
+
+### File: `src/utils/reportUtils.ts`
+
+**Change 1: Update `buildRealTableHTML` to accept dynamic columns** (lines ~43-115)
+
+```typescript
+// Before
+const columns = ["Name", "Week", "Month"];
+
+// After - accept columns as parameter
+export function buildRealTableHTML(
+  type: "employee" | "project",
+  data: any[],
+  columns: string[] = ["Name", "Hours"],  // New default
+  title?: string,
+  dateRange?: { start: Date; end: Date }
+) {
+```
+
+**Change 2: Update the totals row** (lines ~99-104)
+
+```typescript
+// Before - hardcoded week/month totals
+<td style='padding:8px;'>${totalWeek.toFixed(1)}</td>
+<td style='padding:8px;'>${totalMonth.toFixed(1)}</td>
+
+// After - dynamic based on columns
+```
+
+**Change 3: Update `ReportEmployeeData` and `ReportProjectData` interfaces** (lines ~24-34)
+
+```typescript
+// Before
+export interface ReportEmployeeData {
+  name: string;
+  week: number;
+  month: number;
+}
+
+// After
+export interface ReportEmployeeData {
+  name: string;
+  hours: number;  // Just the selected period hours
+}
+```
+
+---
+
+## Summary of Changes
+
+| File | Change |
+|------|--------|
+| `src/pages/Reports.tsx` | Replace week/month with single "hours" field; add date range to title |
+| `src/utils/reportUtils.ts` | Update table builder to use "Name" + "Hours" columns; update interfaces |
+
+## Expected Outcome
+When selecting a date range like `01/28/26` to `01/28/26`:
+- Report title: **"Work Hours Per Employee — Jan 28, 2026"**
+- Columns: **Name** | **Hours**
+- Data: Shows only hours worked on that specific day
+
+When selecting a range like `01/20/26` to `01/28/26`:
+- Report title: **"Work Hours Per Employee — Jan 20, 2026 - Jan 28, 2026"**
+- Columns: **Name** | **Hours**
+- Data: Shows total hours worked across that entire range
