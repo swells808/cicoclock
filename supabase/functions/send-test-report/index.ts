@@ -1112,7 +1112,7 @@ serve(async (req) => {
         clock_out,
         duration_minutes,
         break_duration_minutes,
-        profiles!inner(
+        profiles!time_entries_profile_id_fkey(
           id,
           first_name,
           last_name,
