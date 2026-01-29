@@ -10,13 +10,16 @@ import { Clock } from 'lucide-react';
 interface TimeEntry {
   id: string;
   user_id: string;
+  profile_id: string | null;
   start_time: string;
   end_time: string | null;
   duration_minutes: number | null;
   profile?: {
+    id: string;
     first_name: string | null;
     last_name: string | null;
     display_name: string | null;
+    department_id: string | null;
   };
   projects?: {
     name: string;
@@ -25,10 +28,14 @@ interface TimeEntry {
 
 interface DailyTimecardReportProps {
   date?: Date;
+  employeeId?: string;
+  departmentId?: string;
 }
 
 export const DailyTimecardReport: React.FC<DailyTimecardReportProps> = ({ 
-  date: propDate 
+  date: propDate,
+  employeeId,
+  departmentId
 }) => {
   const { company } = useCompany();
   const [entries, setEntries] = useState<TimeEntry[]>([]);
@@ -57,6 +64,7 @@ export const DailyTimecardReport: React.FC<DailyTimecardReportProps> = ({
           .select(`
             id,
             user_id,
+            profile_id,
             start_time,
             end_time,
             duration_minutes,
@@ -69,24 +77,45 @@ export const DailyTimecardReport: React.FC<DailyTimecardReportProps> = ({
 
         if (error) throw error;
 
-        // Fetch profiles separately
-        const userIds = [...new Set(data.map(e => e.user_id))];
+        // Fetch profiles separately - get all profiles for the company for filtering
+        const userIds = [...new Set(data.map(e => e.user_id).filter(Boolean))];
+        const profileIds = [...new Set(data.map(e => e.profile_id).filter(Boolean))];
+        
         const { data: profiles, error: profilesError } = await supabase
           .from('profiles')
-          .select('user_id, first_name, last_name, display_name')
-          .in('user_id', userIds);
+          .select('id, user_id, first_name, last_name, display_name, department_id')
+          .or(`user_id.in.(${userIds.join(',')}),id.in.(${profileIds.join(',')})`);
 
         if (profilesError) throw profilesError;
 
+        // Build profile map indexed by both id and user_id
         const profileMap = profiles?.reduce((acc, p) => {
-          acc[p.user_id] = p;
+          acc[p.id] = p;
+          if (p.user_id) acc[p.user_id] = p;
           return acc;
         }, {} as Record<string, any>) || {};
 
-        setEntries(data.map(entry => ({
+        // Map entries and apply filters
+        let filteredEntries = data.map(entry => ({
           ...entry,
-          profile: profileMap[entry.user_id]
-        })));
+          profile: entry.profile_id ? profileMap[entry.profile_id] : profileMap[entry.user_id]
+        }));
+
+        // Filter by employee if specified
+        if (employeeId) {
+          filteredEntries = filteredEntries.filter(entry => 
+            entry.profile?.id === employeeId || entry.profile_id === employeeId
+          );
+        }
+
+        // Filter by department if specified
+        if (departmentId) {
+          filteredEntries = filteredEntries.filter(entry => 
+            entry.profile?.department_id === departmentId
+          );
+        }
+
+        setEntries(filteredEntries);
       } catch (error) {
         console.error('Error fetching daily timecard entries:', error);
       } finally {
@@ -95,7 +124,7 @@ export const DailyTimecardReport: React.FC<DailyTimecardReportProps> = ({
     };
 
     fetchEntries();
-  }, [company?.id, dateStr]);
+  }, [company?.id, dateStr, employeeId, departmentId]);
 
   const formatDuration = (minutes: number | null) => {
     if (!minutes) return '-';

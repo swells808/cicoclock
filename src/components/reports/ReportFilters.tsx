@@ -113,8 +113,8 @@ export const ReportFilters: React.FC<ReportFiltersProps> = ({ onApply, loading }
     return fullName || emp.display_name || 'Unknown';
   };
 
-  const showEmployeeFilter = reportType === 'employee';
-  const showDepartmentFilter = reportType === 'employee';
+  const showEmployeeFilter = ['employee', 'daily', 'timecard'].includes(reportType);
+  const showDepartmentFilter = ['employee', 'daily', 'timecard'].includes(reportType);
 
   // Show loading state while checking roles
   if (rolesLoading || profileLoading) {
