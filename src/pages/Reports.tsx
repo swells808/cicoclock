@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useState, useRef } from "react";
 import {
   Download,
   Clock,
@@ -81,6 +81,10 @@ const Reports = () => {
   const [appliedFilters, setAppliedFilters] = useState<ReportFiltersValues | null>(null);
   const { metrics, employeeReports, projectReports, loading, error } = useReports(selectedStartDate, selectedEndDate);
 
+  // Refs for scrolling to report sections
+  const dailyReportRef = useRef<HTMLDivElement>(null);
+  const timeEntryReportRef = useRef<HTMLDivElement>(null);
+
   // Generate report logic
   const handleGenerateReport = async (filters: ReportFiltersValues) => {
     // Store applied filters for daily/timecard reports
@@ -90,8 +94,18 @@ const Reports = () => {
     setSelectedStartDate(filters.startDate);
     setSelectedEndDate(filters.endDate);
 
-    // For daily and timecard, we just update the state - no popup needed
-    if (filters.reportType === 'daily' || filters.reportType === 'timecard') {
+    // For daily and timecard, scroll to the relevant section after state update
+    if (filters.reportType === 'daily') {
+      setTimeout(() => {
+        dailyReportRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+      }, 100);
+      return;
+    }
+    
+    if (filters.reportType === 'timecard') {
+      setTimeout(() => {
+        timeEntryReportRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+      }, 100);
       return;
     }
 
@@ -363,19 +377,25 @@ const Reports = () => {
             </div>
 
             {/* Daily Timecard Report - defaults to today */}
-            <DailyTimecardReport 
-              date={appliedFilters?.reportType === 'daily' ? appliedFilters.startDate : new Date()}
-              employeeId={appliedFilters?.employeeId}
-              departmentId={appliedFilters?.departmentId}
-            />
+            <div ref={dailyReportRef}>
+              <DailyTimecardReport 
+                key={`daily-${appliedFilters?.startDate?.toISOString()}-${appliedFilters?.employeeId}-${appliedFilters?.departmentId}`}
+                date={appliedFilters?.reportType === 'daily' ? appliedFilters.startDate : new Date()}
+                employeeId={appliedFilters?.reportType === 'daily' ? appliedFilters?.employeeId : undefined}
+                departmentId={appliedFilters?.reportType === 'daily' ? appliedFilters?.departmentId : undefined}
+              />
+            </div>
 
             {/* Time Entry Details Report with Photos - defaults to today */}
-            <TimeEntryDetailsReport 
-              startDate={appliedFilters?.reportType === 'timecard' ? appliedFilters.startDate : new Date()} 
-              endDate={appliedFilters?.reportType === 'timecard' ? appliedFilters.endDate : new Date()}
-              employeeId={appliedFilters?.employeeId}
-              departmentId={appliedFilters?.departmentId}
-            />
+            <div ref={timeEntryReportRef}>
+              <TimeEntryDetailsReport 
+                key={`timecard-${appliedFilters?.startDate?.toISOString()}-${appliedFilters?.endDate?.toISOString()}-${appliedFilters?.employeeId}-${appliedFilters?.departmentId}`}
+                startDate={appliedFilters?.reportType === 'timecard' ? appliedFilters.startDate : new Date()} 
+                endDate={appliedFilters?.reportType === 'timecard' ? appliedFilters.endDate : new Date()}
+                employeeId={appliedFilters?.reportType === 'timecard' ? appliedFilters?.employeeId : undefined}
+                departmentId={appliedFilters?.reportType === 'timecard' ? appliedFilters?.departmentId : undefined}
+              />
+            </div>
 
             {/* Report Content */}
             <section className="bg-card rounded-xl shadow-sm border border-border mb-8">
