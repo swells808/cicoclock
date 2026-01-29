@@ -23,14 +23,12 @@ export interface ReportUser {
 
 export interface ReportEmployeeData {
   name: string;
-  week: number;
-  month: number;
+  hours: number;
 }
 
 export interface ReportProjectData {
   name: string;
-  week: number;
-  month: number;
+  hours: number;
 }
 
 function sanitizeFilename(name: string): string {
@@ -46,7 +44,7 @@ export function buildRealTableHTML(
   title?: string,
   dateRange?: { start: Date; end: Date }
 ) {
-  const columns = ["Name", "Week", "Month"];
+  const columns = ["Name", "Hours"];
 
   let html = title ? `
     <!DOCTYPE html>
@@ -79,14 +77,12 @@ export function buildRealTableHTML(
     columns.map((col) => `<th style='padding:8px;background:#F6F6F7;'>${col}</th>`).join("") +
     "</tr></thead><tbody>";
 
-  let totalWeek = 0;
-  let totalMonth = 0;
+  let totalHours = 0;
 
   table += data
     .map(
       (row) => {
-        totalWeek += row.week || 0;
-        totalMonth += row.month || 0;
+        totalHours += row.hours || 0;
         return "<tr>" +
           columns
             .map((col) => `<td style='padding:8px;'>${(row as any)[col.toLowerCase()] ?? ""}</td>`)
@@ -99,8 +95,7 @@ export function buildRealTableHTML(
   if (title) {
     table += `<tr style='font-weight:bold;background-color:#e8f5e9;'>
       <td style='padding:8px;'>Total</td>
-      <td style='padding:8px;'>${totalWeek.toFixed(1)}</td>
-      <td style='padding:8px;'>${totalMonth.toFixed(1)}</td>
+      <td style='padding:8px;'>${totalHours.toFixed(1)}</td>
     </tr>`;
   }
 
@@ -139,7 +134,7 @@ export function calculateTotalHours(entries: { duration_minutes?: number | null 
 }
 
 export function exportRealDataAsCSV(type: "employee" | "project", data: ReportEmployeeData[] | ReportProjectData[]) {
-  const columns = ["Name", "Week", "Month"];
+  const columns = ["Name", "Hours"];
   let csv =
     columns.join(",") +
     "\n" +

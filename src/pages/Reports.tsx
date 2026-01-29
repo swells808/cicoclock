@@ -167,31 +167,22 @@ const Reports = () => {
         if (!acc[entryKey]) {
           acc[entryKey] = {
             name,
-            week: 0,
-            month: 0,
+            hours: 0,
             odId: entryKey,
             departmentId: profile?.department_id
           };
         }
-        acc[entryKey].month += hours;
-
-        const entryDate = new Date(entry.start_time);
-        const weekAgo = new Date();
-        weekAgo.setDate(weekAgo.getDate() - 7);
-        if (entryDate >= weekAgo) {
-          acc[entryKey].week += hours;
-        }
+        acc[entryKey].hours += hours;
 
         return acc;
       }, {} as Record<string, any>);
 
       let employeeReportData = Object.values(employeeHours).map((data: any) => ({
         name: data.name,
-        week: Math.round(data.week),
-        month: Math.round(data.month),
+        hours: Math.round(data.hours * 10) / 10,
         odId: data.odId,
         departmentId: data.departmentId,
-      })).sort((a: any, b: any) => b.month - a.month);
+      })).sort((a: any, b: any) => b.hours - a.hours);
 
       // Apply employee filter if specified
       if (filters.employeeId) {
@@ -218,38 +209,35 @@ const Reports = () => {
         if (!acc[projectId]) {
           acc[projectId] = {
             name: projectName,
-            week: 0,
-            month: 0,
+            hours: 0,
             projectId,
             status: projectStatus
           };
         }
-        acc[projectId].month += hours;
-
-        const entryDate = new Date(entry.start_time);
-        const weekAgo = new Date();
-        weekAgo.setDate(weekAgo.getDate() - 7);
-        if (entryDate >= weekAgo) {
-          acc[projectId].week += hours;
-        }
+        acc[projectId].hours += hours;
 
         return acc;
       }, {} as Record<string, any>);
 
       reportData = Object.values(projectHours).map((data: any) => ({
         name: data.name,
-        week: Math.round(data.week),
-        month: Math.round(data.month),
+        hours: Math.round(data.hours * 10) / 10,
         projectId: data.projectId,
         status: data.status,
-      })).sort((a: any, b: any) => b.month - a.month);
+      })).sort((a: any, b: any) => b.hours - a.hours);
     }
+
+    // Format date range for title
+    const formatDateForTitle = (d: Date) => d.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
+    const dateRangeStr = start.toDateString() === end.toDateString()
+      ? formatDateForTitle(start)
+      : `${formatDateForTitle(start)} - ${formatDateForTitle(end)}`;
 
     const reportTable = buildRealTableHTML(filters.reportType === 'employee' ? 'employee' : 'project', reportData);
     const title =
       filters.reportType === "employee"
-        ? "Work Hours Per Employee"
-        : "Project Time Distribution";
+        ? `Work Hours Per Employee — ${dateRangeStr}`
+        : `Project Time Distribution — ${dateRangeStr}`;
 
     const style = `
       <style>
