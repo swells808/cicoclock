@@ -78,13 +78,22 @@ function exportTableAsPDF(type: "employee" | "project") {
 const Reports = () => {
   const [selectedStartDate, setSelectedStartDate] = useState<Date | undefined>(undefined);
   const [selectedEndDate, setSelectedEndDate] = useState<Date | undefined>(undefined);
+  const [appliedFilters, setAppliedFilters] = useState<ReportFiltersValues | null>(null);
   const { metrics, employeeReports, projectReports, loading, error } = useReports(selectedStartDate, selectedEndDate);
 
   // Generate report logic
   const handleGenerateReport = async (filters: ReportFiltersValues) => {
+    // Store applied filters for daily/timecard reports
+    setAppliedFilters(filters);
+    
     // Update selected dates for the hook to update overview metrics
     setSelectedStartDate(filters.startDate);
     setSelectedEndDate(filters.endDate);
+
+    // For daily and timecard, we just update the state - no popup needed
+    if (filters.reportType === 'daily' || filters.reportType === 'timecard') {
+      return;
+    }
 
     const newWin = window.open("", "_blank", "width=900,height=700");
     if (!newWin) {
@@ -354,10 +363,19 @@ const Reports = () => {
             </div>
 
             {/* Daily Timecard Report - defaults to today */}
-            <DailyTimecardReport />
+            <DailyTimecardReport 
+              date={appliedFilters?.reportType === 'daily' ? appliedFilters.startDate : new Date()}
+              employeeId={appliedFilters?.employeeId}
+              departmentId={appliedFilters?.departmentId}
+            />
 
             {/* Time Entry Details Report with Photos - defaults to today */}
-            <TimeEntryDetailsReport startDate={new Date()} endDate={new Date()} />
+            <TimeEntryDetailsReport 
+              startDate={appliedFilters?.reportType === 'timecard' ? appliedFilters.startDate : new Date()} 
+              endDate={appliedFilters?.reportType === 'timecard' ? appliedFilters.endDate : new Date()}
+              employeeId={appliedFilters?.employeeId}
+              departmentId={appliedFilters?.departmentId}
+            />
 
             {/* Report Content */}
             <section className="bg-card rounded-xl shadow-sm border border-border mb-8">
