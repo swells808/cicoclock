@@ -1,249 +1,118 @@
 
-# Add Employee and Department Filtering to Daily Timecard and Time Entry Details Reports
+# Fix Time Entry Details Report Not Updating Visually
 
-## Problem
-The "Daily Timecard" and "Time Entry Details" reports currently:
-1. Don't show the Employee/Department filter dropdowns in the UI (filters are only enabled for "Employee Hours" report type)
-2. Components don't accept employee/department filter props
-3. Components are rendered with hardcoded dates, not connected to the filter system
+## Root Cause Analysis
+After investigating the code and network requests, I identified the following issues:
 
-## Solution Overview
-1. Extend the filter visibility logic to include `daily` and `timecard` report types
-2. Update both report components to accept and apply `employeeId` and `departmentId` filters
-3. Connect the reports to the filter state in the Reports page
-4. Maintain role-based access control (regular employees can only filter to themselves)
+1. **The report IS working** - Network requests show data is being fetched correctly for January 28, 2026
+2. **Visual feedback is missing** - Users don't get clear indication that the report updated or where to look
+3. **Component always renders** - Both DailyTimecardReport and TimeEntryDetailsReport are always visible on the page, but users might not notice the update if they don't scroll
+
+## Proposed Solution
+Add visual feedback and auto-scroll behavior so users can clearly see when the report updates.
 
 ---
 
 ## Technical Changes
 
-### File 1: `src/components/reports/ReportFilters.tsx`
+### File 1: `src/pages/Reports.tsx`
 
-**Change: Update filter visibility logic** (lines 116-117)
+**Change 1: Add a ref to scroll to the relevant report section**
 
-```typescript
-// Before
-const showEmployeeFilter = reportType === 'employee';
-const showDepartmentFilter = reportType === 'employee';
-
-// After - show filters for all report types that need employee/department filtering
-const showEmployeeFilter = ['employee', 'daily', 'timecard'].includes(reportType);
-const showDepartmentFilter = ['employee', 'daily', 'timecard'].includes(reportType);
-```
-
----
-
-### File 2: `src/components/reports/DailyTimecardReport.tsx`
-
-**Change 1: Update props interface** (lines 26-28)
+Add refs for the report sections and scroll to the appropriate one after generating a report.
 
 ```typescript
-interface DailyTimecardReportProps {
-  date?: Date;
-  employeeId?: string;
-  departmentId?: string;
-}
-```
+import { useRef } from 'react';
 
-**Change 2: Accept new props and fetch department_id in profiles** (lines 30-35)
+// Inside Reports component
+const dailyReportRef = useRef<HTMLDivElement>(null);
+const timeEntryReportRef = useRef<HTMLDivElement>(null);
 
-```typescript
-export const DailyTimecardReport: React.FC<DailyTimecardReportProps> = ({ 
-  date: propDate,
-  employeeId,
-  departmentId
-}) => {
-```
-
-**Change 3: Update profile query to include department_id** (lines 74-77)
-
-```typescript
-const { data: profiles, error: profilesError } = await supabase
-  .from('profiles')
-  .select('id, user_id, first_name, last_name, display_name, department_id')
-  .in('user_id', userIds);
-```
-
-**Change 4: Update profile map and TimeEntry interface** (lines 10-24, 81-84)
-
-Add `profile_id` to query and interface, include `department_id` in profile map:
-
-```typescript
-interface TimeEntry {
-  id: string;
-  user_id: string;
-  profile_id: string | null;
-  // ... existing fields
-  profile?: {
-    id: string;
-    first_name: string | null;
-    last_name: string | null;
-    display_name: string | null;
-    department_id: string | null;
-  };
-}
-```
-
-**Change 5: Add filtering logic after fetching entries** (after line 89)
-
-```typescript
-// Filter by employee if specified
-let filteredEntries = data.map(entry => ({
-  ...entry,
-  profile: profileMap[entry.user_id]
-}));
-
-if (employeeId) {
-  filteredEntries = filteredEntries.filter(entry => 
-    entry.profile?.id === employeeId || entry.profile_id === employeeId
-  );
-}
-
-if (departmentId) {
-  filteredEntries = filteredEntries.filter(entry => 
-    entry.profile?.department_id === departmentId
-  );
-}
-
-setEntries(filteredEntries);
-```
-
-**Change 6: Update useEffect dependency array** (line 98)
-
-```typescript
-}, [company?.id, dateStr, employeeId, departmentId]);
-```
-
----
-
-### File 3: `src/components/reports/TimeEntryDetailsReport.tsx`
-
-**Change 1: Update props interface** (lines 37-40)
-
-```typescript
-interface TimeEntryDetailsReportProps {
-  startDate?: Date;
-  endDate?: Date;
-  employeeId?: string;
-  departmentId?: string;
-}
-```
-
-**Change 2: Accept new props** (lines 42-47)
-
-```typescript
-export const TimeEntryDetailsReport: React.FC<TimeEntryDetailsReportProps> = ({ 
-  startDate: propStartDate,
-  endDate: propEndDate,
-  employeeId,
-  departmentId
-}) => {
-```
-
-**Change 3: Update profile query to include id and department_id** (lines 101-104)
-
-```typescript
-const { data: profiles, error: profilesError } = await supabase
-  .from('profiles')
-  .select('id, user_id, first_name, last_name, display_name, department_id')
-  .in('user_id', userIds);
-```
-
-**Change 4: Update TimeEntryDetail interface and profile type** (lines 11-35)
-
-```typescript
-interface TimeEntryDetail {
-  id: string;
-  user_id: string;
-  profile_id: string | null;
-  // ... existing fields
-  profile?: {
-    id: string;
-    first_name: string | null;
-    last_name: string | null;
-    display_name: string | null;
-    department_id: string | null;
-  };
-}
-```
-
-**Change 5: Add filtering logic** (after line 116)
-
-```typescript
-let filteredEntries = data.map(entry => ({
-  ...entry,
-  profile: profileMap[entry.user_id]
-}));
-
-if (employeeId) {
-  filteredEntries = filteredEntries.filter(entry => 
-    entry.profile?.id === employeeId || entry.profile_id === employeeId
-  );
-}
-
-if (departmentId) {
-  filteredEntries = filteredEntries.filter(entry => 
-    entry.profile?.department_id === departmentId
-  );
-}
-
-setEntries(filteredEntries);
-```
-
-**Change 6: Update time_entries query to include profile_id** (lines 71-95)
-
-Add `profile_id` to the select statement.
-
-**Change 7: Update useEffect dependency array** (line 125)
-
-```typescript
-}, [company?.id, startDateStr, endDateStr, employeeId, departmentId]);
-```
-
----
-
-### File 4: `src/pages/Reports.tsx`
-
-**Change 1: Add state to track applied filters** (after line 81)
-
-```typescript
-const [appliedFilters, setAppliedFilters] = useState<ReportFiltersValues | null>(null);
-```
-
-**Change 2: Update handleGenerateReport to store filters** (inside the function)
-
-```typescript
 const handleGenerateReport = async (filters: ReportFiltersValues) => {
-  // Store applied filters for daily/timecard reports
   setAppliedFilters(filters);
-  
-  // For daily and timecard, we just update the state - no popup needed
-  if (filters.reportType === 'daily' || filters.reportType === 'timecard') {
-    setSelectedStartDate(filters.startDate);
-    setSelectedEndDate(filters.endDate);
+  setSelectedStartDate(filters.startDate);
+  setSelectedEndDate(filters.endDate);
+
+  // For daily and timecard, scroll to the relevant section
+  if (filters.reportType === 'daily') {
+    setTimeout(() => {
+      dailyReportRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    }, 100);
     return;
   }
   
-  // ... existing popup logic for employee/project reports
+  if (filters.reportType === 'timecard') {
+    setTimeout(() => {
+      timeEntryReportRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    }, 100);
+    return;
+  }
+  
+  // ... rest of the popup logic for employee/project reports
 };
 ```
 
-**Change 3: Pass filters to report components** (lines 357-360)
+**Change 2: Wrap report components with ref divs**
 
-```typescript
+```tsx
 {/* Daily Timecard Report */}
-<DailyTimecardReport 
-  date={appliedFilters?.reportType === 'daily' ? appliedFilters.startDate : new Date()}
-  employeeId={appliedFilters?.employeeId}
-  departmentId={appliedFilters?.departmentId}
-/>
+<div ref={dailyReportRef}>
+  <DailyTimecardReport 
+    date={appliedFilters?.reportType === 'daily' ? appliedFilters.startDate : new Date()}
+    employeeId={appliedFilters?.reportType === 'daily' ? appliedFilters?.employeeId : undefined}
+    departmentId={appliedFilters?.reportType === 'daily' ? appliedFilters?.departmentId : undefined}
+  />
+</div>
 
 {/* Time Entry Details Report */}
+<div ref={timeEntryReportRef}>
+  <TimeEntryDetailsReport 
+    startDate={appliedFilters?.reportType === 'timecard' ? appliedFilters.startDate : new Date()} 
+    endDate={appliedFilters?.reportType === 'timecard' ? appliedFilters.endDate : new Date()}
+    employeeId={appliedFilters?.reportType === 'timecard' ? appliedFilters?.employeeId : undefined}
+    departmentId={appliedFilters?.reportType === 'timecard' ? appliedFilters?.departmentId : undefined}
+  />
+</div>
+```
+
+**Change 3: Only pass filters when the matching report type is selected**
+
+This ensures filters are only applied to the report type that was actually selected:
+
+```tsx
+// Only pass filters to the relevant report type
+employeeId={appliedFilters?.reportType === 'timecard' ? appliedFilters?.employeeId : undefined}
+departmentId={appliedFilters?.reportType === 'timecard' ? appliedFilters?.departmentId : undefined}
+```
+
+---
+
+### File 2: `src/components/reports/TimeEntryDetailsReport.tsx`
+
+**Change: Add visual loading indicator when filters change**
+
+The component already has a loading state, but we should ensure it triggers on filter changes.
+
+```typescript
+// Add key prop to force remount when filters change (optional, for immediate visual feedback)
+// In Reports.tsx:
 <TimeEntryDetailsReport 
-  startDate={appliedFilters?.reportType === 'timecard' ? appliedFilters.startDate : new Date()} 
-  endDate={appliedFilters?.reportType === 'timecard' ? appliedFilters.endDate : new Date()}
-  employeeId={appliedFilters?.employeeId}
-  departmentId={appliedFilters?.departmentId}
+  key={`${appliedFilters?.startDate?.toISOString()}-${appliedFilters?.endDate?.toISOString()}-${appliedFilters?.employeeId}-${appliedFilters?.departmentId}`}
+  // ... props
+/>
+```
+
+---
+
+### File 3: `src/components/reports/DailyTimecardReport.tsx`
+
+**Same pattern: Add visual loading indicator when filters change**
+
+```typescript
+// In Reports.tsx:
+<DailyTimecardReport 
+  key={`${appliedFilters?.startDate?.toISOString()}-${appliedFilters?.employeeId}-${appliedFilters?.departmentId}`}
+  // ... props
 />
 ```
 
@@ -253,20 +122,16 @@ const handleGenerateReport = async (filters: ReportFiltersValues) => {
 
 | File | Change |
 |------|--------|
-| `src/components/reports/ReportFilters.tsx` | Show Employee/Department filters for `daily` and `timecard` report types |
-| `src/components/reports/DailyTimecardReport.tsx` | Accept `employeeId` and `departmentId` props; filter entries accordingly |
-| `src/components/reports/TimeEntryDetailsReport.tsx` | Accept `employeeId` and `departmentId` props; filter entries accordingly |
-| `src/pages/Reports.tsx` | Store applied filters in state; pass filters to report components |
+| `src/pages/Reports.tsx` | Add refs to scroll to report sections after generating; conditionally pass filters only when matching report type is selected; add key prop for visual refresh |
 
-## Expected Behavior
+## Expected Behavior After Fix
 
-| Report Type | Employee Filter | Department Filter | Behavior |
-|-------------|-----------------|-------------------|----------|
-| Employee Hours | Visible (for Admin/Supervisor) | Visible (for Admin/Supervisor) | Opens popup with filtered data |
-| Project Hours | Hidden | Hidden | Opens popup with project data |
-| Daily Timecard | Visible (for Admin/Supervisor) | Visible (for Admin/Supervisor) | Updates inline report with filter |
-| Time Entry Details | Visible (for Admin/Supervisor) | Visible (for Admin/Supervisor) | Updates inline report with filter |
+1. User selects "Time Entry Details" report type
+2. User picks date (e.g., Jan 28, 2026)
+3. User clicks "Generate Report"
+4. Page automatically scrolls down to the Time Entry Details section
+5. The component shows a loading skeleton briefly
+6. The report displays the filtered data for that date
 
-## Role-Based Access Control (Maintained)
-- **Admin/Supervisor**: Can filter by any employee or department
-- **Regular Employee**: Employee/Department dropdowns remain hidden; reports auto-filter to their own data
+## Additional Note
+The current "No employee data available" message the user may have noticed is from a different section (Metrics tables), not the Time Entry Details report. The Time Entry Details report shows "No time entries for this period" when empty.
