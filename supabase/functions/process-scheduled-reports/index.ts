@@ -403,7 +403,7 @@ async function generateTimeEntryDetailsPDF(
       borderColor: rgb(0.7, 0.7, 0.7),
       borderWidth: 0.5,
     });
-    page.drawText(entry.clock_in_photo_url ? '📷' : '-', {
+    page.drawText(entry.clock_in_photo_url ? 'Photo' : '-', {
       x: clockInX + 18,
       y: clockInY + 36,
       size: 10,
@@ -421,7 +421,7 @@ async function generateTimeEntryDetailsPDF(
       borderColor: rgb(0.7, 0.85, 0.7),
       borderWidth: 0.5,
     });
-    page.drawText(entry.clock_in_latitude ? '🗺️' : '-', {
+    page.drawText(entry.clock_in_latitude ? 'Map' : '-', {
       x: clockInX + 58,
       y: clockInY + 36,
       size: 10,
@@ -530,7 +530,7 @@ async function generateTimeEntryDetailsPDF(
       borderColor: rgb(0.7, 0.7, 0.7),
       borderWidth: 0.5,
     });
-    page.drawText(entry.clock_out_photo_url ? '📷' : '-', {
+    page.drawText(entry.clock_out_photo_url ? 'Photo' : '-', {
       x: clockOutX + 18,
       y: clockInY + 36,
       size: 10,
@@ -548,7 +548,7 @@ async function generateTimeEntryDetailsPDF(
       borderColor: rgb(0.7, 0.85, 0.7),
       borderWidth: 0.5,
     });
-    page.drawText(entry.clock_out_latitude ? '🗺️' : '-', {
+    page.drawText(entry.clock_out_latitude ? 'Map' : '-', {
       x: clockOutX + 58,
       y: clockInY + 36,
       size: 10,
