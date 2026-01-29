@@ -15,6 +15,159 @@ import { ScheduledReportsManager } from "@/components/reports/ScheduledReportsMa
 import { TimeEntryDetailsReport } from "@/components/reports/TimeEntryDetailsReport";
 import { format } from "date-fns";
 
+// --- Timeline Segment Calculation Helper ---
+
+function calculateTimelineSegmentsHTML(
+  startTime: Date, 
+  endTime: Date | null, 
+  isBreak: boolean,
+  scheduledStartHour: number = 8,
+  scheduledEndHour: number = 17
+): string {
+  const timelineStartHour = 6;
+  const timelineEndHour = 20;
+  const totalHours = timelineEndHour - timelineStartHour;
+  
+  const getPositionPercent = (hour: number): number => {
+    return Math.max(0, Math.min(100, ((hour - timelineStartHour) / totalHours) * 100));
+  };
+  
+  const clockInHour = startTime.getHours() + startTime.getMinutes() / 60;
+  const clockOutTime = endTime || new Date();
+  const clockOutHour = clockOutTime.getHours() + clockOutTime.getMinutes() / 60;
+  
+  const clockInMinutes = startTime.getHours() * 60 + startTime.getMinutes();
+  const scheduledStartMinutes = scheduledStartHour * 60;
+  const isLateByMoreThan10 = clockInMinutes > scheduledStartMinutes + 10;
+  
+  let segmentsHTML = '';
+  
+  // Colors
+  const colors = {
+    regular: '#3b82f6',
+    late: '#f97316', 
+    overtime: '#ef4444',
+    break: '#14b8a6'
+  };
+  
+  // Late segment (gap from scheduled start to actual clock-in)
+  if (isLateByMoreThan10 && !isBreak) {
+    const startPct = getPositionPercent(scheduledStartHour);
+    const endPct = getPositionPercent(clockInHour);
+    const widthPct = endPct - startPct;
+    if (widthPct > 0) {
+      segmentsHTML += `<div style="position: absolute; top: 4px; bottom: 4px; left: ${startPct}%; width: ${widthPct}%; background: ${colors.late}; border-radius: 3px;" title="Late"></div>`;
+    }
+  }
+  
+  // Main segment(s)
+  if (isBreak) {
+    const startPct = getPositionPercent(clockInHour);
+    const endPct = getPositionPercent(clockOutHour);
+    const widthPct = Math.max(endPct - startPct, 1);
+    segmentsHTML += `<div style="position: absolute; top: 4px; bottom: 4px; left: ${startPct}%; width: ${widthPct}%; background: ${colors.break}; border-radius: 3px;"></div>`;
+  } else {
+    const clockOutMinutes = clockOutTime.getHours() * 60 + clockOutTime.getMinutes();
+    const scheduledEndMinutes = scheduledEndHour * 60;
+    
+    if (clockInMinutes >= scheduledEndMinutes) {
+      // Entire entry is overtime
+      const startPct = getPositionPercent(clockInHour);
+      const endPct = getPositionPercent(clockOutHour);
+      const widthPct = Math.max(endPct - startPct, 1);
+      segmentsHTML += `<div style="position: absolute; top: 4px; bottom: 4px; left: ${startPct}%; width: ${widthPct}%; background: ${colors.overtime}; border-radius: 3px;"></div>`;
+    } else if (clockOutMinutes > scheduledEndMinutes) {
+      // Spans into overtime - split into regular + overtime
+      const scheduledEndHourFloat = scheduledEndMinutes / 60;
+      const regularStart = getPositionPercent(clockInHour);
+      const regularEnd = getPositionPercent(scheduledEndHourFloat);
+      const regularWidth = Math.max(regularEnd - regularStart, 1);
+      const overtimeStart = getPositionPercent(scheduledEndHourFloat);
+      const overtimeEnd = getPositionPercent(clockOutHour);
+      const overtimeWidth = Math.max(overtimeEnd - overtimeStart, 1);
+      
+      segmentsHTML += `<div style="position: absolute; top: 4px; bottom: 4px; left: ${regularStart}%; width: ${regularWidth}%; background: ${colors.regular}; border-radius: 3px 0 0 3px;"></div>`;
+      segmentsHTML += `<div style="position: absolute; top: 4px; bottom: 4px; left: ${overtimeStart}%; width: ${overtimeWidth}%; background: ${colors.overtime}; border-radius: 0 3px 3px 0;"></div>`;
+    } else {
+      // Regular work within scheduled hours
+      const startPct = getPositionPercent(clockInHour);
+      const endPct = getPositionPercent(clockOutHour);
+      const widthPct = Math.max(endPct - startPct, 1);
+      segmentsHTML += `<div style="position: absolute; top: 4px; bottom: 4px; left: ${startPct}%; width: ${widthPct}%; background: ${colors.regular}; border-radius: 3px;"></div>`;
+    }
+  }
+  
+  return segmentsHTML;
+}
+
+// Build enhanced timeline HTML with hour labels, tick marks, and legend
+function buildEnhancedTimelineHTML(startTime: Date, endTime: Date | null, isBreak: boolean): string {
+  const segments = calculateTimelineSegmentsHTML(startTime, endTime, isBreak);
+  
+  // Hour label positions (6am to 8pm = 14 hours, so each 2-hour interval is 100/7 ≈ 14.29%)
+  const hourLabels = `
+    <div style="position: relative; height: 14px; margin-bottom: 4px;">
+      <span style="position: absolute; left: 0%; font-size: 9px; color: #6b7280;">6am</span>
+      <span style="position: absolute; left: 14.29%; font-size: 9px; color: #6b7280; transform: translateX(-50%);">8am</span>
+      <span style="position: absolute; left: 28.57%; font-size: 9px; color: #6b7280; transform: translateX(-50%);">10am</span>
+      <span style="position: absolute; left: 42.86%; font-size: 9px; color: #6b7280; transform: translateX(-50%);">12pm</span>
+      <span style="position: absolute; left: 57.14%; font-size: 9px; color: #6b7280; transform: translateX(-50%);">2pm</span>
+      <span style="position: absolute; left: 71.43%; font-size: 9px; color: #6b7280; transform: translateX(-50%);">4pm</span>
+      <span style="position: absolute; left: 85.71%; font-size: 9px; color: #6b7280; transform: translateX(-50%);">6pm</span>
+      <span style="position: absolute; right: 0%; font-size: 9px; color: #6b7280;">8pm</span>
+    </div>
+  `;
+  
+  // Tick marks at 2-hour intervals inside the bar
+  const tickMarks = `
+    <div style="position: absolute; left: 14.29%; top: 0; bottom: 0; width: 1px; background: #d1d5db;"></div>
+    <div style="position: absolute; left: 28.57%; top: 0; bottom: 0; width: 1px; background: #d1d5db;"></div>
+    <div style="position: absolute; left: 42.86%; top: 0; bottom: 0; width: 1px; background: #d1d5db;"></div>
+    <div style="position: absolute; left: 57.14%; top: 0; bottom: 0; width: 1px; background: #d1d5db;"></div>
+    <div style="position: absolute; left: 71.43%; top: 0; bottom: 0; width: 1px; background: #d1d5db;"></div>
+    <div style="position: absolute; left: 85.71%; top: 0; bottom: 0; width: 1px; background: #d1d5db;"></div>
+  `;
+  
+  // Scheduled range indicator (8am = 14.29%, 5pm = 78.57%, width = 64.28%)
+  const scheduledRange = `
+    <div style="position: absolute; left: 14.29%; width: 64.28%; top: 0; bottom: 0; border-left: 2px dashed rgba(59, 130, 246, 0.4); border-right: 2px dashed rgba(59, 130, 246, 0.4); pointer-events: none;"></div>
+  `;
+  
+  // Color legend
+  const legend = `
+    <div style="display: flex; align-items: center; gap: 12px; margin-top: 8px; flex-wrap: wrap;">
+      <div style="display: flex; align-items: center; gap: 4px;">
+        <div style="width: 12px; height: 12px; border-radius: 2px; background: #3b82f6;"></div>
+        <span style="font-size: 10px; color: #6b7280;">Regular</span>
+      </div>
+      <div style="display: flex; align-items: center; gap: 4px;">
+        <div style="width: 12px; height: 12px; border-radius: 2px; background: #f97316;"></div>
+        <span style="font-size: 10px; color: #6b7280;">Late</span>
+      </div>
+      <div style="display: flex; align-items: center; gap: 4px;">
+        <div style="width: 12px; height: 12px; border-radius: 2px; background: #ef4444;"></div>
+        <span style="font-size: 10px; color: #6b7280;">Overtime</span>
+      </div>
+      <div style="display: flex; align-items: center; gap: 4px;">
+        <div style="width: 12px; height: 12px; border-radius: 2px; background: #14b8a6;"></div>
+        <span style="font-size: 10px; color: #6b7280;">Break</span>
+      </div>
+    </div>
+  `;
+  
+  return `
+    <div style="flex: 1; display: flex; flex-direction: column; justify-content: center; min-width: 200px;">
+      ${hourLabels}
+      <div style="position: relative; height: 28px; background: #f3f4f6; border-radius: 6px; overflow: visible;">
+        ${tickMarks}
+        ${scheduledRange}
+        ${segments}
+      </div>
+      ${legend}
+    </div>
+  `;
+}
+
 // --- Export Utility Functions ---
 
 // Export Daily Timecard as CSV
@@ -237,13 +390,7 @@ function buildSingleEntryCardHTML(entry: any): string {
           </div>
           ${entry.clock_in_address ? `<p style="font-size: 9px; color: #6b7280; max-width: 90px; text-align: center; margin: 2px 0 0; line-height: 1.2; overflow: hidden; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical;">${entry.clock_in_address}</p>` : ''}
         </div>
-        <div style="flex: 1; display: flex; align-items: center;">
-          <div style="width: 100%; height: 24px; background: #f3f4f6; border-radius: 4px; position: relative;">
-            <div style="position: absolute; top: 3px; bottom: 3px; left: 5%; right: 5%; background: ${entry.is_break ? '#14b8a6' : '#3b82f6'}; border-radius: 3px; display: flex; align-items: center; justify-content: center;">
-              <span style="font-size: 9px; color: white; font-weight: 500;">${entry.is_break ? 'Break' : 'Working'}</span>
-            </div>
-          </div>
-        </div>
+        ${buildEnhancedTimelineHTML(clockInTime, clockOutTime, entry.is_break)}
         <div style="display: flex; flex-direction: column; align-items: center; gap: 4px; padding: 8px; border-radius: 6px; background: ${isActive ? '#f3f4f6' : '#fee2e2'}; min-width: 90px;">
           <span style="font-size: 10px; font-weight: 500; color: ${isActive ? '#6b7280' : '#991b1b'};">Clock Out</span>
           <span style="font-size: 12px; font-weight: 700; color: ${isActive ? '#6b7280' : '#991b1b'};">${clockOutTime ? format(clockOutTime, 'h:mm a') : '—'}</span>
@@ -359,14 +506,8 @@ function buildTimeEntryDetailsRichHTML(entries: any[]): string {
             ${entry.clock_in_address ? `<p style="font-size: 10px; color: #6b7280; max-width: 110px; text-align: center; margin: 0; line-height: 1.3; overflow: hidden; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical;">${entry.clock_in_address}</p>` : ''}
           </div>
           
-          <!-- Timeline Bar -->
-          <div style="flex: 1; display: flex; flex-direction: column; justify-content: center;">
-            <div style="position: relative; height: 32px; background: #f3f4f6; border-radius: 6px; overflow: hidden;">
-              <div style="position: absolute; top: 4px; bottom: 4px; left: 10%; right: 10%; background: ${entry.is_break ? '#14b8a6' : '#3b82f6'}; border-radius: 4px; display: flex; align-items: center; justify-content: center;">
-                <span style="font-size: 10px; color: white; font-weight: 500;">${entry.is_break ? 'Break' : 'Working'}</span>
-              </div>
-            </div>
-          </div>
+          <!-- Enhanced Timeline Bar -->
+          ${buildEnhancedTimelineHTML(clockInTime, clockOutTime, entry.is_break)}
           
           <!-- Clock Out Panel -->
           <div style="display: flex; flex-direction: column; align-items: center; gap: 6px; padding: 12px; border-radius: 8px; background: ${isActive ? '#f3f4f6' : '#fee2e2'}; min-width: 110px;">
