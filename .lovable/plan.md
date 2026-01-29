@@ -1,131 +1,134 @@
 
-# Update Employee Hours Report to Show Selected Date Range Hours
+# Restrict Report Filters Based on User Role
 
 ## Problem
-The current report always displays "Week" and "Month" columns regardless of what date range the user selects. When the user picks a specific date (e.g., 01/28/26), they expect to see hours for **that date only** — not unrelated "last 7 days" and "month" buckets.
+Currently, any authenticated user can generate reports for any employee or department. Employees should only be able to run reports for themselves, while Admins and Supervisors should have full access to all employees and departments.
 
 ## Solution Overview
-Modify the report to show a single "Hours" column that reflects **only** the hours worked within the selected date range. Also display the date range in the report title/header so it's clear what period the data covers.
+Modify the `ReportFilters` component to check the user's role and restrict the available options accordingly:
+
+- **Admin/Supervisor**: Full access to all filters (employee, department dropdowns visible)
+- **Employee only**: Filters are hidden, report is automatically scoped to their own profile
 
 ---
 
 ## Technical Changes
 
-### File: `src/pages/Reports.tsx`
+### File: `src/components/reports/ReportFilters.tsx`
 
-**Change 1: Simplify data structure** (lines ~154-186)
+**Change 1: Import role and profile hooks** (lines 1-12)
 
-Replace the "week/month" accumulation with a single "hours" field:
+Add imports for `useUserRole` and `useProfile`:
+```typescript
+import { useUserRole } from '@/hooks/useUserRole';
+import { useProfile } from '@/hooks/useProfile';
+```
+
+**Change 2: Get current user role and profile** (inside component, after line 39)
 
 ```typescript
-// Before
-acc[entryKey] = {
-  name,
-  week: 0,
-  month: 0,
-  odId: entryKey,
-  departmentId: profile?.department_id
+const { isAdmin, isSupervisor, isLoading: rolesLoading } = useUserRole();
+const { data: currentUserProfile, isLoading: profileLoading } = useProfile();
+
+// Determine if user can view all employees or just themselves
+const canViewAllEmployees = isAdmin || isSupervisor;
+```
+
+**Change 3: Auto-set employee filter for regular employees** (update useEffect, lines 51-76)
+
+For employees without admin/supervisor roles:
+- Skip fetching all employees list
+- Auto-set the employee filter to their own profile ID
+
+```typescript
+useEffect(() => {
+  const fetchData = async () => {
+    if (!company?.id) return;
+
+    // Only fetch all employees if user has permission
+    if (canViewAllEmployees) {
+      const [employeesRes, departmentsRes] = await Promise.all([
+        supabase
+          .from('profiles')
+          .select('id, display_name, first_name, last_name')
+          .eq('company_id', company.id)
+          .eq('status', 'active')
+          .order('first_name'),
+        supabase
+          .from('departments')
+          .select('id, name')
+          .eq('company_id', company.id)
+          .eq('is_active', true)
+          .order('name')
+      ]);
+
+      if (employeesRes.data) setEmployees(employeesRes.data);
+      if (departmentsRes.data) setDepartments(departmentsRes.data);
+    }
+  };
+
+  fetchData();
+}, [company?.id, canViewAllEmployees]);
+
+// Auto-set employee filter for regular employees
+useEffect(() => {
+  if (!canViewAllEmployees && currentUserProfile?.id) {
+    setSelectedEmployeeId(currentUserProfile.id);
+  }
+}, [canViewAllEmployees, currentUserProfile?.id]);
+```
+
+**Change 4: Conditionally render filters** (lines 171-207)
+
+Only show Employee and Department dropdowns if user has permission:
+
+```typescript
+{showDepartmentFilter && canViewAllEmployees && (
+  <div className="space-y-2">
+    <Label>Department</Label>
+    {/* existing department select */}
+  </div>
+)}
+
+{showEmployeeFilter && canViewAllEmployees && (
+  <div className="space-y-2">
+    <Label>Employee</Label>
+    {/* existing employee select */}
+  </div>
+)}
+```
+
+**Change 5: Update handleApply to enforce restriction** (lines 78-86)
+
+```typescript
+const handleApply = () => {
+  onApply({
+    reportType,
+    startDate,
+    endDate,
+    // For non-privileged users, always use their own profile ID
+    employeeId: canViewAllEmployees 
+      ? (selectedEmployeeId === 'all' ? undefined : selectedEmployeeId)
+      : currentUserProfile?.id,
+    departmentId: canViewAllEmployees
+      ? (selectedDepartmentId === 'all' ? undefined : selectedDepartmentId)
+      : undefined,
+  });
 };
-acc[entryKey].month += hours;
-// plus week calculation logic
-
-// After
-acc[entryKey] = {
-  name,
-  hours: 0,
-  odId: entryKey,
-  departmentId: profile?.department_id
-};
-acc[entryKey].hours += hours;
-// Remove the week logic entirely
 ```
 
-**Change 2: Update data mapping** (lines ~188-194)
+**Change 6: Show loading state while checking roles** (before return statement)
 
 ```typescript
-// Before
-.map((data: any) => ({
-  name: data.name,
-  week: Math.round(data.week),
-  month: Math.round(data.month),
-  ...
-}))
-
-// After
-.map((data: any) => ({
-  name: data.name,
-  hours: Math.round(data.hours * 10) / 10,  // One decimal for precision
-  ...
-}))
-```
-
-**Change 3: Apply same changes for project reports** (lines ~209-245)
-
-Same pattern: replace week/month with single "hours" field.
-
-**Change 4: Update title to include date range** (lines ~249-252)
-
-```typescript
-// Before
-const title = filters.reportType === "employee"
-  ? "Work Hours Per Employee"
-  : "Project Time Distribution";
-
-// After  
-const formatDate = (d: Date) => d.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
-const dateRangeStr = start.toDateString() === end.toDateString()
-  ? formatDate(start)
-  : `${formatDate(start)} - ${formatDate(end)}`;
-  
-const title = filters.reportType === "employee"
-  ? `Work Hours Per Employee — ${dateRangeStr}`
-  : `Project Time Distribution — ${dateRangeStr}`;
-```
-
----
-
-### File: `src/utils/reportUtils.ts`
-
-**Change 1: Update `buildRealTableHTML` to accept dynamic columns** (lines ~43-115)
-
-```typescript
-// Before
-const columns = ["Name", "Week", "Month"];
-
-// After - accept columns as parameter
-export function buildRealTableHTML(
-  type: "employee" | "project",
-  data: any[],
-  columns: string[] = ["Name", "Hours"],  // New default
-  title?: string,
-  dateRange?: { start: Date; end: Date }
-) {
-```
-
-**Change 2: Update the totals row** (lines ~99-104)
-
-```typescript
-// Before - hardcoded week/month totals
-<td style='padding:8px;'>${totalWeek.toFixed(1)}</td>
-<td style='padding:8px;'>${totalMonth.toFixed(1)}</td>
-
-// After - dynamic based on columns
-```
-
-**Change 3: Update `ReportEmployeeData` and `ReportProjectData` interfaces** (lines ~24-34)
-
-```typescript
-// Before
-export interface ReportEmployeeData {
-  name: string;
-  week: number;
-  month: number;
-}
-
-// After
-export interface ReportEmployeeData {
-  name: string;
-  hours: number;  // Just the selected period hours
+if (rolesLoading || profileLoading) {
+  return (
+    <div className="bg-card p-6 rounded-xl shadow-sm border border-border">
+      <div className="flex items-center gap-2">
+        <Filter className="h-5 w-5 text-muted-foreground" />
+        <span className="text-muted-foreground">Loading filters...</span>
+      </div>
+    </div>
+  );
 }
 ```
 
@@ -135,16 +138,16 @@ export interface ReportEmployeeData {
 
 | File | Change |
 |------|--------|
-| `src/pages/Reports.tsx` | Replace week/month with single "hours" field; add date range to title |
-| `src/utils/reportUtils.ts` | Update table builder to use "Name" + "Hours" columns; update interfaces |
+| `src/components/reports/ReportFilters.tsx` | Add role checks; hide employee/department filters for regular employees; auto-scope reports to their own profile |
 
-## Expected Outcome
-When selecting a date range like `01/28/26` to `01/28/26`:
-- Report title: **"Work Hours Per Employee — Jan 28, 2026"**
-- Columns: **Name** | **Hours**
-- Data: Shows only hours worked on that specific day
+## Expected Behavior
 
-When selecting a range like `01/20/26` to `01/28/26`:
-- Report title: **"Work Hours Per Employee — Jan 20, 2026 - Jan 28, 2026"**
-- Columns: **Name** | **Hours**
-- Data: Shows total hours worked across that entire range
+| Role | Employee Filter | Department Filter | Report Scope |
+|------|-----------------|-------------------|--------------|
+| Admin | Visible (All + list) | Visible (All + list) | Any employee/department |
+| Supervisor | Visible (All + list) | Visible (All + list) | Any employee/department |
+| Employee | Hidden | Hidden | Own data only |
+| Foreman | Hidden | Hidden | Own data only |
+
+## Security Note
+This is a UI-level restriction. The underlying database queries via Supabase RLS already restrict data visibility based on company membership, so a malicious employee cannot access data from other companies. However, this change ensures regular employees have a clear, role-appropriate experience when using the reports feature.
