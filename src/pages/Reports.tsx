@@ -93,8 +93,13 @@ const Reports = () => {
     }
 
     // Fetch fresh data directly with the selected date range
-    const start = filters.startDate || new Date(new Date().getFullYear(), new Date().getMonth(), 1);
-    const end = filters.endDate || new Date(new Date().getFullYear(), new Date().getMonth() + 1, 0, 23, 59, 59);
+    const start = filters.startDate 
+      ? new Date(filters.startDate.getFullYear(), filters.startDate.getMonth(), filters.startDate.getDate(), 0, 0, 0)
+      : new Date(new Date().getFullYear(), new Date().getMonth(), 1);
+
+    const end = filters.endDate 
+      ? new Date(filters.endDate.getFullYear(), filters.endDate.getMonth(), filters.endDate.getDate(), 23, 59, 59, 999)
+      : new Date(new Date().getFullYear(), new Date().getMonth() + 1, 0, 23, 59, 59, 999);
 
     const { data: profiles } = await supabase
       .from('profiles')
