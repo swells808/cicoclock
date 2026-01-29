@@ -1,68 +1,48 @@
 
-# Fix: Scheduled Reports List Not Updating After Create
+# Update Email Sender Address
 
-## Problem Summary
-When you create a new scheduled report, the report card doesn't appear until you refresh the page. This happens because the dialog and the list use **separate instances** of the `useScheduledReports` hook, each with their own local state.
+## Overview
+Change the "from" email address in all three email-sending edge functions from `reports@resend.dev` to your verified domain.
 
-## Root Cause
-The flow currently works like this:
+## Files to Modify
 
-1. `ScheduledReportsManager` calls `useScheduledReports()` → gets `reports` list (Hook Instance A)
-2. `ScheduledReportDialog` calls `useScheduledReports()` → gets `createReport` function (Hook Instance B)
-3. When dialog calls `createReport()`, it triggers `fetchReports()` inside Hook Instance B
-4. Hook Instance B's state updates, but Hook Instance A (the list) never gets notified
-
-Since React hooks create independent state for each component that uses them, the manager's list doesn't see the new report until the page refreshes.
-
-## Solution
-Pass a callback from the Manager to the Dialog so the Manager can refetch its reports after a successful create/update.
-
-## Changes Required
-
-### File: `src/components/reports/ScheduledReportsManager.tsx`
-- Destructure `refetch` from the `useScheduledReports()` hook
-- Pass `refetch` as an `onSuccess` callback prop to `ScheduledReportDialog`
-
+### 1. `supabase/functions/send-test-report/index.ts`
+**Line 97** - Change the `from` field in the Resend email send call:
 ```typescript
-// Line 24: Add refetch to destructured values
-const { reports, loading, deleteReport, toggleReportStatus, sendTestEmail, refetch } = useScheduledReports();
+// Before
+from: 'CICO Reports <reports@resend.dev>',
 
-// Line 219-222: Pass onSuccess callback to dialog
-<ScheduledReportDialog
-  open={dialogOpen}
-  onOpenChange={setDialogOpen}
-  report={editingReport}
-  onSuccess={refetch}  // Add this prop
-/>
+// After  
+from: 'CICO Reports <reports@notifications.battlebornsteel.com>',
 ```
 
-### File: `src/components/reports/ScheduledReportDialog.tsx`
-- Add `onSuccess` prop to the interface
-- Call `onSuccess()` after successful create/update (after `onOpenChange(false)`)
-
+### 2. `supabase/functions/send-recipient-welcome-email/index.ts`
+**Line 40** - Change the `from` field:
 ```typescript
-// Line 18-22: Update interface
-interface ScheduledReportDialogProps {
-  open: boolean;
-  onOpenChange: (open: boolean) => void;
-  report: ScheduledReport | null;
-  onSuccess?: () => void;  // Add this
-}
+// Before
+from: 'CICO Reports <reports@resend.dev>',
 
-// Line 47: Accept the new prop
-export const ScheduledReportDialog = ({ open, onOpenChange, report, onSuccess }: ScheduledReportDialogProps) => {
-
-// Line 218-219: Call onSuccess after closing dialog
-onOpenChange(false);
-onSuccess?.();  // Add this line
+// After
+from: 'CICO Reports <reports@notifications.battlebornsteel.com>',
 ```
 
-## Technical Summary
+### 3. `supabase/functions/process-scheduled-reports/index.ts`
+**Line 693** - Change the `from` field:
+```typescript
+// Before
+from: 'CICO Reports <reports@resend.dev>',
 
-| File | Change |
-|------|--------|
-| `src/components/reports/ScheduledReportsManager.tsx` | Extract `refetch` from hook, pass as `onSuccess` prop to dialog |
-| `src/components/reports/ScheduledReportDialog.tsx` | Accept `onSuccess` prop, call it after successful save |
+// After
+from: 'CICO Reports <reports@notifications.battlebornsteel.com>',
+```
 
-## Expected Outcome
-After creating or editing a scheduled report, the list will immediately show the updated data without requiring a page refresh.
+## Summary
+
+| Edge Function | Change |
+|--------------|--------|
+| `send-test-report` | Update `from` address on line 97 |
+| `send-recipient-welcome-email` | Update `from` address on line 40 |
+| `process-scheduled-reports` | Update `from` address on line 693 |
+
+## Prerequisites
+Make sure the domain `notifications.battlebornsteel.com` is verified in your Resend account at [resend.com/domains](https://resend.com/domains). If it's not verified, emails will still fail with a 403 error.
