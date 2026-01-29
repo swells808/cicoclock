@@ -1,6 +1,7 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { Resend } from "https://esm.sh/resend@2.0.0";
+import { PDFDocument, StandardFonts, rgb } from "https://esm.sh/pdf-lib@1.17.1";
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -27,6 +28,7 @@ interface TimeEntry {
     last_name: string | null;
     display_name: string | null;
     department_id: string | null;
+    employee_id: string | null;
   };
   projects: {
     id: string;
@@ -60,6 +62,14 @@ function formatDate(dateString: string): string {
   });
 }
 
+function formatShortDate(dateString: string): string {
+  const date = new Date(dateString);
+  return date.toLocaleDateString('en-US', { 
+    month: 'short', 
+    day: 'numeric'
+  });
+}
+
 function getReportTypeName(type: string): string {
   const names: Record<string, string> = {
     'employee_timecard': 'Employee Timecard',
@@ -69,6 +79,575 @@ function getReportTypeName(type: string): string {
   };
   return names[type] || type;
 }
+
+function getEmployeeName(entry: TimeEntry): string {
+  return entry.profiles.display_name || 
+    `${entry.profiles.first_name || ''} ${entry.profiles.last_name || ''}`.trim() || 
+    'Unknown';
+}
+
+// ============= CSV Generation Functions =============
+
+function generateEmployeeTimecardCSV(entries: TimeEntry[]): string {
+  let csv = 'Employee,Employee Number,Project,Date,Clock In,Clock Out,Break,Duration\n';
+  
+  for (const entry of entries) {
+    const name = getEmployeeName(entry);
+    const employeeNumber = entry.profiles.employee_id || '';
+    const projectName = entry.projects?.name || 'No Project';
+    const date = formatDate(entry.clock_in);
+    const clockIn = formatTime(entry.clock_in);
+    const clockOut = entry.clock_out ? formatTime(entry.clock_out) : 'Open';
+    const breakTime = formatDuration(entry.break_duration_minutes);
+    const duration = formatDuration(entry.duration_minutes);
+    
+    // Escape quotes in values
+    const escapeCsv = (val: string) => `"${val.replace(/"/g, '""')}"`;
+    
+    csv += `${escapeCsv(name)},${escapeCsv(employeeNumber)},${escapeCsv(projectName)},${escapeCsv(date)},${escapeCsv(clockIn)},${escapeCsv(clockOut)},${escapeCsv(breakTime)},${escapeCsv(duration)}\n`;
+  }
+  
+  return csv;
+}
+
+function generateProjectTimecardCSV(entries: TimeEntry[]): string {
+  let csv = 'Project,Employee,Employee Number,Date,Clock In,Clock Out,Break,Duration\n';
+  
+  for (const entry of entries) {
+    const name = getEmployeeName(entry);
+    const employeeNumber = entry.profiles.employee_id || '';
+    const projectName = entry.projects?.name || 'No Project';
+    const date = formatDate(entry.clock_in);
+    const clockIn = formatTime(entry.clock_in);
+    const clockOut = entry.clock_out ? formatTime(entry.clock_out) : 'Open';
+    const breakTime = formatDuration(entry.break_duration_minutes);
+    const duration = formatDuration(entry.duration_minutes);
+    
+    const escapeCsv = (val: string) => `"${val.replace(/"/g, '""')}"`;
+    
+    csv += `${escapeCsv(projectName)},${escapeCsv(name)},${escapeCsv(employeeNumber)},${escapeCsv(date)},${escapeCsv(clockIn)},${escapeCsv(clockOut)},${escapeCsv(breakTime)},${escapeCsv(duration)}\n`;
+  }
+  
+  return csv;
+}
+
+function generateWeeklyPayrollCSV(entries: TimeEntry[]): string {
+  const byEmployee = new Map<string, { 
+    name: string; 
+    employeeNumber: string;
+    totalMinutes: number; 
+    breakMinutes: number; 
+    days: Set<string> 
+  }>();
+  
+  for (const entry of entries) {
+    const profileId = entry.profiles.id;
+    const name = getEmployeeName(entry);
+    const employeeNumber = entry.profiles.employee_id || '';
+    
+    if (!byEmployee.has(profileId)) {
+      byEmployee.set(profileId, { name, employeeNumber, totalMinutes: 0, breakMinutes: 0, days: new Set() });
+    }
+    
+    const emp = byEmployee.get(profileId)!;
+    emp.totalMinutes += entry.duration_minutes || 0;
+    emp.breakMinutes += entry.break_duration_minutes || 0;
+    emp.days.add(entry.clock_in.split('T')[0]);
+  }
+  
+  let csv = 'Employee,Employee Number,Days Worked,Regular Hours,Overtime,Breaks,Total Hours\n';
+  
+  const escapeCsv = (val: string) => `"${val.replace(/"/g, '""')}"`;
+  
+  for (const [, emp] of byEmployee) {
+    const regularMinutes = Math.min(emp.totalMinutes, 40 * 60);
+    const overtimeMinutes = Math.max(0, emp.totalMinutes - 40 * 60);
+    
+    csv += `${escapeCsv(emp.name)},${escapeCsv(emp.employeeNumber)},${emp.days.size},${escapeCsv(formatDuration(regularMinutes))},${escapeCsv(formatDuration(overtimeMinutes))},${escapeCsv(formatDuration(emp.breakMinutes))},${escapeCsv(formatDuration(emp.totalMinutes))}\n`;
+  }
+  
+  return csv;
+}
+
+// ============= PDF Generation Functions =============
+
+async function generateEmployeeTimecardPDF(
+  entries: TimeEntry[], 
+  companyName: string, 
+  reportName: string,
+  dateRange: { start: string; end: string }
+): Promise<Uint8Array> {
+  const pdfDoc = await PDFDocument.create();
+  const font = await pdfDoc.embedFont(StandardFonts.Helvetica);
+  const boldFont = await pdfDoc.embedFont(StandardFonts.HelveticaBold);
+  
+  const pageWidth = 612;
+  const pageHeight = 792;
+  let page = pdfDoc.addPage([pageWidth, pageHeight]);
+  let yPosition = pageHeight - 50;
+  
+  // Title
+  page.drawText(reportName || 'Employee Timecard Report', {
+    x: 50,
+    y: yPosition,
+    size: 18,
+    font: boldFont,
+    color: rgb(0.23, 0.32, 0.96),
+  });
+  yPosition -= 22;
+  
+  // Company name
+  page.drawText(companyName, {
+    x: 50,
+    y: yPosition,
+    size: 12,
+    font: font,
+    color: rgb(0.4, 0.4, 0.4),
+  });
+  yPosition -= 18;
+  
+  // Date range
+  page.drawText(`Period: ${dateRange.start} - ${dateRange.end}`, {
+    x: 50,
+    y: yPosition,
+    size: 10,
+    font: font,
+    color: rgb(0.4, 0.4, 0.4),
+  });
+  yPosition -= 30;
+  
+  // Table headers
+  const headers = ['Employee', 'Emp #', 'Project', 'Date', 'In', 'Out', 'Hours'];
+  const colWidths = [100, 50, 90, 75, 50, 50, 50];
+  let xPos = 50;
+  
+  for (let i = 0; i < headers.length; i++) {
+    page.drawText(headers[i], {
+      x: xPos,
+      y: yPosition,
+      size: 9,
+      font: boldFont,
+      color: rgb(0.2, 0.2, 0.2),
+    });
+    xPos += colWidths[i];
+  }
+  yPosition -= 15;
+  
+  // Draw line under headers
+  page.drawLine({
+    start: { x: 50, y: yPosition + 5 },
+    end: { x: pageWidth - 50, y: yPosition + 5 },
+    thickness: 1,
+    color: rgb(0.8, 0.8, 0.8),
+  });
+  yPosition -= 8;
+  
+  // Table rows
+  for (const entry of entries) {
+    if (yPosition < 60) {
+      page = pdfDoc.addPage([pageWidth, pageHeight]);
+      yPosition = pageHeight - 50;
+    }
+    
+    const name = getEmployeeName(entry);
+    const empNumber = entry.profiles.employee_id || '-';
+    const projectName = entry.projects?.name || 'No Project';
+    const date = formatShortDate(entry.clock_in);
+    const clockIn = formatTime(entry.clock_in);
+    const clockOut = entry.clock_out ? formatTime(entry.clock_out) : 'Open';
+    const duration = formatDuration(entry.duration_minutes);
+    
+    const rowData = [
+      name.substring(0, 16),
+      empNumber.substring(0, 8),
+      projectName.substring(0, 14),
+      date,
+      clockIn,
+      clockOut,
+      duration
+    ];
+    
+    xPos = 50;
+    for (let i = 0; i < rowData.length; i++) {
+      page.drawText(rowData[i], {
+        x: xPos,
+        y: yPosition,
+        size: 8,
+        font: font,
+        color: rgb(0.2, 0.2, 0.2),
+      });
+      xPos += colWidths[i];
+    }
+    yPosition -= 14;
+  }
+  
+  if (entries.length === 0) {
+    page.drawText('No time entries found for this period.', {
+      x: 50,
+      y: yPosition,
+      size: 10,
+      font: font,
+      color: rgb(0.5, 0.5, 0.5),
+    });
+  }
+  
+  // Footer on last page
+  const lastPage = pdfDoc.getPages()[pdfDoc.getPageCount() - 1];
+  lastPage.drawText(`Generated by CICO on ${new Date().toLocaleString()}`, {
+    x: 50,
+    y: 30,
+    size: 8,
+    font: font,
+    color: rgb(0.6, 0.6, 0.6),
+  });
+  
+  return await pdfDoc.save();
+}
+
+async function generateProjectTimecardPDF(
+  entries: TimeEntry[], 
+  companyName: string, 
+  reportName: string,
+  dateRange: { start: string; end: string }
+): Promise<Uint8Array> {
+  const pdfDoc = await PDFDocument.create();
+  const font = await pdfDoc.embedFont(StandardFonts.Helvetica);
+  const boldFont = await pdfDoc.embedFont(StandardFonts.HelveticaBold);
+  
+  const pageWidth = 612;
+  const pageHeight = 792;
+  let page = pdfDoc.addPage([pageWidth, pageHeight]);
+  let yPosition = pageHeight - 50;
+  
+  // Title
+  page.drawText(reportName || 'Project Timecard Report', {
+    x: 50,
+    y: yPosition,
+    size: 18,
+    font: boldFont,
+    color: rgb(0.06, 0.72, 0.51),
+  });
+  yPosition -= 22;
+  
+  // Company name
+  page.drawText(companyName, {
+    x: 50,
+    y: yPosition,
+    size: 12,
+    font: font,
+    color: rgb(0.4, 0.4, 0.4),
+  });
+  yPosition -= 18;
+  
+  // Date range
+  page.drawText(`Period: ${dateRange.start} - ${dateRange.end}`, {
+    x: 50,
+    y: yPosition,
+    size: 10,
+    font: font,
+    color: rgb(0.4, 0.4, 0.4),
+  });
+  yPosition -= 30;
+  
+  // Group by project
+  const byProject = new Map<string, { name: string; entries: TimeEntry[]; totalMinutes: number }>();
+  
+  for (const entry of entries) {
+    const projectId = entry.projects?.id || 'no-project';
+    const projectName = entry.projects?.name || 'No Project';
+    
+    if (!byProject.has(projectId)) {
+      byProject.set(projectId, { name: projectName, entries: [], totalMinutes: 0 });
+    }
+    
+    const proj = byProject.get(projectId)!;
+    proj.entries.push(entry);
+    proj.totalMinutes += entry.duration_minutes || 0;
+  }
+  
+  // Table headers
+  const headers = ['Employee', 'Emp #', 'Date', 'In', 'Out', 'Break', 'Hours'];
+  const colWidths = [110, 55, 80, 55, 55, 55, 55];
+  
+  for (const [, proj] of byProject) {
+    // Check if we need a new page for project header
+    if (yPosition < 100) {
+      page = pdfDoc.addPage([pageWidth, pageHeight]);
+      yPosition = pageHeight - 50;
+    }
+    
+    // Project header
+    page.drawRectangle({
+      x: 50,
+      y: yPosition - 4,
+      width: pageWidth - 100,
+      height: 18,
+      color: rgb(0.94, 0.98, 1),
+    });
+    
+    page.drawText(`${proj.name} - Total: ${formatDuration(proj.totalMinutes)}`, {
+      x: 55,
+      y: yPosition,
+      size: 10,
+      font: boldFont,
+      color: rgb(0.2, 0.2, 0.2),
+    });
+    yPosition -= 25;
+    
+    // Column headers
+    let xPos = 50;
+    for (let i = 0; i < headers.length; i++) {
+      page.drawText(headers[i], {
+        x: xPos,
+        y: yPosition,
+        size: 8,
+        font: boldFont,
+        color: rgb(0.4, 0.4, 0.4),
+      });
+      xPos += colWidths[i];
+    }
+    yPosition -= 14;
+    
+    // Entries
+    for (const entry of proj.entries) {
+      if (yPosition < 60) {
+        page = pdfDoc.addPage([pageWidth, pageHeight]);
+        yPosition = pageHeight - 50;
+      }
+      
+      const name = getEmployeeName(entry);
+      const empNumber = entry.profiles.employee_id || '-';
+      const date = formatShortDate(entry.clock_in);
+      const clockIn = formatTime(entry.clock_in);
+      const clockOut = entry.clock_out ? formatTime(entry.clock_out) : 'Open';
+      const breakTime = formatDuration(entry.break_duration_minutes);
+      const duration = formatDuration(entry.duration_minutes);
+      
+      const rowData = [
+        name.substring(0, 18),
+        empNumber.substring(0, 8),
+        date,
+        clockIn,
+        clockOut,
+        breakTime,
+        duration
+      ];
+      
+      xPos = 50;
+      for (let i = 0; i < rowData.length; i++) {
+        page.drawText(rowData[i], {
+          x: xPos,
+          y: yPosition,
+          size: 8,
+          font: font,
+          color: rgb(0.2, 0.2, 0.2),
+        });
+        xPos += colWidths[i];
+      }
+      yPosition -= 13;
+    }
+    
+    yPosition -= 10; // Space between projects
+  }
+  
+  if (entries.length === 0) {
+    page.drawText('No time entries found for this period.', {
+      x: 50,
+      y: yPosition,
+      size: 10,
+      font: font,
+      color: rgb(0.5, 0.5, 0.5),
+    });
+  }
+  
+  // Footer
+  const lastPage = pdfDoc.getPages()[pdfDoc.getPageCount() - 1];
+  lastPage.drawText(`Generated by CICO on ${new Date().toLocaleString()}`, {
+    x: 50,
+    y: 30,
+    size: 8,
+    font: font,
+    color: rgb(0.6, 0.6, 0.6),
+  });
+  
+  return await pdfDoc.save();
+}
+
+async function generateWeeklyPayrollPDF(
+  entries: TimeEntry[], 
+  companyName: string, 
+  reportName: string,
+  dateRange: { start: string; end: string }
+): Promise<Uint8Array> {
+  const pdfDoc = await PDFDocument.create();
+  const font = await pdfDoc.embedFont(StandardFonts.Helvetica);
+  const boldFont = await pdfDoc.embedFont(StandardFonts.HelveticaBold);
+  
+  const pageWidth = 612;
+  const pageHeight = 792;
+  let page = pdfDoc.addPage([pageWidth, pageHeight]);
+  let yPosition = pageHeight - 50;
+  
+  // Title
+  page.drawText(reportName || 'Weekly Payroll Report', {
+    x: 50,
+    y: yPosition,
+    size: 18,
+    font: boldFont,
+    color: rgb(0.55, 0.36, 0.96),
+  });
+  yPosition -= 22;
+  
+  // Company name
+  page.drawText(companyName, {
+    x: 50,
+    y: yPosition,
+    size: 12,
+    font: font,
+    color: rgb(0.4, 0.4, 0.4),
+  });
+  yPosition -= 18;
+  
+  // Date range
+  page.drawText(`Pay Period: ${dateRange.start} - ${dateRange.end}`, {
+    x: 50,
+    y: yPosition,
+    size: 10,
+    font: font,
+    color: rgb(0.4, 0.4, 0.4),
+  });
+  yPosition -= 30;
+  
+  // Group by employee
+  const byEmployee = new Map<string, { 
+    name: string; 
+    employeeNumber: string;
+    totalMinutes: number; 
+    breakMinutes: number; 
+    days: Set<string> 
+  }>();
+  
+  for (const entry of entries) {
+    const profileId = entry.profiles.id;
+    const name = getEmployeeName(entry);
+    const employeeNumber = entry.profiles.employee_id || '';
+    
+    if (!byEmployee.has(profileId)) {
+      byEmployee.set(profileId, { name, employeeNumber, totalMinutes: 0, breakMinutes: 0, days: new Set() });
+    }
+    
+    const emp = byEmployee.get(profileId)!;
+    emp.totalMinutes += entry.duration_minutes || 0;
+    emp.breakMinutes += entry.break_duration_minutes || 0;
+    emp.days.add(entry.clock_in.split('T')[0]);
+  }
+  
+  // Table headers
+  const headers = ['Employee', 'Emp #', 'Days', 'Regular', 'Overtime', 'Breaks', 'Total'];
+  const colWidths = [130, 60, 45, 65, 65, 60, 60];
+  let xPos = 50;
+  
+  for (let i = 0; i < headers.length; i++) {
+    page.drawText(headers[i], {
+      x: xPos,
+      y: yPosition,
+      size: 9,
+      font: boldFont,
+      color: rgb(0.2, 0.2, 0.2),
+    });
+    xPos += colWidths[i];
+  }
+  yPosition -= 15;
+  
+  // Draw line under headers
+  page.drawLine({
+    start: { x: 50, y: yPosition + 5 },
+    end: { x: pageWidth - 50, y: yPosition + 5 },
+    thickness: 1,
+    color: rgb(0.8, 0.8, 0.8),
+  });
+  yPosition -= 8;
+  
+  let grandTotalMinutes = 0;
+  
+  const sortedEmployees = Array.from(byEmployee.entries()).sort((a, b) => a[1].name.localeCompare(b[1].name));
+  
+  for (const [, emp] of sortedEmployees) {
+    if (yPosition < 60) {
+      page = pdfDoc.addPage([pageWidth, pageHeight]);
+      yPosition = pageHeight - 50;
+    }
+    
+    grandTotalMinutes += emp.totalMinutes;
+    const regularMinutes = Math.min(emp.totalMinutes, 40 * 60);
+    const overtimeMinutes = Math.max(0, emp.totalMinutes - 40 * 60);
+    
+    const rowData = [
+      emp.name.substring(0, 22),
+      emp.employeeNumber.substring(0, 10) || '-',
+      String(emp.days.size),
+      formatDuration(regularMinutes),
+      formatDuration(overtimeMinutes),
+      formatDuration(emp.breakMinutes),
+      formatDuration(emp.totalMinutes)
+    ];
+    
+    xPos = 50;
+    for (let i = 0; i < rowData.length; i++) {
+      const isOvertime = i === 4 && overtimeMinutes > 0;
+      page.drawText(rowData[i], {
+        x: xPos,
+        y: yPosition,
+        size: 8,
+        font: i === 6 ? boldFont : font,
+        color: isOvertime ? rgb(0.86, 0.15, 0.15) : rgb(0.2, 0.2, 0.2),
+      });
+      xPos += colWidths[i];
+    }
+    yPosition -= 14;
+  }
+  
+  // Total row
+  yPosition -= 5;
+  page.drawLine({
+    start: { x: 50, y: yPosition + 10 },
+    end: { x: pageWidth - 50, y: yPosition + 10 },
+    thickness: 1,
+    color: rgb(0.6, 0.6, 0.6),
+  });
+  
+  page.drawText(`Grand Total: ${formatDuration(grandTotalMinutes)}`, {
+    x: 50,
+    y: yPosition - 5,
+    size: 10,
+    font: boldFont,
+    color: rgb(0.2, 0.2, 0.2),
+  });
+  
+  if (entries.length === 0) {
+    page.drawText('No time entries found for this period.', {
+      x: 50,
+      y: yPosition,
+      size: 10,
+      font: font,
+      color: rgb(0.5, 0.5, 0.5),
+    });
+  }
+  
+  // Footer
+  const lastPage = pdfDoc.getPages()[pdfDoc.getPageCount() - 1];
+  lastPage.drawText(`Generated by CICO on ${new Date().toLocaleString()}`, {
+    x: 50,
+    y: 30,
+    size: 8,
+    font: font,
+    color: rgb(0.6, 0.6, 0.6),
+  });
+  
+  return await pdfDoc.save();
+}
+
+// ============= HTML Generation Functions =============
 
 function generateEmployeeTimecardHtml(
   entries: TimeEntry[], 
@@ -81,9 +660,7 @@ function generateEmployeeTimecardHtml(
   
   for (const entry of entries) {
     const profileId = entry.profiles.id;
-    const name = entry.profiles.display_name || 
-      `${entry.profiles.first_name || ''} ${entry.profiles.last_name || ''}`.trim() || 
-      'Unknown';
+    const name = getEmployeeName(entry);
     
     if (!byEmployee.has(profileId)) {
       byEmployee.set(profileId, { name, entries: [], totalMinutes: 0 });
@@ -153,6 +730,13 @@ function generateEmployeeTimecardHtml(
           </p>
           <p style="margin: 4px 0 0 0; color: #6b7280; font-size: 14px;">
             <strong>Total Hours:</strong> ${formatDuration(grandTotalMinutes)}
+          </p>
+        </div>
+        
+        <!-- Attachment Notice -->
+        <div style="padding: 12px 24px; background: #eff6ff; border-bottom: 1px solid #dbeafe;">
+          <p style="margin: 0; color: #1e40af; font-size: 13px;">
+            📎 <strong>Attachments:</strong> PDF and CSV files are attached to this email for download.
           </p>
         </div>
         
@@ -226,9 +810,7 @@ function generateProjectTimecardHtml(
     `;
     
     for (const entry of proj.entries) {
-      const empName = entry.profiles.display_name || 
-        `${entry.profiles.first_name || ''} ${entry.profiles.last_name || ''}`.trim() || 
-        'Unknown';
+      const empName = getEmployeeName(entry);
       const clockIn = formatTime(entry.clock_in);
       const clockOut = entry.clock_out ? formatTime(entry.clock_out) : 'Open';
       const duration = formatDuration(entry.duration_minutes);
@@ -279,6 +861,13 @@ function generateProjectTimecardHtml(
           </p>
         </div>
         
+        <!-- Attachment Notice -->
+        <div style="padding: 12px 24px; background: #ecfdf5; border-bottom: 1px solid #d1fae5;">
+          <p style="margin: 0; color: #065f46; font-size: 13px;">
+            📎 <strong>Attachments:</strong> PDF and CSV files are attached to this email for download.
+          </p>
+        </div>
+        
         <div style="padding: 0; overflow-x: auto;">
           <table style="width: 100%; border-collapse: collapse; font-size: 14px;">
             <thead>
@@ -319,9 +908,7 @@ function generateWeeklyPayrollHtml(
   
   for (const entry of entries) {
     const profileId = entry.profiles.id;
-    const name = entry.profiles.display_name || 
-      `${entry.profiles.first_name || ''} ${entry.profiles.last_name || ''}`.trim() || 
-      'Unknown';
+    const name = getEmployeeName(entry);
     
     if (!byEmployee.has(profileId)) {
       byEmployee.set(profileId, { name, totalMinutes: 0, breakMinutes: 0, days: new Set() });
@@ -385,6 +972,13 @@ function generateWeeklyPayrollHtml(
           </p>
           <p style="margin: 4px 0 0 0; color: #6b7280; font-size: 14px;">
             <strong>Total Payable Hours:</strong> ${formatDuration(grandTotalMinutes)}
+          </p>
+        </div>
+        
+        <!-- Attachment Notice -->
+        <div style="padding: 12px 24px; background: #f5f3ff; border-bottom: 1px solid #ede9fe;">
+          <p style="margin: 0; color: #5b21b6; font-size: 13px;">
+            📎 <strong>Attachments:</strong> PDF and CSV files are attached to this email for download.
           </p>
         </div>
         
@@ -462,7 +1056,6 @@ function getDateRange(frequency: string, timezone: string): { startDate: Date; e
       startDate = new Date(Date.UTC(localYear, localMonth - 1, 1, 0, 0, 0, 0));
       endDate = new Date(Date.UTC(localYear, localMonth, 0, 23, 59, 59, 999)); // Day 0 = last day of prev month
       break;
-      break;
     default:
       // Default to previous day
       startDate = new Date(now);
@@ -478,6 +1071,15 @@ function getDateRange(frequency: string, timezone: string): { startDate: Date; e
     start: formatDate(startDate.toISOString()),
     end: formatDate(endDate.toISOString())
   };
+}
+
+// Helper to encode binary data to base64 (Deno compatible)
+function uint8ArrayToBase64(bytes: Uint8Array): string {
+  let binary = '';
+  for (let i = 0; i < bytes.length; i++) {
+    binary += String.fromCharCode(bytes[i]);
+  }
+  return btoa(binary);
 }
 
 serve(async (req) => {
@@ -601,7 +1203,7 @@ serve(async (req) => {
         const dateRange = getDateRange(report.schedule_frequency, companyTimezone);
         console.log(`Date range: ${dateRange.start} to ${dateRange.end}`);
 
-        // Build time entries query
+        // Build time entries query - now including employee_id
         let query = supabase
           .from('time_entries')
           .select(`
@@ -615,7 +1217,8 @@ serve(async (req) => {
               first_name,
               last_name,
               display_name,
-              department_id
+              department_id,
+              employee_id
             ),
             projects(
               id,
@@ -647,25 +1250,49 @@ serve(async (req) => {
 
         console.log(`Found ${entries?.length || 0} time entries for report`);
 
-        // Generate HTML based on report type
+        // Generate HTML, CSV, and PDF based on report type
         const companyName = report.companies?.company_name || 'Unknown Company';
         const typedEntries = (entries || []) as unknown as TimeEntry[];
+        
         let html: string;
+        let csvContent: string;
+        let pdfBytes: Uint8Array;
+        let attachmentPrefix: string;
 
         switch (report.report_type) {
           case 'employee_timecard':
             html = generateEmployeeTimecardHtml(typedEntries, companyName, report.name, dateRange);
+            csvContent = generateEmployeeTimecardCSV(typedEntries);
+            pdfBytes = await generateEmployeeTimecardPDF(typedEntries, companyName, report.name, dateRange);
+            attachmentPrefix = 'employee-timecard';
             break;
           case 'project_timecard':
             html = generateProjectTimecardHtml(typedEntries, companyName, report.name, dateRange);
+            csvContent = generateProjectTimecardCSV(typedEntries);
+            pdfBytes = await generateProjectTimecardPDF(typedEntries, companyName, report.name, dateRange);
+            attachmentPrefix = 'project-timecard';
             break;
           case 'weekly_payroll':
           case 'monthly_project_billing':
             html = generateWeeklyPayrollHtml(typedEntries, companyName, report.name, dateRange);
+            csvContent = generateWeeklyPayrollCSV(typedEntries);
+            pdfBytes = await generateWeeklyPayrollPDF(typedEntries, companyName, report.name, dateRange);
+            attachmentPrefix = 'payroll';
             break;
           default:
             html = generateEmployeeTimecardHtml(typedEntries, companyName, report.name, dateRange);
+            csvContent = generateEmployeeTimecardCSV(typedEntries);
+            pdfBytes = await generateEmployeeTimecardPDF(typedEntries, companyName, report.name, dateRange);
+            attachmentPrefix = 'timecard';
         }
+
+        // Convert PDF bytes to base64
+        const pdfBase64 = uint8ArrayToBase64(pdfBytes);
+
+        // Create filename with date
+        const dateStr = dateRange.start.replace(/[^a-zA-Z0-9]/g, '-');
+        const csvFilename = `${attachmentPrefix}-${dateStr}.csv`;
+        const pdfFilename = `${attachmentPrefix}-${dateStr}.pdf`;
 
         // Send to all recipients
         const recipients = report.scheduled_report_recipients || [];
@@ -694,9 +1321,19 @@ serve(async (req) => {
           to: recipientEmails,
           subject,
           html,
+          attachments: [
+            {
+              filename: csvFilename,
+              content: csvContent,
+            },
+            {
+              filename: pdfFilename,
+              content: pdfBase64,
+            }
+          ],
         });
 
-        console.log('Email sent:', emailResponse);
+        console.log('Email sent with attachments:', emailResponse);
 
         // Log successful execution
         await supabase.from('report_execution_log').insert({
@@ -711,7 +1348,8 @@ serve(async (req) => {
           report_name: report.name,
           status: 'success',
           recipients: recipientEmails.length,
-          entries: entries?.length || 0
+          entries: entries?.length || 0,
+          attachments: [csvFilename, pdfFilename]
         });
 
       } catch (reportError) {
