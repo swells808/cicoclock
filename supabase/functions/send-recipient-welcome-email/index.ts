@@ -37,7 +37,7 @@ serve(async (req) => {
     }
 
     const emailResponse = await resend.emails.send({
-      from: 'CICO Reports <reports@resend.dev>',
+      from: 'CICO Reports <reports@notifications.battlebornsteel.com>',
       to: [recipient_email],
       subject: `You've been added to receive ${report_type} reports - ${company_name}`,
       html: `

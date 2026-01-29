@@ -50,18 +50,18 @@ serve(async (req) => {
     const apiKey = Deno.env.get('AZURE_FACE_API_KEY');
 
     if (!endpoint || !apiKey) {
-      await updateRecord(supabase, recordId, { status: 'error', error_message: 'Azure Face API not configured' });
+      await updateRecord(supabase, recordId!, { status: 'error', error_message: 'Azure Face API not configured' });
       return jsonResponse({ success: true, status: 'error', message: 'Azure Face API not configured' });
     }
 
     // Step 3: Check photo URLs
     if (!clock_photo_url) {
-      await updateRecord(supabase, recordId, { status: 'skipped', error_message: 'No clock photo' });
+      await updateRecord(supabase, recordId!, { status: 'skipped', error_message: 'No clock photo' });
       return jsonResponse({ success: true, status: 'skipped' });
     }
 
     if (!profile_photo_url) {
-      await updateRecord(supabase, recordId, { status: 'skipped', error_message: 'No profile photo' });
+      await updateRecord(supabase, recordId!, { status: 'skipped', error_message: 'No profile photo' });
       return jsonResponse({ success: true, status: 'skipped' });
     }
 
@@ -74,31 +74,31 @@ serve(async (req) => {
       : await getSignedUrl(supabase, 'avatars', profile_photo_url);
 
     if (!fullClockPhotoUrl) {
-      await updateRecord(supabase, recordId, { status: 'error', error_message: 'Failed to generate signed URL for clock photo' });
+      await updateRecord(supabase, recordId!, { status: 'error', error_message: 'Failed to generate signed URL for clock photo' });
       return jsonResponse({ success: true, status: 'error' });
     }
     if (!fullProfilePhotoUrl) {
-      await updateRecord(supabase, recordId, { status: 'error', error_message: 'Failed to generate signed URL for profile photo' });
+      await updateRecord(supabase, recordId!, { status: 'error', error_message: 'Failed to generate signed URL for profile photo' });
       return jsonResponse({ success: true, status: 'error' });
     }
 
     // Detect faces (binary mode)
     const clockFaceId = await detectFace(endpoint, apiKey, fullClockPhotoUrl);
     if (!clockFaceId) {
-      await updateRecord(supabase, recordId, { status: 'no_face', error_message: 'No face detected in clock photo' });
+      await updateRecord(supabase, recordId!, { status: 'no_face', error_message: 'No face detected in clock photo' });
       return jsonResponse({ success: true, status: 'no_face' });
     }
 
     const profileFaceId = await detectFace(endpoint, apiKey, fullProfilePhotoUrl);
     if (!profileFaceId) {
-      await updateRecord(supabase, recordId, { status: 'no_face', error_message: 'No face detected in profile photo' });
+      await updateRecord(supabase, recordId!, { status: 'no_face', error_message: 'No face detected in profile photo' });
       return jsonResponse({ success: true, status: 'no_face' });
     }
 
     // Step 5: Verify faces
     const result = await verifyFaces(endpoint, apiKey, clockFaceId, profileFaceId);
 
-    await updateRecord(supabase, recordId, {
+    await updateRecord(supabase, recordId!, {
       status: 'verified',
       confidence_score: result.confidence,
       is_match: result.isIdentical,
