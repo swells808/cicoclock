@@ -18,10 +18,9 @@ interface ReportConfig {
 
 interface TimeEntry {
   id: string;
-  clock_in: string;
-  clock_out: string | null;
+  start_time: string;
+  end_time: string | null;
   duration_minutes: number | null;
-  break_duration_minutes: number | null;
   profiles: {
     id: string;
     first_name: string | null;
@@ -91,42 +90,40 @@ function getEmployeeName(entry: TimeEntry): string {
 // ============= CSV Generation Functions =============
 
 function generateEmployeeTimecardCSV(entries: TimeEntry[]): string {
-  let csv = 'Employee,Employee Number,Project,Date,Clock In,Clock Out,Break,Duration\n';
+  let csv = 'Employee,Employee Number,Project,Date,Clock In,Clock Out,Duration\n';
   
   for (const entry of entries) {
     const name = getEmployeeName(entry);
     const employeeNumber = entry.profiles.employee_id || '';
     const projectName = entry.projects?.name || 'No Project';
-    const date = formatDate(entry.clock_in);
-    const clockIn = formatTime(entry.clock_in);
-    const clockOut = entry.clock_out ? formatTime(entry.clock_out) : 'Open';
-    const breakTime = formatDuration(entry.break_duration_minutes);
+    const date = formatDate(entry.start_time);
+    const clockIn = formatTime(entry.start_time);
+    const clockOut = entry.end_time ? formatTime(entry.end_time) : 'Open';
     const duration = formatDuration(entry.duration_minutes);
     
     const escapeCsv = (val: string) => `"${val.replace(/"/g, '""')}"`;
     
-    csv += `${escapeCsv(name)},${escapeCsv(employeeNumber)},${escapeCsv(projectName)},${escapeCsv(date)},${escapeCsv(clockIn)},${escapeCsv(clockOut)},${escapeCsv(breakTime)},${escapeCsv(duration)}\n`;
+    csv += `${escapeCsv(name)},${escapeCsv(employeeNumber)},${escapeCsv(projectName)},${escapeCsv(date)},${escapeCsv(clockIn)},${escapeCsv(clockOut)},${escapeCsv(duration)}\n`;
   }
   
   return csv;
 }
 
 function generateProjectTimecardCSV(entries: TimeEntry[]): string {
-  let csv = 'Project,Employee,Employee Number,Date,Clock In,Clock Out,Break,Duration\n';
+  let csv = 'Project,Employee,Employee Number,Date,Clock In,Clock Out,Duration\n';
   
   for (const entry of entries) {
     const name = getEmployeeName(entry);
     const employeeNumber = entry.profiles.employee_id || '';
     const projectName = entry.projects?.name || 'No Project';
-    const date = formatDate(entry.clock_in);
-    const clockIn = formatTime(entry.clock_in);
-    const clockOut = entry.clock_out ? formatTime(entry.clock_out) : 'Open';
-    const breakTime = formatDuration(entry.break_duration_minutes);
+    const date = formatDate(entry.start_time);
+    const clockIn = formatTime(entry.start_time);
+    const clockOut = entry.end_time ? formatTime(entry.end_time) : 'Open';
     const duration = formatDuration(entry.duration_minutes);
     
     const escapeCsv = (val: string) => `"${val.replace(/"/g, '""')}"`;
     
-    csv += `${escapeCsv(projectName)},${escapeCsv(name)},${escapeCsv(employeeNumber)},${escapeCsv(date)},${escapeCsv(clockIn)},${escapeCsv(clockOut)},${escapeCsv(breakTime)},${escapeCsv(duration)}\n`;
+    csv += `${escapeCsv(projectName)},${escapeCsv(name)},${escapeCsv(employeeNumber)},${escapeCsv(date)},${escapeCsv(clockIn)},${escapeCsv(clockOut)},${escapeCsv(duration)}\n`;
   }
   
   return csv;
@@ -137,7 +134,6 @@ function generateWeeklyPayrollCSV(entries: TimeEntry[]): string {
     name: string; 
     employeeNumber: string;
     totalMinutes: number; 
-    breakMinutes: number; 
     days: Set<string> 
   }>();
   
@@ -147,16 +143,15 @@ function generateWeeklyPayrollCSV(entries: TimeEntry[]): string {
     const employeeNumber = entry.profiles.employee_id || '';
     
     if (!byEmployee.has(profileId)) {
-      byEmployee.set(profileId, { name, employeeNumber, totalMinutes: 0, breakMinutes: 0, days: new Set() });
+      byEmployee.set(profileId, { name, employeeNumber, totalMinutes: 0, days: new Set() });
     }
     
     const emp = byEmployee.get(profileId)!;
     emp.totalMinutes += entry.duration_minutes || 0;
-    emp.breakMinutes += entry.break_duration_minutes || 0;
-    emp.days.add(entry.clock_in.split('T')[0]);
+    emp.days.add(entry.start_time.split('T')[0]);
   }
   
-  let csv = 'Employee,Employee Number,Days Worked,Regular Hours,Overtime,Breaks,Total Hours\n';
+  let csv = 'Employee,Employee Number,Days Worked,Regular Hours,Overtime,Total Hours\n';
   
   const escapeCsv = (val: string) => `"${val.replace(/"/g, '""')}"`;
   
@@ -164,7 +159,7 @@ function generateWeeklyPayrollCSV(entries: TimeEntry[]): string {
     const regularMinutes = Math.min(emp.totalMinutes, 40 * 60);
     const overtimeMinutes = Math.max(0, emp.totalMinutes - 40 * 60);
     
-    csv += `${escapeCsv(emp.name)},${escapeCsv(emp.employeeNumber)},${emp.days.size},${escapeCsv(formatDuration(regularMinutes))},${escapeCsv(formatDuration(overtimeMinutes))},${escapeCsv(formatDuration(emp.breakMinutes))},${escapeCsv(formatDuration(emp.totalMinutes))}\n`;
+    csv += `${escapeCsv(emp.name)},${escapeCsv(emp.employeeNumber)},${emp.days.size},${escapeCsv(formatDuration(regularMinutes))},${escapeCsv(formatDuration(overtimeMinutes))},${escapeCsv(formatDuration(emp.totalMinutes))}\n`;
   }
   
   return csv;
@@ -247,9 +242,9 @@ async function generateEmployeeTimecardPDF(
     const name = getEmployeeName(entry);
     const empNumber = entry.profiles.employee_id || '-';
     const projectName = entry.projects?.name || 'No Project';
-    const date = formatShortDate(entry.clock_in);
-    const clockIn = formatTime(entry.clock_in);
-    const clockOut = entry.clock_out ? formatTime(entry.clock_out) : 'Open';
+    const date = formatShortDate(entry.start_time);
+    const clockIn = formatTime(entry.start_time);
+    const clockOut = entry.end_time ? formatTime(entry.end_time) : 'Open';
     const duration = formatDuration(entry.duration_minutes);
     
     const rowData = [
@@ -355,8 +350,8 @@ async function generateProjectTimecardPDF(
     proj.totalMinutes += entry.duration_minutes || 0;
   }
   
-  const headers = ['Employee', 'Emp #', 'Date', 'In', 'Out', 'Break', 'Hours'];
-  const colWidths = [110, 55, 80, 55, 55, 55, 55];
+  const headers = ['Employee', 'Emp #', 'Date', 'In', 'Out', 'Hours'];
+  const colWidths = [120, 60, 90, 60, 60, 65];
   
   for (const [, proj] of byProject) {
     if (yPosition < 100) {
@@ -402,19 +397,17 @@ async function generateProjectTimecardPDF(
       
       const name = getEmployeeName(entry);
       const empNumber = entry.profiles.employee_id || '-';
-      const date = formatShortDate(entry.clock_in);
-      const clockIn = formatTime(entry.clock_in);
-      const clockOut = entry.clock_out ? formatTime(entry.clock_out) : 'Open';
-      const breakTime = formatDuration(entry.break_duration_minutes);
+      const date = formatShortDate(entry.start_time);
+      const clockIn = formatTime(entry.start_time);
+      const clockOut = entry.end_time ? formatTime(entry.end_time) : 'Open';
       const duration = formatDuration(entry.duration_minutes);
       
       const rowData = [
-        name.substring(0, 18),
+        name.substring(0, 20),
         empNumber.substring(0, 8),
         date,
         clockIn,
         clockOut,
-        breakTime,
         duration
       ];
       
@@ -503,7 +496,6 @@ async function generateWeeklyPayrollPDF(
     name: string; 
     employeeNumber: string;
     totalMinutes: number; 
-    breakMinutes: number; 
     days: Set<string> 
   }>();
   
@@ -513,17 +505,16 @@ async function generateWeeklyPayrollPDF(
     const employeeNumber = entry.profiles.employee_id || '';
     
     if (!byEmployee.has(profileId)) {
-      byEmployee.set(profileId, { name, employeeNumber, totalMinutes: 0, breakMinutes: 0, days: new Set() });
+      byEmployee.set(profileId, { name, employeeNumber, totalMinutes: 0, days: new Set() });
     }
     
     const emp = byEmployee.get(profileId)!;
     emp.totalMinutes += entry.duration_minutes || 0;
-    emp.breakMinutes += entry.break_duration_minutes || 0;
-    emp.days.add(entry.clock_in.split('T')[0]);
+    emp.days.add(entry.start_time.split('T')[0]);
   }
   
-  const headers = ['Employee', 'Emp #', 'Days', 'Regular', 'Overtime', 'Breaks', 'Total'];
-  const colWidths = [130, 60, 45, 65, 65, 60, 60];
+  const headers = ['Employee', 'Emp #', 'Days', 'Regular', 'Overtime', 'Total'];
+  const colWidths = [140, 65, 50, 75, 75, 75];
   let xPos = 50;
   
   for (let i = 0; i < headers.length; i++) {
@@ -561,12 +552,11 @@ async function generateWeeklyPayrollPDF(
     const overtimeMinutes = Math.max(0, emp.totalMinutes - 40 * 60);
     
     const rowData = [
-      emp.name.substring(0, 22),
+      emp.name.substring(0, 24),
       emp.employeeNumber.substring(0, 10) || '-',
       String(emp.days.size),
       formatDuration(regularMinutes),
       formatDuration(overtimeMinutes),
-      formatDuration(emp.breakMinutes),
       formatDuration(emp.totalMinutes)
     ];
     
@@ -577,7 +567,7 @@ async function generateWeeklyPayrollPDF(
         x: xPos,
         y: yPosition,
         size: 8,
-        font: i === 6 ? boldFont : font,
+        font: i === 5 ? boldFont : font,
         color: isOvertime ? rgb(0.86, 0.15, 0.15) : rgb(0.2, 0.2, 0.2),
       });
       xPos += colWidths[i];
@@ -654,19 +644,17 @@ function generateEmployeeTimecardHtml(
     
     for (const entry of emp.entries) {
       const projectName = entry.projects?.name || 'No Project';
-      const clockIn = formatTime(entry.clock_in);
-      const clockOut = entry.clock_out ? formatTime(entry.clock_out) : 'Open';
+      const clockIn = formatTime(entry.start_time);
+      const clockOut = entry.end_time ? formatTime(entry.end_time) : 'Open';
       const duration = formatDuration(entry.duration_minutes);
-      const breakTime = formatDuration(entry.break_duration_minutes);
       
       tableRows += `
         <tr>
           <td style="padding: 12px; border-bottom: 1px solid #e5e7eb;">${emp.name}</td>
           <td style="padding: 12px; border-bottom: 1px solid #e5e7eb;">${projectName}</td>
-          <td style="padding: 12px; border-bottom: 1px solid #e5e7eb;">${formatDate(entry.clock_in)}</td>
+          <td style="padding: 12px; border-bottom: 1px solid #e5e7eb;">${formatDate(entry.start_time)}</td>
           <td style="padding: 12px; border-bottom: 1px solid #e5e7eb;">${clockIn}</td>
           <td style="padding: 12px; border-bottom: 1px solid #e5e7eb;">${clockOut}</td>
-          <td style="padding: 12px; border-bottom: 1px solid #e5e7eb;">${breakTime}</td>
           <td style="padding: 12px; border-bottom: 1px solid #e5e7eb; font-weight: 500;">${duration}</td>
         </tr>
       `;
@@ -676,7 +664,7 @@ function generateEmployeeTimecardHtml(
   if (entries.length === 0) {
     tableRows = `
       <tr>
-        <td colspan="7" style="padding: 24px; text-align: center; color: #6b7280;">
+        <td colspan="6" style="padding: 24px; text-align: center; color: #6b7280;">
           No time entries found for this period.
         </td>
       </tr>
@@ -721,7 +709,6 @@ function generateEmployeeTimecardHtml(
                 <th style="padding: 12px; text-align: left; font-weight: 600; border-bottom: 2px solid #e5e7eb;">Date</th>
                 <th style="padding: 12px; text-align: left; font-weight: 600; border-bottom: 2px solid #e5e7eb;">Clock In</th>
                 <th style="padding: 12px; text-align: left; font-weight: 600; border-bottom: 2px solid #e5e7eb;">Clock Out</th>
-                <th style="padding: 12px; text-align: left; font-weight: 600; border-bottom: 2px solid #e5e7eb;">Break</th>
                 <th style="padding: 12px; text-align: left; font-weight: 600; border-bottom: 2px solid #e5e7eb;">Hours</th>
               </tr>
             </thead>
@@ -779,17 +766,16 @@ function generateProjectTimecardHtml(
     
     for (const entry of proj.entries) {
       const empName = getEmployeeName(entry);
-      const clockIn = formatTime(entry.clock_in);
-      const clockOut = entry.clock_out ? formatTime(entry.clock_out) : 'Open';
+      const clockIn = formatTime(entry.start_time);
+      const clockOut = entry.end_time ? formatTime(entry.end_time) : 'Open';
       const duration = formatDuration(entry.duration_minutes);
       
       tableRows += `
         <tr>
           <td style="padding: 12px; border-bottom: 1px solid #e5e7eb; padding-left: 24px;">${empName}</td>
-          <td style="padding: 12px; border-bottom: 1px solid #e5e7eb;">${formatDate(entry.clock_in)}</td>
+          <td style="padding: 12px; border-bottom: 1px solid #e5e7eb;">${formatDate(entry.start_time)}</td>
           <td style="padding: 12px; border-bottom: 1px solid #e5e7eb;">${clockIn}</td>
           <td style="padding: 12px; border-bottom: 1px solid #e5e7eb;">${clockOut}</td>
-          <td style="padding: 12px; border-bottom: 1px solid #e5e7eb;">${formatDuration(entry.break_duration_minutes)}</td>
           <td style="padding: 12px; border-bottom: 1px solid #e5e7eb; font-weight: 500;">${duration}</td>
         </tr>
       `;
@@ -843,7 +829,6 @@ function generateProjectTimecardHtml(
                 <th style="padding: 12px; text-align: left; font-weight: 600; border-bottom: 2px solid #e5e7eb;">Date</th>
                 <th style="padding: 12px; text-align: left; font-weight: 600; border-bottom: 2px solid #e5e7eb;">Clock In</th>
                 <th style="padding: 12px; text-align: left; font-weight: 600; border-bottom: 2px solid #e5e7eb;">Clock Out</th>
-                <th style="padding: 12px; text-align: left; font-weight: 600; border-bottom: 2px solid #e5e7eb;">Break</th>
                 <th style="padding: 12px; text-align: left; font-weight: 600; border-bottom: 2px solid #e5e7eb;">Hours</th>
               </tr>
             </thead>
@@ -870,20 +855,19 @@ function generateWeeklyPayrollHtml(
   reportName: string,
   dateRange: { start: string; end: string }
 ): string {
-  const byEmployee = new Map<string, { name: string; totalMinutes: number; breakMinutes: number; days: Set<string> }>();
+  const byEmployee = new Map<string, { name: string; totalMinutes: number; days: Set<string> }>();
   
   for (const entry of entries) {
     const profileId = entry.profiles.id;
     const name = getEmployeeName(entry);
     
     if (!byEmployee.has(profileId)) {
-      byEmployee.set(profileId, { name, totalMinutes: 0, breakMinutes: 0, days: new Set() });
+      byEmployee.set(profileId, { name, totalMinutes: 0, days: new Set() });
     }
     
     const emp = byEmployee.get(profileId)!;
     emp.totalMinutes += entry.duration_minutes || 0;
-    emp.breakMinutes += entry.break_duration_minutes || 0;
-    emp.days.add(entry.clock_in.split('T')[0]);
+    emp.days.add(entry.start_time.split('T')[0]);
   }
 
   let tableRows = '';
@@ -902,7 +886,6 @@ function generateWeeklyPayrollHtml(
         <td style="padding: 12px; border-bottom: 1px solid #e5e7eb; text-align: center;">${emp.days.size}</td>
         <td style="padding: 12px; border-bottom: 1px solid #e5e7eb;">${formatDuration(regularHours)}</td>
         <td style="padding: 12px; border-bottom: 1px solid #e5e7eb; color: ${overtimeMinutes > 0 ? '#dc2626' : '#6b7280'};">${formatDuration(overtimeMinutes)}</td>
-        <td style="padding: 12px; border-bottom: 1px solid #e5e7eb;">${formatDuration(emp.breakMinutes)}</td>
         <td style="padding: 12px; border-bottom: 1px solid #e5e7eb; font-weight: 600;">${formatDuration(emp.totalMinutes)}</td>
       </tr>
     `;
@@ -955,7 +938,6 @@ function generateWeeklyPayrollHtml(
                 <th style="padding: 12px; text-align: center; font-weight: 600; border-bottom: 2px solid #e5e7eb;">Days</th>
                 <th style="padding: 12px; text-align: left; font-weight: 600; border-bottom: 2px solid #e5e7eb;">Regular</th>
                 <th style="padding: 12px; text-align: left; font-weight: 600; border-bottom: 2px solid #e5e7eb;">Overtime</th>
-                <th style="padding: 12px; text-align: left; font-weight: 600; border-bottom: 2px solid #e5e7eb;">Breaks</th>
                 <th style="padding: 12px; text-align: left; font-weight: 600; border-bottom: 2px solid #e5e7eb;">Total</th>
               </tr>
             </thead>
@@ -964,7 +946,7 @@ function generateWeeklyPayrollHtml(
             </tbody>
             <tfoot>
               <tr style="background: #f9fafb;">
-                <td colspan="5" style="padding: 12px; font-weight: 600; border-top: 2px solid #e5e7eb;">Grand Total</td>
+                <td colspan="4" style="padding: 12px; font-weight: 600; border-top: 2px solid #e5e7eb;">Grand Total</td>
                 <td style="padding: 12px; font-weight: 700; border-top: 2px solid #e5e7eb;">${formatDuration(grandTotalMinutes)}</td>
               </tr>
             </tfoot>
@@ -1108,10 +1090,9 @@ serve(async (req) => {
       .from('time_entries')
       .select(`
         id,
-        clock_in,
-        clock_out,
+        start_time,
+        end_time,
         duration_minutes,
-        break_duration_minutes,
         profiles!time_entries_profile_id_fkey(
           id,
           first_name,
@@ -1126,9 +1107,9 @@ serve(async (req) => {
         )
       `)
       .eq('company_id', report.company_id)
-      .gte('clock_in', dateRange.startDate.toISOString())
-      .lte('clock_in', dateRange.endDate.toISOString())
-      .order('clock_in', { ascending: true });
+      .gte('start_time', dateRange.startDate.toISOString())
+      .lte('start_time', dateRange.endDate.toISOString())
+      .order('start_time', { ascending: true });
 
     // Apply department filter if scope is "department"
     const config = report.report_config as ReportConfig;
