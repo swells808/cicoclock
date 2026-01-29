@@ -98,7 +98,7 @@ const Reports = () => {
 
     const { data: profiles } = await supabase
       .from('profiles')
-      .select('user_id, display_name, first_name, last_name, department_id, company_id');
+      .select('id, user_id, display_name, first_name, last_name, department_id, company_id');
 
     const companyId = profiles?.[0]?.company_id;
     if (!companyId) {
@@ -114,6 +114,7 @@ const Reports = () => {
         start_time,
         end_time,
         user_id,
+        profile_id,
         projects(id, name, status)
       `)
       .eq('company_id', companyId)
@@ -131,8 +132,13 @@ const Reports = () => {
       return { ...entry, calculated_minutes: minutes || 0 };
     }) || [];
 
+    // Build profile lookup map using profile id as key (for profile_id lookups)
+    // Also index by user_id for backwards compatibility
     const userProfiles = profiles?.reduce((acc, profile) => {
-      acc[profile.user_id] = profile;
+      acc[profile.id] = profile;  // Use profile.id as key
+      if (profile.user_id) {
+        acc[profile.user_id] = profile;  // Also index by user_id for backwards compatibility
+      }
       return acc;
     }, {} as Record<string, any>) || {};
 
@@ -141,41 +147,58 @@ const Reports = () => {
 
     if (filters.reportType === 'employee') {
       const employeeHours = timeEntries.reduce((acc, entry: any) => {
-        const profile = userProfiles[entry.user_id];
+        // Look up profile by profile_id first, fall back to user_id
+        const profile = entry.profile_id 
+          ? userProfiles[entry.profile_id] 
+          : userProfiles[entry.user_id];
         const name = `${profile?.first_name || ''} ${profile?.last_name || ''}`.trim() ||
                     profile?.display_name ||
                     'Unknown User';
         const hours = entry.calculated_minutes / 60;
-        const userId = entry.user_id;
+        
+        // Use profile_id or user_id as grouping key
+        const entryKey = entry.profile_id || entry.user_id || 'unknown';
 
-        if (!acc[userId]) {
-          acc[userId] = {
+        if (!acc[entryKey]) {
+          acc[entryKey] = {
             name,
             week: 0,
             month: 0,
-            userId,
+            odId: entryKey,
             departmentId: profile?.department_id
           };
         }
-        acc[userId].month += hours;
+        acc[entryKey].month += hours;
 
         const entryDate = new Date(entry.start_time);
         const weekAgo = new Date();
         weekAgo.setDate(weekAgo.getDate() - 7);
         if (entryDate >= weekAgo) {
-          acc[userId].week += hours;
+          acc[entryKey].week += hours;
         }
 
         return acc;
       }, {} as Record<string, any>);
 
-      reportData = Object.values(employeeHours).map((data: any) => ({
+      let employeeReportData = Object.values(employeeHours).map((data: any) => ({
         name: data.name,
         week: Math.round(data.week),
         month: Math.round(data.month),
-        userId: data.userId,
+        odId: data.odId,
         departmentId: data.departmentId,
       })).sort((a: any, b: any) => b.month - a.month);
+
+      // Apply employee filter if specified
+      if (filters.employeeId) {
+        employeeReportData = employeeReportData.filter(e => e.odId === filters.employeeId);
+      }
+
+      // Apply department filter if specified
+      if (filters.departmentId) {
+        employeeReportData = employeeReportData.filter(e => e.departmentId === filters.departmentId);
+      }
+
+      reportData = employeeReportData;
 
     } else {
       const projectHours = timeEntries.reduce((acc, entry: any) => {
