@@ -172,7 +172,7 @@ function buildEnhancedTimelineHTML(startTime: Date, endTime: Date | null, isBrea
 
 // Export Daily Timecard as CSV
 function exportDailyTimecardAsCSV(entries: any[]) {
-  const columns = ["Employee", "Project", "Clock In", "Clock Out", "Duration"];
+  const columns = ["Employee", "Employee Number", "Project", "Clock In", "Clock Out", "Duration"];
   let csv = columns.join(",") + "\n";
   csv += entries.map(entry => {
     const clockIn = entry.start_time ? format(new Date(entry.start_time), 'h:mm a') : '-';
@@ -182,6 +182,7 @@ function exportDailyTimecardAsCSV(entries: any[]) {
       : '-';
     return [
       `"${entry.employeeName}"`,
+      `"${entry.employeeNumber || ''}"`,
       `"${entry.projectName || 'No Project'}"`,
       clockIn,
       clockOut,
@@ -202,7 +203,7 @@ function exportDailyTimecardAsCSV(entries: any[]) {
 
 // Export Time Entry Details as CSV
 function exportTimeEntryDetailsAsCSV(entries: any[]) {
-  const columns = ["Employee", "Date", "Project", "Clock In", "Clock Out", "Duration", "Clock In Address", "Clock Out Address"];
+  const columns = ["Employee", "Employee Number", "Date", "Project", "Clock In", "Clock Out", "Duration", "Clock In Address", "Clock Out Address"];
   let csv = columns.join(",") + "\n";
   csv += entries.map(entry => {
     const date = format(new Date(entry.start_time), 'MMM d, yyyy');
@@ -213,6 +214,7 @@ function exportTimeEntryDetailsAsCSV(entries: any[]) {
       : '-';
     return [
       `"${entry.employeeName}"`,
+      `"${entry.employeeNumber || ''}"`,
       date,
       `"${entry.projectName || 'No Project'}"`,
       clockIn,
@@ -828,7 +830,7 @@ const Reports = () => {
     // Fetch company data
     const { data: profiles } = await supabase
       .from('profiles')
-      .select('id, user_id, display_name, first_name, last_name, department_id, company_id');
+      .select('id, user_id, display_name, first_name, last_name, department_id, company_id, employee_id');
 
     const companyId = profiles?.[0]?.company_id;
     if (!companyId) {
@@ -873,6 +875,7 @@ const Reports = () => {
         return {
           ...entry,
           employeeName,
+          employeeNumber: profile?.employee_id || null,
           projectName: entry.projects?.name || null,
           departmentId: profile?.department_id,
           profileId: entry.profile_id || profile?.id
@@ -933,6 +936,7 @@ const Reports = () => {
         return {
           ...entry,
           employeeName,
+          employeeNumber: profile?.employee_id || null,
           projectName: entry.projects?.name || null,
           departmentId: profile?.department_id,
           profileId: entry.profile_id || profile?.id
