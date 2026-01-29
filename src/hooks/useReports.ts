@@ -15,7 +15,7 @@ export interface EmployeeReport {
   name: string;
   week: number;
   month: number;
-  userId: string;
+  odId: string;
   departmentId?: string;
 }
 
@@ -62,6 +62,7 @@ export const useReports = (startDate?: Date, endDate?: Date) => {
           start_time,
           end_time,
           user_id,
+          profile_id,
           clock_in_photo_url,
           clock_out_photo_url,
           projects(id, name, status)
@@ -97,39 +98,48 @@ export const useReports = (startDate?: Date, endDate?: Date) => {
 
       const { data: profiles } = await supabase
         .from('profiles')
-        .select('user_id, display_name, first_name, last_name, department_id')
+        .select('id, user_id, display_name, first_name, last_name, department_id')
         .eq('company_id', company.id);
 
+      // Build profile lookup map using profile id as key (for profile_id lookups)
+      // Also index by user_id for backwards compatibility
       const userProfiles = profiles?.reduce((acc, profile) => {
-        acc[profile.user_id] = profile;
+        acc[profile.id] = profile;
+        if (profile.user_id) {
+          acc[profile.user_id] = profile;
+        }
         return acc;
       }, {} as Record<string, any>) || {};
 
       const employeeHours = timeEntries?.reduce((acc, entry: any) => {
-        const profile = userProfiles[entry.user_id];
+        // Look up profile by profile_id first, fall back to user_id
+        const profile = entry.profile_id 
+          ? userProfiles[entry.profile_id] 
+          : userProfiles[entry.user_id];
         const name = `${profile?.first_name || ''} ${profile?.last_name || ''}`.trim() ||
                     profile?.display_name ||
                     'Unknown User';
 
         const hours = entry.calculated_minutes / 60;
 
-        const userId = entry.user_id;
-        if (!acc[userId]) {
-          acc[userId] = {
+        // Use profile_id or user_id as grouping key
+        const entryKey = entry.profile_id || entry.user_id || 'unknown';
+        if (!acc[entryKey]) {
+          acc[entryKey] = {
             name,
             week: 0,
             month: 0,
-            userId,
+            odId: entryKey,
             departmentId: profile?.department_id
           };
         }
-        acc[userId].month += hours;
+        acc[entryKey].month += hours;
 
         const entryDate = new Date(entry.start_time);
         const weekAgo = new Date();
         weekAgo.setDate(weekAgo.getDate() - 7);
         if (entryDate >= weekAgo) {
-          acc[userId].week += hours;
+          acc[entryKey].week += hours;
         }
 
         return acc;
@@ -140,7 +150,7 @@ export const useReports = (startDate?: Date, endDate?: Date) => {
           name: data.name,
           week: Math.round(data.week),
           month: Math.round(data.month),
-          userId: data.userId,
+          odId: data.odId,
           departmentId: data.departmentId,
         }))
         .sort((a, b) => b.month - a.month);
