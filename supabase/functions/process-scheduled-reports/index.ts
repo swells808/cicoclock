@@ -690,7 +690,7 @@ serve(async (req) => {
         const subject = `${getReportTypeName(report.report_type)}: ${report.name || companyName} - ${dateRange.start}`;
 
         const emailResponse = await resend.emails.send({
-          from: 'CICO Reports <reports@resend.dev>',
+          from: 'CICO Reports <reports@notifications.battlebornsteel.com>',
           to: recipientEmails,
           subject,
           html,
