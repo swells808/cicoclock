@@ -1,137 +1,61 @@
 
-# Fix: Employee Hours Report Shows Blank + Add Filtering Options
+# Fix: Employee Hours Report Returns Empty for Single Day Selection
 
-## Problem Summary
-The "Employee Hours" report generates blank results because the system queries time entries using `user_id`, but most time entries only have `profile_id` set (employees clocking in via PIN don't have auth accounts).
+## Problem Identified
+When a user selects a single date (e.g., `01/28/26`) for both start and end dates, the report returns no data even though there are 18+ time entries for that day.
 
 ## Root Cause
+The date picker returns dates at midnight (`2026-01-28T00:00:00`). When used in the query:
 
-**Current Query Logic (broken):**
 ```
-time_entries.user_id → profiles.user_id (lookup)
+start_time >= 2026-01-28T00:00:00Z
+start_time <= 2026-01-28T00:00:00Z
 ```
 
-**What the data actually has:**
-- Time entries: `profile_id` is populated, `user_id` is NULL
-- Profiles: `user_id` is often NULL (employees without login accounts)
+This range only matches entries at exactly midnight, not the actual work hours (e.g., `13:07:23`).
 
-The report tries to match `time_entries.user_id` to `profiles.user_id`, but since most time entries have NULL `user_id`, no matches are found.
+**Database evidence:** Time entries for Jan 28, 2026 have `start_time` values like:
+- `2026-01-28 13:07:23` (Anthony Giron Carias)
+- `2026-01-28 13:06:15` (Felipe Salazar)
+- `2026-01-28 12:58:59` (18 employees total)
 
-## Solution Overview
+All of these fall outside the midnight-to-midnight window because the end time isn't being adjusted.
 
-### Part 1: Fix the Report Query (Critical)
-Update the report generation to use `profile_id` instead of `user_id` for employee lookup.
-
-### Part 2: Add Employee/Department Filtering (Feature Request)
-Add dropdown filters to select:
-- All Employees (default)
-- Specific Employee
-- Specific Department
-
----
-
-## Technical Changes
+## Solution
+Adjust the end date to include the full day by setting it to `23:59:59.999` of the selected date.
 
 ### File: `src/pages/Reports.tsx`
 
-**Change 1:** Fetch `profile_id` in the time entries query (line ~113)
-```typescript
-// Before
-.select(`duration_minutes, start_time, end_time, user_id, projects(...)`)
+**Change location:** Lines 96-97
 
-// After  
-.select(`duration_minutes, start_time, end_time, user_id, profile_id, projects(...)`)
+**Current code:**
+```typescript
+const start = filters.startDate || new Date(new Date().getFullYear(), new Date().getMonth(), 1);
+const end = filters.endDate || new Date(new Date().getFullYear(), new Date().getMonth() + 1, 0, 23, 59, 59);
 ```
 
-**Change 2:** Build profile lookup map using profile `id` as key (line ~134-137)
-```typescript
-// Before
-const userProfiles = profiles?.reduce((acc, profile) => {
-  acc[profile.user_id] = profile;
-  return acc;
-}, {} as Record<string, any>) || {};
+**Problem:** The time adjustment only happens for the fallback (when no date is selected). When the user picks a date, it stays at midnight.
 
-// After
-const userProfiles = profiles?.reduce((acc, profile) => {
-  acc[profile.id] = profile;  // Use profile.id as key
-  if (profile.user_id) {
-    acc[profile.user_id] = profile;  // Also index by user_id for backwards compatibility
-  }
-  return acc;
-}, {} as Record<string, any>) || {};
+**Fixed code:**
+```typescript
+const start = filters.startDate 
+  ? new Date(filters.startDate.getFullYear(), filters.startDate.getMonth(), filters.startDate.getDate(), 0, 0, 0)
+  : new Date(new Date().getFullYear(), new Date().getMonth(), 1);
+
+const end = filters.endDate 
+  ? new Date(filters.endDate.getFullYear(), filters.endDate.getMonth(), filters.endDate.getDate(), 23, 59, 59, 999)
+  : new Date(new Date().getFullYear(), new Date().getMonth() + 1, 0, 23, 59, 59, 999);
 ```
 
-**Change 3:** Look up profile by `profile_id` first, fall back to `user_id` (line ~143-149)
-```typescript
-// Before
-const profile = userProfiles[entry.user_id];
+This ensures:
+- Start date uses `00:00:00` (beginning of day)
+- End date uses `23:59:59.999` (end of day)
 
-// After
-const profile = entry.profile_id 
-  ? userProfiles[entry.profile_id] 
-  : userProfiles[entry.user_id];
-```
+## Summary
 
-**Change 4:** Use `profile_id` or `user_id` as grouping key
-```typescript
-// Before
-const userId = entry.user_id;
-if (!acc[userId]) { ... }
-
-// After
-const entryKey = entry.profile_id || entry.user_id || 'unknown';
-if (!acc[entryKey]) { ... }
-```
-
----
-
-### File: `src/components/reports/ReportFilters.tsx`
-
-**Add new filter controls for Employee and Department:**
-
-1. Add state variables for `selectedEmployeeId` and `selectedDepartmentId`
-2. Add hooks to fetch employees and departments lists
-3. Add two new Select dropdowns in the filter grid
-4. Update `ReportFiltersValues` interface to include these new fields
-5. Pass values in `handleApply`
-
-**New interface fields:**
-```typescript
-export interface ReportFiltersValues {
-  reportType: 'employee' | 'project' | 'daily' | 'timecard';
-  startDate?: Date;
-  endDate?: Date;
-  departmentId?: string;   // Already exists
-  employeeId?: string;     // Already exists
-}
-```
-
-**New UI elements:**
-- "Employee" dropdown: Options = "All Employees" + list of employees from profiles
-- "Department" dropdown: Options = "All Departments" + list from departments table
-
----
-
-### File: `src/pages/Reports.tsx` (continued)
-
-**Apply filters to the generated report:**
-
-When `filters.employeeId` is set:
-- Filter `reportData` to only include that employee
-
-When `filters.departmentId` is set:
-- Filter `reportData` to only include employees in that department
-
----
-
-## Summary of Changes
-
-| File | Change |
-|------|--------|
-| `src/pages/Reports.tsx` | Fix profile lookup to use `profile_id`; apply employee/department filters |
-| `src/components/reports/ReportFilters.tsx` | Add Employee and Department dropdown filters |
-| `src/hooks/useReports.ts` | Update to use `profile_id` for employee grouping |
-
-## Expected Outcome
-1. Employee Hours report will correctly show all employee hours, including those who clocked in via PIN
-2. Users can filter by specific employee or department before generating reports
+| Item | Details |
+|------|---------|
+| **Bug** | Single-day report returns empty because end time is midnight, not end-of-day |
+| **Fix** | Adjust end date to `23:59:59.999` of selected day |
+| **Files Changed** | `src/pages/Reports.tsx` (lines 96-97) |
+| **Impact** | All report types (employee hours, project hours) will now work correctly for single-day and multi-day date ranges |
