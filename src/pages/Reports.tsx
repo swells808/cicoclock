@@ -1,11 +1,9 @@
 import React, { useState, useRef } from "react";
 import {
-  Download,
   Clock,
   FolderOpen,
   ArrowUp,
 } from "lucide-react";
-import { Button } from "@/components/ui/button";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { supabase } from "@/integrations/supabase/client";
 import { DashboardLayout } from "@/components/layout/DashboardLayout";
@@ -13,11 +11,284 @@ import { useReports } from "@/hooks/useReports";
 import { ReportFilters, ReportFiltersValues } from "@/components/reports/ReportFilters";
 import { buildRealTableHTML } from "@/utils/reportUtils";
 import { DailyTimecardReport } from "@/components/reports/DailyTimecardReport";
-
 import { ScheduledReportsManager } from "@/components/reports/ScheduledReportsManager";
 import { TimeEntryDetailsReport } from "@/components/reports/TimeEntryDetailsReport";
+import { format } from "date-fns";
 
-// --- Report Export Utilities ---
+// --- Export Utility Functions ---
+
+// Export Daily Timecard as CSV
+function exportDailyTimecardAsCSV(entries: any[]) {
+  const columns = ["Employee", "Project", "Clock In", "Clock Out", "Duration"];
+  let csv = columns.join(",") + "\n";
+  csv += entries.map(entry => {
+    const clockIn = entry.start_time ? format(new Date(entry.start_time), 'h:mm a') : '-';
+    const clockOut = entry.end_time ? format(new Date(entry.end_time), 'h:mm a') : 'Active';
+    const duration = entry.duration_minutes 
+      ? `${Math.floor(entry.duration_minutes / 60)}h ${entry.duration_minutes % 60}m` 
+      : '-';
+    return [
+      `"${entry.employeeName}"`,
+      `"${entry.projectName || 'No Project'}"`,
+      clockIn,
+      clockOut,
+      duration
+    ].join(",");
+  }).join("\n");
+  
+  const blob = new Blob([csv], { type: "text/csv" });
+  const url = window.URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = "daily-timecard-report.csv";
+  document.body.appendChild(a);
+  a.click();
+  window.URL.revokeObjectURL(url);
+  a.remove();
+}
+
+// Export Time Entry Details as CSV
+function exportTimeEntryDetailsAsCSV(entries: any[]) {
+  const columns = ["Employee", "Date", "Project", "Clock In", "Clock Out", "Duration", "Clock In Address", "Clock Out Address"];
+  let csv = columns.join(",") + "\n";
+  csv += entries.map(entry => {
+    const date = format(new Date(entry.start_time), 'MMM d, yyyy');
+    const clockIn = format(new Date(entry.start_time), 'h:mm a');
+    const clockOut = entry.end_time ? format(new Date(entry.end_time), 'h:mm a') : 'Active';
+    const duration = entry.duration_minutes 
+      ? `${Math.floor(entry.duration_minutes / 60)}h ${entry.duration_minutes % 60}m` 
+      : '-';
+    return [
+      `"${entry.employeeName}"`,
+      date,
+      `"${entry.projectName || 'No Project'}"`,
+      clockIn,
+      clockOut,
+      duration,
+      `"${entry.clock_in_address || ''}"`,
+      `"${entry.clock_out_address || ''}"`
+    ].join(",");
+  }).join("\n");
+  
+  const blob = new Blob([csv], { type: "text/csv" });
+  const url = window.URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = "time-entry-details-report.csv";
+  document.body.appendChild(a);
+  a.click();
+  window.URL.revokeObjectURL(url);
+  a.remove();
+}
+
+// Export Daily Timecard as PDF
+function exportDailyTimecardAsPDF(entries: any[], dateStr: string) {
+  // @ts-ignore
+  import("jspdf").then(jsPDFImport => {
+    // @ts-ignore
+    import("jspdf-autotable").then(() => {
+      const { jsPDF } = jsPDFImport;
+      const doc = new jsPDF();
+      const columns = ["Employee", "Project", "Clock In", "Clock Out", "Duration"];
+      
+      doc.setFontSize(16);
+      doc.text(`Daily Timecard Report - ${dateStr}`, 14, 16);
+      
+      // @ts-ignore
+      doc.autoTable({
+        startY: 25,
+        head: [columns],
+        body: entries.map(entry => [
+          entry.employeeName,
+          entry.projectName || 'No Project',
+          entry.start_time ? format(new Date(entry.start_time), 'h:mm a') : '-',
+          entry.end_time ? format(new Date(entry.end_time), 'h:mm a') : 'Active',
+          entry.duration_minutes 
+            ? `${Math.floor(entry.duration_minutes / 60)}h ${entry.duration_minutes % 60}m` 
+            : '-'
+        ]),
+        theme: 'striped',
+        headStyles: { fillColor: [59, 130, 246] },
+      });
+      
+      doc.save(`daily-timecard-${dateStr.replace(/[^a-zA-Z0-9]/g, '-')}.pdf`);
+    });
+  });
+}
+
+// Export Time Entry Details as PDF
+function exportTimeEntryDetailsAsPDF(entries: any[], dateRange: string) {
+  // @ts-ignore
+  import("jspdf").then(jsPDFImport => {
+    // @ts-ignore
+    import("jspdf-autotable").then(() => {
+      const { jsPDF } = jsPDFImport;
+      const doc = new jsPDF('landscape');
+      const columns = ["Employee", "Date", "Project", "Clock In", "Clock Out", "Duration"];
+      
+      doc.setFontSize(16);
+      doc.text(`Time Entry Details - ${dateRange}`, 14, 16);
+      
+      // @ts-ignore
+      doc.autoTable({
+        startY: 25,
+        head: [columns],
+        body: entries.map(entry => [
+          entry.employeeName,
+          format(new Date(entry.start_time), 'MMM d, yyyy'),
+          entry.projectName || 'No Project',
+          format(new Date(entry.start_time), 'h:mm a'),
+          entry.end_time ? format(new Date(entry.end_time), 'h:mm a') : 'Active',
+          entry.duration_minutes 
+            ? `${Math.floor(entry.duration_minutes / 60)}h ${entry.duration_minutes % 60}m` 
+            : '-'
+        ]),
+        theme: 'striped',
+        headStyles: { fillColor: [34, 197, 94] },
+      });
+      
+      doc.save(`time-entry-details-${dateRange.replace(/[^a-zA-Z0-9]/g, '-')}.pdf`);
+    });
+  });
+}
+
+// Build Daily Timecard HTML table
+function buildDailyTimecardHTML(entries: any[]): string {
+  const columns = ["Employee", "Project", "Clock In", "Clock Out", "Duration"];
+  let table = "<table border='1' style='border-collapse:collapse;width:100%;font-family:sans-serif;'>";
+  table += "<thead><tr>" + columns.map(col => 
+    `<th style='padding:10px;background:#F6F6F7;text-align:left;'>${col}</th>`
+  ).join("") + "</tr></thead><tbody>";
+  
+  if (entries.length === 0) {
+    table += `<tr><td colspan='${columns.length}' style='padding:20px;text-align:center;color:#666;'>No time entries for this period</td></tr>`;
+  } else {
+    table += entries.map((entry, i) => {
+      const bgColor = i % 2 === 0 ? '#fff' : '#fafafa';
+      return `<tr style='background:${bgColor}'>
+        <td style='padding:10px;'>${entry.employeeName}</td>
+        <td style='padding:10px;'>${entry.projectName || 'No Project'}</td>
+        <td style='padding:10px;'>${entry.start_time ? format(new Date(entry.start_time), 'h:mm a') : '-'}</td>
+        <td style='padding:10px;'>${entry.end_time ? format(new Date(entry.end_time), 'h:mm a') : 'Active'}</td>
+        <td style='padding:10px;'>${entry.duration_minutes ? `${Math.floor(entry.duration_minutes / 60)}h ${entry.duration_minutes % 60}m` : '-'}</td>
+      </tr>`;
+    }).join("");
+  }
+  
+  table += "</tbody></table>";
+  return table;
+}
+
+// Build Time Entry Details HTML table
+function buildTimeEntryDetailsHTML(entries: any[]): string {
+  const columns = ["Employee", "Date", "Project", "Clock In", "Clock Out", "Duration", "Location"];
+  let table = "<table border='1' style='border-collapse:collapse;width:100%;font-family:sans-serif;'>";
+  table += "<thead><tr>" + columns.map(col => 
+    `<th style='padding:10px;background:#F6F6F7;text-align:left;'>${col}</th>`
+  ).join("") + "</tr></thead><tbody>";
+  
+  if (entries.length === 0) {
+    table += `<tr><td colspan='${columns.length}' style='padding:20px;text-align:center;color:#666;'>No time entries for this period</td></tr>`;
+  } else {
+    table += entries.map((entry, i) => {
+      const bgColor = i % 2 === 0 ? '#fff' : '#fafafa';
+      return `<tr style='background:${bgColor}'>
+        <td style='padding:10px;'>${entry.employeeName}</td>
+        <td style='padding:10px;'>${format(new Date(entry.start_time), 'MMM d, yyyy')}</td>
+        <td style='padding:10px;'>${entry.projectName || 'No Project'}</td>
+        <td style='padding:10px;'>${format(new Date(entry.start_time), 'h:mm a')}</td>
+        <td style='padding:10px;'>${entry.end_time ? format(new Date(entry.end_time), 'h:mm a') : 'Active'}</td>
+        <td style='padding:10px;'>${entry.duration_minutes ? `${Math.floor(entry.duration_minutes / 60)}h ${entry.duration_minutes % 60}m` : '-'}</td>
+        <td style='padding:10px;'>${entry.clock_in_address || '-'}</td>
+      </tr>`;
+    }).join("");
+  }
+  
+  table += "</tbody></table>";
+  return table;
+}
+
+// Render report in popup window
+function renderReportPopup(
+  newWin: Window, 
+  title: string, 
+  tableHtml: string, 
+  reportType: string, 
+  dateInfo: string,
+  entries: any[]
+) {
+  const style = `
+    <style>
+      body { font-family: sans-serif; background: #F6F6F7; margin:0; padding:24px; }
+      .download-btn {
+        margin-top: 24px; margin-right: 16px;
+        padding: 10px 16px; border: none; border-radius:6px;
+        font-size: 15px; background: #4BA0F4; color: #fff; cursor: pointer;
+        display: inline-flex; align-items: center; gap: 7px;
+      }
+      .download-btn:hover { background: #3b8ee6; }
+      h2 { margin-bottom: 8px; }
+      .export-bar { margin-bottom: 20px; }
+      table { background: #fff; border:1px solid #ececec; }
+      .entry-count { color: #666; margin-bottom: 16px; margin-top: 0; }
+    </style>
+  `;
+
+  const html = `
+    <html>
+      <head><title>${title}</title>${style}</head>
+      <body>
+        <h2>${title}</h2>
+        <p class="entry-count">${entries.length} ${entries.length === 1 ? 'entry' : 'entries'}</p>
+        <div class="export-bar">
+          <button class="download-btn" id="btn-pdf">
+            <svg fill="none" height="18" width="18" viewBox="0 0 24 24" stroke="currentColor" stroke-width="1.5">
+              <rect width="18" height="22" x="3" y="1" stroke="#fff" fill="none" rx="2"/>
+              <text x="7" y="18" font-size="9" fill="#fff">PDF</text>
+            </svg> Save as PDF
+          </button>
+          <button class="download-btn" id="btn-csv">
+            <svg fill="none" height="18" width="18" viewBox="0 0 24 24" stroke="currentColor" stroke-width="1.5">
+              <rect width="18" height="22" x="3" y="1" stroke="#fff" fill="none" rx="2"/>
+              <text x="7" y="18" font-size="9" fill="#fff">CSV</text>
+            </svg> Save as CSV
+          </button>
+        </div>
+        ${tableHtml}
+        <script>
+          document.getElementById('btn-pdf').onclick = function() {
+            if (window.opener && window.opener.exportReportPDF) {
+              window.opener.exportReportPDF('${reportType}');
+            }
+          };
+          document.getElementById('btn-csv').onclick = function() {
+            if (window.opener && window.opener.exportReportCSV) {
+              window.opener.exportReportCSV('${reportType}');
+            }
+          };
+        </script>
+      </body>
+    </html>
+  `;
+  
+  newWin.document.write(html);
+  newWin.document.close();
+  
+  // Store entries and attach export functions to opener window
+  (window as any).currentReportData = { entries, dateInfo, reportType };
+  (window as any).exportReportPDF = (type: string) => {
+    const data = (window as any).currentReportData;
+    if (type === 'daily') exportDailyTimecardAsPDF(data.entries, data.dateInfo);
+    if (type === 'timecard') exportTimeEntryDetailsAsPDF(data.entries, data.dateInfo);
+  };
+  (window as any).exportReportCSV = (type: string) => {
+    const data = (window as any).currentReportData;
+    if (type === 'daily') exportDailyTimecardAsCSV(data.entries);
+    if (type === 'timecard') exportTimeEntryDetailsAsCSV(data.entries);
+  };
+}
+
+// --- Legacy Report Export Utilities ---
 const sampleEmployeeRows = [
   { name: "Jane Doe", week: 42, month: 172 },
   { name: "Alex Lee", week: 39, month: 165 },
@@ -34,7 +305,6 @@ const sampleProjectRows = [
   { name: "Remote HR", week: 15, month: 97 },
 ];
 
-// Utility: Export HTML table as CSV
 function exportTableAsCSV(type: "employee" | "project") {
   const rows = type === "employee" ? sampleEmployeeRows : sampleProjectRows;
   const columns = ["Name", "Week", "Month"];
@@ -53,7 +323,6 @@ function exportTableAsCSV(type: "employee" | "project") {
   a.remove();
 }
 
-// Utility: Export HTML table as PDF using jsPDF + autotable
 function exportTableAsPDF(type: "employee" | "project") {
   // @ts-ignore
   import("jspdf").then(jsPDFImport => {
@@ -87,43 +356,21 @@ const Reports = () => {
 
   // Generate report logic
   const handleGenerateReport = async (filters: ReportFiltersValues) => {
-    // Store applied filters for daily/timecard reports
+    // Store applied filters for inline reports
     setAppliedFilters(filters);
     
     // Update selected dates for the hook to update overview metrics
     setSelectedStartDate(filters.startDate);
     setSelectedEndDate(filters.endDate);
 
-    // For daily and timecard, scroll to the relevant section after state update
-    if (filters.reportType === 'daily') {
-      setTimeout(() => {
-        dailyReportRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
-      }, 100);
-      return;
-    }
-    
-    if (filters.reportType === 'timecard') {
-      setTimeout(() => {
-        timeEntryReportRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
-      }, 100);
-      return;
-    }
-
+    // Open popup window for all report types
     const newWin = window.open("", "_blank", "width=900,height=700");
     if (!newWin) {
       alert("Please enable popups for this site.");
       return;
     }
 
-    // Fetch fresh data directly with the selected date range
-    const start = filters.startDate 
-      ? new Date(filters.startDate.getFullYear(), filters.startDate.getMonth(), filters.startDate.getDate(), 0, 0, 0)
-      : new Date(new Date().getFullYear(), new Date().getMonth(), 1);
-
-    const end = filters.endDate 
-      ? new Date(filters.endDate.getFullYear(), filters.endDate.getMonth(), filters.endDate.getDate(), 23, 59, 59, 999)
-      : new Date(new Date().getFullYear(), new Date().getMonth() + 1, 0, 23, 59, 59, 999);
-
+    // Fetch company data
     const { data: profiles } = await supabase
       .from('profiles')
       .select('id, user_id, display_name, first_name, last_name, department_id, company_id');
@@ -134,6 +381,128 @@ const Reports = () => {
       alert("Unable to fetch company data");
       return;
     }
+
+    // Build profile lookup map
+    const userProfiles = profiles?.reduce((acc, profile) => {
+      acc[profile.id] = profile;
+      if (profile.user_id) {
+        acc[profile.user_id] = profile;
+      }
+      return acc;
+    }, {} as Record<string, any>) || {};
+
+    // Handle Daily Timecard Report
+    if (filters.reportType === 'daily') {
+      const date = filters.startDate || new Date();
+      const startOfDay = new Date(date);
+      startOfDay.setHours(0, 0, 0, 0);
+      const endOfDay = new Date(date);
+      endOfDay.setHours(23, 59, 59, 999);
+
+      const { data: timeEntries } = await supabase
+        .from('time_entries')
+        .select(`id, user_id, profile_id, start_time, end_time, duration_minutes, projects(name)`)
+        .eq('company_id', companyId)
+        .gte('start_time', startOfDay.toISOString())
+        .lte('start_time', endOfDay.toISOString())
+        .order('start_time', { ascending: false });
+
+      // Map entries with employee names and filter
+      let entries = (timeEntries || []).map((entry: any) => {
+        const profile = entry.profile_id 
+          ? userProfiles[entry.profile_id] 
+          : userProfiles[entry.user_id];
+        const employeeName = `${profile?.first_name || ''} ${profile?.last_name || ''}`.trim() ||
+                            profile?.display_name ||
+                            'Unknown User';
+        return {
+          ...entry,
+          employeeName,
+          projectName: entry.projects?.name || null,
+          departmentId: profile?.department_id,
+          profileId: entry.profile_id || profile?.id
+        };
+      });
+
+      // Apply filters
+      if (filters.employeeId) {
+        entries = entries.filter(e => e.profileId === filters.employeeId || e.user_id === filters.employeeId);
+      }
+      if (filters.departmentId) {
+        entries = entries.filter(e => e.departmentId === filters.departmentId);
+      }
+
+      const dateStr = format(date, 'MMMM d, yyyy');
+      const title = `Daily Timecard Report — ${dateStr}`;
+      const reportTable = buildDailyTimecardHTML(entries);
+      
+      renderReportPopup(newWin, title, reportTable, 'daily', dateStr, entries);
+      return;
+    }
+
+    // Handle Time Entry Details Report
+    if (filters.reportType === 'timecard') {
+      const startDate = filters.startDate || new Date();
+      const endDate = filters.endDate || new Date();
+      
+      const start = new Date(startDate);
+      start.setHours(0, 0, 0, 0);
+      const end = new Date(endDate);
+      end.setHours(23, 59, 59, 999);
+
+      const { data: timeEntries } = await supabase
+        .from('time_entries')
+        .select(`id, user_id, profile_id, start_time, end_time, duration_minutes, clock_in_address, clock_out_address, projects(name)`)
+        .eq('company_id', companyId)
+        .gte('start_time', start.toISOString())
+        .lte('start_time', end.toISOString())
+        .order('start_time', { ascending: false });
+
+      // Map entries with employee names and filter
+      let entries = (timeEntries || []).map((entry: any) => {
+        const profile = entry.profile_id 
+          ? userProfiles[entry.profile_id] 
+          : userProfiles[entry.user_id];
+        const employeeName = `${profile?.first_name || ''} ${profile?.last_name || ''}`.trim() ||
+                            profile?.display_name ||
+                            'Unknown User';
+        return {
+          ...entry,
+          employeeName,
+          projectName: entry.projects?.name || null,
+          departmentId: profile?.department_id,
+          profileId: entry.profile_id || profile?.id
+        };
+      });
+
+      // Apply filters
+      if (filters.employeeId) {
+        entries = entries.filter(e => e.profileId === filters.employeeId || e.user_id === filters.employeeId);
+      }
+      if (filters.departmentId) {
+        entries = entries.filter(e => e.departmentId === filters.departmentId);
+      }
+
+      const formatDateForTitle = (d: Date) => format(d, 'MMM d, yyyy');
+      const dateRangeStr = start.toDateString() === end.toDateString()
+        ? formatDateForTitle(start)
+        : `${formatDateForTitle(start)} - ${formatDateForTitle(end)}`;
+      
+      const title = `Time Entry Details — ${dateRangeStr}`;
+      const reportTable = buildTimeEntryDetailsHTML(entries);
+      
+      renderReportPopup(newWin, title, reportTable, 'timecard', dateRangeStr, entries);
+      return;
+    }
+
+    // Handle Employee and Project reports (existing logic)
+    const start = filters.startDate 
+      ? new Date(filters.startDate.getFullYear(), filters.startDate.getMonth(), filters.startDate.getDate(), 0, 0, 0)
+      : new Date(new Date().getFullYear(), new Date().getMonth(), 1);
+
+    const end = filters.endDate 
+      ? new Date(filters.endDate.getFullYear(), filters.endDate.getMonth(), filters.endDate.getDate(), 23, 59, 59, 999)
+      : new Date(new Date().getFullYear(), new Date().getMonth() + 1, 0, 23, 59, 59, 999);
 
     const { data: rawTimeEntries } = await supabase
       .from('time_entries')
@@ -160,22 +529,11 @@ const Reports = () => {
       return { ...entry, calculated_minutes: minutes || 0 };
     }) || [];
 
-    // Build profile lookup map using profile id as key (for profile_id lookups)
-    // Also index by user_id for backwards compatibility
-    const userProfiles = profiles?.reduce((acc, profile) => {
-      acc[profile.id] = profile;  // Use profile.id as key
-      if (profile.user_id) {
-        acc[profile.user_id] = profile;  // Also index by user_id for backwards compatibility
-      }
-      return acc;
-    }, {} as Record<string, any>) || {};
-
     // Build employee or project reports from fresh data
     let reportData: any[] = [];
 
     if (filters.reportType === 'employee') {
       const employeeHours = timeEntries.reduce((acc, entry: any) => {
-        // Look up profile by profile_id first, fall back to user_id
         const profile = entry.profile_id 
           ? userProfiles[entry.profile_id] 
           : userProfiles[entry.user_id];
@@ -184,7 +542,6 @@ const Reports = () => {
                     'Unknown User';
         const hours = entry.calculated_minutes / 60;
         
-        // Use profile_id or user_id as grouping key
         const entryKey = entry.profile_id || entry.user_id || 'unknown';
 
         if (!acc[entryKey]) {
@@ -207,12 +564,9 @@ const Reports = () => {
         departmentId: data.departmentId,
       })).sort((a: any, b: any) => b.hours - a.hours);
 
-      // Apply employee filter if specified
       if (filters.employeeId) {
         employeeReportData = employeeReportData.filter(e => e.odId === filters.employeeId);
       }
-
-      // Apply department filter if specified
       if (filters.departmentId) {
         employeeReportData = employeeReportData.filter(e => e.departmentId === filters.departmentId);
       }
@@ -277,7 +631,6 @@ const Reports = () => {
       </style>
     `;
 
-    // Markup for buttons
     const pdfBtnId = "btn-pdf";
     const csvBtnId = "btn-csv";
     const html = `
@@ -317,6 +670,7 @@ const Reports = () => {
       </html>
     `;
     newWin.document.write(html);
+    newWin.document.close();
     // attach utility functions to opener so popup can invoke
     (window as any).exportTableAsCSV = exportTableAsCSV;
     (window as any).exportTableAsPDF = exportTableAsPDF;
