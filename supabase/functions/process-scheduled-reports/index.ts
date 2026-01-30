@@ -382,10 +382,11 @@ async function fetchAndEmbedImage(pdfDoc: PDFDocument, imageUrl: string): Promis
   }
 }
 
-// Chunking configuration for memory management
-// Each chunk generates a separate PDF document that is merged after processing
-// This allows garbage collection between chunks, preventing memory exhaustion
-const ENTRIES_PER_CHUNK = 6; // 6 entries × 4 images = ~24 images per chunk, ~1.2MB max
+// Memory configuration for Edge Function limits
+// pdf-lib accumulates all embedded images in memory until save() is called
+// copyPages does NOT release memory - it copies image data to the final document
+// Therefore, we must skip images entirely for large reports to avoid WORKER_LIMIT crashes
+const MAX_ENTRIES_FOR_IMAGES = 8; // Safe limit: 8 entries × 4 images × ~50KB = ~1.6MB
 
 // Fetch images for a single entry on-demand (not pre-fetched)
 interface EntryImages {
@@ -438,17 +439,16 @@ async function fetchEntryImages(
 
 // ============= Time Entry Details PDF Generation =============
 
-// Generate a PDF for a single chunk of entries (always includes images since chunk is small)
-async function generateChunkPDF(
-  entries: TimeEntry[],
-  companyName: string,
+// Generate the complete PDF for time entry details
+// Conditionally includes images based on entry count to stay within memory limits
+async function generateTimeEntryDetailsPDF(
+  entries: TimeEntry[], 
+  companyName: string, 
   reportName: string,
   dateRange: { start: string; end: string },
   timezone: string,
-  supabase: any,
-  isFirstChunk: boolean,
-  chunkIndex: number
-): Promise<PDFDocument> {
+  supabase: any
+): Promise<Uint8Array> {
   const pdfDoc = await PDFDocument.create();
   const font = await pdfDoc.embedFont(StandardFonts.Helvetica);
   const boldFont = await pdfDoc.embedFont(StandardFonts.HelveticaBold);
@@ -457,7 +457,12 @@ async function generateChunkPDF(
   const pageHeight = 792;
   const margin = 40;
   const cardHeight = 185;
-  const cardSpacing = 15;
+  
+  // Determine if we can include images (memory check)
+  const includeImages = entries.length <= MAX_ENTRIES_FOR_IMAGES;
+  if (!includeImages) {
+    console.info(`Skipping images: ${entries.length} entries exceeds limit of ${MAX_ENTRIES_FOR_IMAGES}`);
+  }
   
   let page = pdfDoc.addPage([pageWidth, pageHeight]);
   let yPosition = pageHeight - margin;
@@ -466,47 +471,48 @@ async function generateChunkPDF(
   const hourLabels = ['6am', '8am', '10am', '12pm', '2pm', '4pm', '6pm', '8pm'];
   const hourValues = [6, 8, 10, 12, 14, 16, 18, 20];
   
-  // Only add full header on first chunk
-  if (isFirstChunk) {
-    page.drawText(reportName || 'Time Entry Details Report', {
-      x: margin,
-      y: yPosition,
-      size: 18,
-      font: boldFont,
-      color: rgb(0.23, 0.32, 0.96),
-    });
-    yPosition -= 22;
-    
-    page.drawText(companyName, {
-      x: margin,
-      y: yPosition,
-      size: 12,
-      font: font,
-      color: rgb(0.4, 0.4, 0.4),
-    });
-    yPosition -= 18;
-    
-    page.drawText(`Period: ${dateRange.start} - ${dateRange.end}`, {
-      x: margin,
-      y: yPosition,
-      size: 10,
-      font: font,
-      color: rgb(0.4, 0.4, 0.4),
-    });
-    yPosition -= 30;
-  } else {
-    // Continuation header for subsequent chunks
-    page.drawText(`${reportName || 'Time Entry Details'} (continued)`, {
-      x: margin,
-      y: yPosition,
-      size: 12,
-      font: boldFont,
-      color: rgb(0.4, 0.4, 0.4),
-    });
-    yPosition -= 25;
-  }
+  // Report header
+  page.drawText(reportName || 'Time Entry Details Report', {
+    x: margin,
+    y: yPosition,
+    size: 18,
+    font: boldFont,
+    color: rgb(0.23, 0.32, 0.96),
+  });
+  yPosition -= 22;
   
-  // Process each entry in this chunk
+  page.drawText(companyName, {
+    x: margin,
+    y: yPosition,
+    size: 12,
+    font: font,
+    color: rgb(0.4, 0.4, 0.4),
+  });
+  yPosition -= 18;
+  
+  page.drawText(`Period: ${dateRange.start} - ${dateRange.end}`, {
+    x: margin,
+    y: yPosition,
+    size: 10,
+    font: font,
+    color: rgb(0.4, 0.4, 0.4),
+  });
+  yPosition -= 15;
+  
+  // Add note if images are skipped
+  if (!includeImages) {
+    page.drawText(`Note: Photos excluded from PDF (${entries.length} entries). View full details in the app.`, {
+      x: margin,
+      y: yPosition,
+      size: 8,
+      font: font,
+      color: rgb(0.6, 0.4, 0.2),
+    });
+    yPosition -= 15;
+  }
+  yPosition -= 15;
+  
+  // Process each entry
   for (const entry of entries) {
     // Check if we need a new page
     if (yPosition - cardHeight < margin + 30) {
@@ -514,8 +520,8 @@ async function generateChunkPDF(
       yPosition = pageHeight - margin;
     }
     
-    // Always fetch images for chunk entries (chunk size is memory-safe)
-    const images = await fetchEntryImages(pdfDoc, supabase, entry);
+    // Fetch images only if within budget
+    const images = includeImages ? await fetchEntryImages(pdfDoc, supabase, entry) : null;
     
     const cardTop = yPosition;
     const cardWidth = pageWidth - (margin * 2);
@@ -983,7 +989,7 @@ async function generateChunkPDF(
     }
     
     // Move to next card position
-    yPosition = cardTop - cardHeight - cardSpacing;
+    yPosition = cardTop - cardHeight - 15;
   }
   
   // Handle empty state
@@ -997,88 +1003,8 @@ async function generateChunkPDF(
     });
   }
   
-  return pdfDoc;
-}
-
-// Main function that orchestrates chunked PDF generation
-async function generateTimeEntryDetailsPDF(
-  entries: TimeEntry[], 
-  companyName: string, 
-  reportName: string,
-  dateRange: { start: string; end: string },
-  timezone: string,
-  supabase: any
-): Promise<Uint8Array> {
-  // Split entries into chunks for memory-efficient processing
-  const chunks: TimeEntry[][] = [];
-  for (let i = 0; i < entries.length; i += ENTRIES_PER_CHUNK) {
-    chunks.push(entries.slice(i, i + ENTRIES_PER_CHUNK));
-  }
-  
-  console.info(`Processing ${entries.length} entries in ${chunks.length} chunk(s)`);
-  
-  // If only one chunk, generate directly (no merge overhead)
-  if (chunks.length <= 1) {
-    const pdfDoc = await generateChunkPDF(
-      entries,
-      companyName,
-      reportName,
-      dateRange,
-      timezone,
-      supabase,
-      true,
-      0
-    );
-    
-    // Add footer to all pages
-    const font = await pdfDoc.embedFont(StandardFonts.Helvetica);
-    const pages = pdfDoc.getPages();
-    for (let i = 0; i < pages.length; i++) {
-      const p = pages[i];
-      p.drawText(`Generated by CICO on ${new Date().toLocaleString()} | Page ${i + 1} of ${pages.length}`, {
-        x: 40,
-        y: 20,
-        size: 8,
-        font: font,
-        color: rgb(0.6, 0.6, 0.6),
-      });
-    }
-    
-    return await pdfDoc.save();
-  }
-  
-  // Multiple chunks: generate each chunk PDF and merge pages into final document
-  const finalPdf = await PDFDocument.create();
-  
-  for (let i = 0; i < chunks.length; i++) {
-    console.info(`Processing chunk ${i + 1}/${chunks.length} (${chunks[i].length} entries)`);
-    
-    // Generate PDF for this chunk
-    const chunkPdf = await generateChunkPDF(
-      chunks[i],
-      companyName,
-      reportName,
-      dateRange,
-      timezone,
-      supabase,
-      i === 0, // isFirstChunk
-      i
-    );
-    
-    // Copy all pages from chunk PDF to final PDF
-    // This allows the chunkPdf to be garbage collected after we're done with it
-    const copiedPages = await finalPdf.copyPages(chunkPdf, chunkPdf.getPageIndices());
-    for (const page of copiedPages) {
-      finalPdf.addPage(page);
-    }
-    
-    console.info(`Chunk ${i + 1} complete, ${copiedPages.length} page(s) added`);
-    // chunkPdf goes out of scope here and can be garbage collected
-  }
-  
-  // Add footer to all pages of the final merged document
-  const font = await finalPdf.embedFont(StandardFonts.Helvetica);
-  const pages = finalPdf.getPages();
+  // Add footer to all pages
+  const pages = pdfDoc.getPages();
   for (let i = 0; i < pages.length; i++) {
     const p = pages[i];
     p.drawText(`Generated by CICO on ${new Date().toLocaleString()} | Page ${i + 1} of ${pages.length}`, {
@@ -1090,8 +1016,8 @@ async function generateTimeEntryDetailsPDF(
     });
   }
   
-  console.info(`Final PDF has ${pages.length} pages`);
-  return await finalPdf.save();
+  console.info(`Generated PDF with ${pages.length} pages for ${entries.length} entries (images: ${includeImages ? 'included' : 'skipped'})`);
+  return await pdfDoc.save();
 }
 
 // ============= Other PDF Generation Functions =============
