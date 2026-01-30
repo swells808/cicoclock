@@ -1,7 +1,7 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { Resend } from "https://esm.sh/resend@2.0.0";
-import { PDFDocument, StandardFonts, rgb } from "https://esm.sh/pdf-lib@1.17.1";
+import { PDFDocument, StandardFonts, rgb, PDFImage } from "https://esm.sh/pdf-lib@1.17.1";
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -297,12 +297,152 @@ function wrapAddress(address: string, maxCharsPerLine: number = 20): string[] {
   return lines.slice(0, 4); // Max 4 lines
 }
 
+// ============= Image Embedding Helpers =============
+
+// Generate signed URL for private storage bucket
+async function getSignedUrl(supabase: any, bucket: string, path: string): Promise<string | null> {
+  // Normalize path (remove bucket prefix if present)
+  let cleanPath = path;
+  if (path.startsWith(`${bucket}/`)) {
+    cleanPath = path.replace(`${bucket}/`, '');
+  }
+  
+  const { data, error } = await supabase.storage.from(bucket).createSignedUrl(cleanPath, 3600);
+  if (error) {
+    console.error(`Failed to sign ${bucket}/${cleanPath}:`, error.message);
+    return null;
+  }
+  return data.signedUrl;
+}
+
+// Resolve photo URL (handles full URLs vs storage paths)
+async function resolvePhotoUrl(supabase: any, photoUrl: string | null): Promise<string | null> {
+  if (!photoUrl) return null;
+  
+  // If already a full URL, return as-is
+  if (photoUrl.startsWith('http')) {
+    return photoUrl;
+  }
+  
+  return getSignedUrl(supabase, 'timeclock-photos', photoUrl);
+}
+
+// Generate Mapbox static map URL
+function getMapUrl(latitude: number | null, longitude: number | null, isClockIn: boolean): string | null {
+  if (!latitude || !longitude) return null;
+  
+  const mapboxToken = Deno.env.get('MAPBOX_PUBLIC_TOKEN');
+  if (!mapboxToken) {
+    console.warn('MAPBOX_PUBLIC_TOKEN not configured');
+    return null;
+  }
+  
+  const pinColor = isClockIn ? '22c55e' : 'ef4444';
+  return `https://api.mapbox.com/styles/v1/mapbox/streets-v12/static/pin-s+${pinColor}(${longitude},${latitude})/${longitude},${latitude},15/80x80@2x?access_token=${mapboxToken}`;
+}
+
+// Fetch image and embed in PDF
+async function fetchAndEmbedImage(pdfDoc: PDFDocument, imageUrl: string): Promise<PDFImage | null> {
+  try {
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 10000); // 10s timeout
+    
+    const response = await fetch(imageUrl, { signal: controller.signal });
+    clearTimeout(timeoutId);
+    
+    if (!response.ok) {
+      console.warn(`Image fetch failed: ${response.status} for ${imageUrl.substring(0, 100)}...`);
+      return null;
+    }
+    
+    const contentType = response.headers.get('content-type') || '';
+    const bytes = new Uint8Array(await response.arrayBuffer());
+    
+    if (bytes.length < 100) {
+      console.warn('Image too small, likely an error response');
+      return null;
+    }
+    
+    if (contentType.includes('png')) {
+      return await pdfDoc.embedPng(bytes);
+    } else {
+      return await pdfDoc.embedJpg(bytes);
+    }
+  } catch (error) {
+    console.error('Failed to embed image:', error);
+    return null;
+  }
+}
+
+// Pre-fetch all images for entries
+interface EntryImages {
+  clockInPhoto: PDFImage | null;
+  clockOutPhoto: PDFImage | null;
+  clockInMap: PDFImage | null;
+  clockOutMap: PDFImage | null;
+}
+
+async function prefetchEntryImages(
+  pdfDoc: PDFDocument,
+  supabase: any,
+  entries: TimeEntry[]
+): Promise<Map<string, EntryImages>> {
+  const imageMap = new Map<string, EntryImages>();
+  
+  console.log(`Pre-fetching images for ${entries.length} entries...`);
+  
+  // Process entries in batches to avoid overwhelming the network
+  const batchSize = 5;
+  for (let i = 0; i < entries.length; i += batchSize) {
+    const batch = entries.slice(i, i + batchSize);
+    
+    await Promise.all(batch.map(async (entry) => {
+      const images: EntryImages = {
+        clockInPhoto: null,
+        clockOutPhoto: null,
+        clockInMap: null,
+        clockOutMap: null,
+      };
+      
+      // Fetch all images for this entry in parallel
+      const [clockInPhotoUrl, clockOutPhotoUrl] = await Promise.all([
+        resolvePhotoUrl(supabase, entry.clock_in_photo_url),
+        resolvePhotoUrl(supabase, entry.clock_out_photo_url),
+      ]);
+      
+      const clockInMapUrl = getMapUrl(entry.clock_in_latitude, entry.clock_in_longitude, true);
+      const clockOutMapUrl = getMapUrl(entry.clock_out_latitude, entry.clock_out_longitude, false);
+      
+      // Fetch and embed all images in parallel
+      const [clockInPhoto, clockOutPhoto, clockInMap, clockOutMap] = await Promise.all([
+        clockInPhotoUrl ? fetchAndEmbedImage(pdfDoc, clockInPhotoUrl) : Promise.resolve(null),
+        clockOutPhotoUrl ? fetchAndEmbedImage(pdfDoc, clockOutPhotoUrl) : Promise.resolve(null),
+        clockInMapUrl ? fetchAndEmbedImage(pdfDoc, clockInMapUrl) : Promise.resolve(null),
+        clockOutMapUrl ? fetchAndEmbedImage(pdfDoc, clockOutMapUrl) : Promise.resolve(null),
+      ]);
+      
+      images.clockInPhoto = clockInPhoto;
+      images.clockOutPhoto = clockOutPhoto;
+      images.clockInMap = clockInMap;
+      images.clockOutMap = clockOutMap;
+      
+      imageMap.set(entry.id, images);
+    }));
+  }
+  
+  console.log(`Pre-fetched images for ${imageMap.size} entries`);
+  return imageMap;
+}
+
+// ============= Time Entry Details PDF Generation =============
+
 async function generateTimeEntryDetailsPDF(
   entries: TimeEntry[], 
   companyName: string, 
   reportName: string,
   dateRange: { start: string; end: string },
-  timezone: string
+  timezone: string,
+  supabase: any
 ): Promise<Uint8Array> {
   const pdfDoc = await PDFDocument.create();
   const font = await pdfDoc.embedFont(StandardFonts.Helvetica);
@@ -349,8 +489,13 @@ async function generateTimeEntryDetailsPDF(
   const hourLabels = ['6am', '8am', '10am', '12pm', '2pm', '4pm', '6pm', '8pm'];
   const hourValues = [6, 8, 10, 12, 14, 16, 18, 20];
   
+  // Pre-fetch all images for entries
+  const entryImages = await prefetchEntryImages(pdfDoc, supabase, entries);
+  
   // ===== Draw Time Entry Cards =====
   for (const entry of entries) {
+    // Get pre-fetched images for this entry
+    const images = entryImages.get(entry.id);
     // Check if we need a new page
     if (yPosition - cardHeight < margin + 30) {
       page = pdfDoc.addPage([pageWidth, pageHeight]);
@@ -506,50 +651,85 @@ async function generateTimeEntryDetailsPDF(
       color: rgb(0.1, 0.1, 0.1),
     });
     
-    // Photo and Map indicators
-    const indicatorY = clockInY + panelHeight - 62;
+    // Photo and Map thumbnails
+    const thumbnailY = clockInY + panelHeight - 100;
+    const thumbnailSize = 40;
     
-    // Photo box
-    const hasClockInPhoto = !!entry.clock_in_photo_url;
-    page.drawRectangle({
-      x: clockInX + 8,
-      y: indicatorY - 20,
-      width: 40,
-      height: 20,
-      color: hasClockInPhoto ? rgb(0.85, 0.92, 0.85) : rgb(0.95, 0.95, 0.95),
-      borderColor: hasClockInPhoto ? rgb(0.5, 0.7, 0.5) : rgb(0.8, 0.8, 0.8),
-      borderWidth: hasClockInPhoto ? 1 : 0.5,
-    });
-    page.drawText('Photo', {
-      x: clockInX + 17,
-      y: indicatorY - 15,
-      size: 8,
-      font: hasClockInPhoto ? boldFont : font,
-      color: hasClockInPhoto ? rgb(0.3, 0.5, 0.3) : rgb(0.6, 0.6, 0.6),
-    });
+    // Photo thumbnail
+    if (images?.clockInPhoto) {
+      page.drawImage(images.clockInPhoto, {
+        x: clockInX + 8,
+        y: thumbnailY,
+        width: thumbnailSize,
+        height: thumbnailSize,
+      });
+      page.drawRectangle({
+        x: clockInX + 8,
+        y: thumbnailY,
+        width: thumbnailSize,
+        height: thumbnailSize,
+        borderColor: rgb(0.5, 0.7, 0.5),
+        borderWidth: 0.5,
+      });
+    } else {
+      // Placeholder
+      page.drawRectangle({
+        x: clockInX + 8,
+        y: thumbnailY,
+        width: thumbnailSize,
+        height: thumbnailSize,
+        color: rgb(0.96, 0.96, 0.96),
+        borderColor: rgb(0.8, 0.8, 0.8),
+        borderWidth: 0.5,
+      });
+      page.drawText('Photo', {
+        x: clockInX + 15,
+        y: thumbnailY + 16,
+        size: 8,
+        font: font,
+        color: rgb(0.6, 0.6, 0.6),
+      });
+    }
     
-    // Map box
-    const hasClockInLocation = !!(entry.clock_in_latitude && entry.clock_in_longitude);
-    page.drawRectangle({
-      x: clockInX + 54,
-      y: indicatorY - 20,
-      width: 40,
-      height: 20,
-      color: hasClockInLocation ? rgb(0.85, 0.92, 0.85) : rgb(0.95, 0.95, 0.95),
-      borderColor: hasClockInLocation ? rgb(0.5, 0.7, 0.5) : rgb(0.8, 0.8, 0.8),
-      borderWidth: hasClockInLocation ? 1 : 0.5,
-    });
-    page.drawText('Map', {
-      x: clockInX + 65,
-      y: indicatorY - 15,
-      size: 8,
-      font: hasClockInLocation ? boldFont : font,
-      color: hasClockInLocation ? rgb(0.3, 0.5, 0.3) : rgb(0.6, 0.6, 0.6),
-    });
+    // Map thumbnail
+    if (images?.clockInMap) {
+      page.drawImage(images.clockInMap, {
+        x: clockInX + 8 + thumbnailSize + 4,
+        y: thumbnailY,
+        width: thumbnailSize,
+        height: thumbnailSize,
+      });
+      page.drawRectangle({
+        x: clockInX + 8 + thumbnailSize + 4,
+        y: thumbnailY,
+        width: thumbnailSize,
+        height: thumbnailSize,
+        borderColor: rgb(0.5, 0.7, 0.5),
+        borderWidth: 0.5,
+      });
+    } else {
+      // Placeholder
+      page.drawRectangle({
+        x: clockInX + 8 + thumbnailSize + 4,
+        y: thumbnailY,
+        width: thumbnailSize,
+        height: thumbnailSize,
+        color: rgb(0.96, 0.96, 0.96),
+        borderColor: rgb(0.8, 0.8, 0.8),
+        borderWidth: 0.5,
+      });
+      page.drawText('Map', {
+        x: clockInX + 8 + thumbnailSize + 14,
+        y: thumbnailY + 16,
+        size: 8,
+        font: font,
+        color: rgb(0.6, 0.6, 0.6),
+      });
+    }
     
-    // Multi-line address
+    // Multi-line address below thumbnails
     const clockInAddrLines = wrapAddress(entry.clock_in_address || '');
-    let addrY = indicatorY - 34;
+    let addrY = thumbnailY - 10;
     for (const line of clockInAddrLines) {
       page.drawText(line, {
         x: clockInX + 8,
@@ -709,50 +889,84 @@ async function generateTimeEntryDetailsPDF(
       color: rgb(0.1, 0.1, 0.1),
     });
     
-    // Photo and Map indicators for clock out
-    const outIndicatorY = clockInY + panelHeight - 62;
+    // Photo and Map thumbnails for clock out
+    const outThumbnailY = clockInY + panelHeight - 100;
     
-    // Photo box
-    const hasClockOutPhoto = !!entry.clock_out_photo_url;
-    page.drawRectangle({
-      x: clockOutX + 8,
-      y: outIndicatorY - 20,
-      width: 40,
-      height: 20,
-      color: hasClockOutPhoto ? rgb(0.92, 0.85, 0.85) : rgb(0.95, 0.95, 0.95),
-      borderColor: hasClockOutPhoto ? rgb(0.7, 0.5, 0.5) : rgb(0.8, 0.8, 0.8),
-      borderWidth: hasClockOutPhoto ? 1 : 0.5,
-    });
-    page.drawText('Photo', {
-      x: clockOutX + 17,
-      y: outIndicatorY - 15,
-      size: 8,
-      font: hasClockOutPhoto ? boldFont : font,
-      color: hasClockOutPhoto ? rgb(0.5, 0.3, 0.3) : rgb(0.6, 0.6, 0.6),
-    });
+    // Photo thumbnail
+    if (images?.clockOutPhoto) {
+      page.drawImage(images.clockOutPhoto, {
+        x: clockOutX + 8,
+        y: outThumbnailY,
+        width: thumbnailSize,
+        height: thumbnailSize,
+      });
+      page.drawRectangle({
+        x: clockOutX + 8,
+        y: outThumbnailY,
+        width: thumbnailSize,
+        height: thumbnailSize,
+        borderColor: rgb(0.7, 0.5, 0.5),
+        borderWidth: 0.5,
+      });
+    } else {
+      // Placeholder
+      page.drawRectangle({
+        x: clockOutX + 8,
+        y: outThumbnailY,
+        width: thumbnailSize,
+        height: thumbnailSize,
+        color: rgb(0.96, 0.96, 0.96),
+        borderColor: rgb(0.8, 0.8, 0.8),
+        borderWidth: 0.5,
+      });
+      page.drawText('Photo', {
+        x: clockOutX + 15,
+        y: outThumbnailY + 16,
+        size: 8,
+        font: font,
+        color: rgb(0.6, 0.6, 0.6),
+      });
+    }
     
-    // Map box
-    const hasClockOutLocation = !!(entry.clock_out_latitude && entry.clock_out_longitude);
-    page.drawRectangle({
-      x: clockOutX + 54,
-      y: outIndicatorY - 20,
-      width: 40,
-      height: 20,
-      color: hasClockOutLocation ? rgb(0.92, 0.85, 0.85) : rgb(0.95, 0.95, 0.95),
-      borderColor: hasClockOutLocation ? rgb(0.7, 0.5, 0.5) : rgb(0.8, 0.8, 0.8),
-      borderWidth: hasClockOutLocation ? 1 : 0.5,
-    });
-    page.drawText('Map', {
-      x: clockOutX + 65,
-      y: outIndicatorY - 15,
-      size: 8,
-      font: hasClockOutLocation ? boldFont : font,
-      color: hasClockOutLocation ? rgb(0.5, 0.3, 0.3) : rgb(0.6, 0.6, 0.6),
-    });
+    // Map thumbnail
+    if (images?.clockOutMap) {
+      page.drawImage(images.clockOutMap, {
+        x: clockOutX + 8 + thumbnailSize + 4,
+        y: outThumbnailY,
+        width: thumbnailSize,
+        height: thumbnailSize,
+      });
+      page.drawRectangle({
+        x: clockOutX + 8 + thumbnailSize + 4,
+        y: outThumbnailY,
+        width: thumbnailSize,
+        height: thumbnailSize,
+        borderColor: rgb(0.7, 0.5, 0.5),
+        borderWidth: 0.5,
+      });
+    } else {
+      // Placeholder
+      page.drawRectangle({
+        x: clockOutX + 8 + thumbnailSize + 4,
+        y: outThumbnailY,
+        width: thumbnailSize,
+        height: thumbnailSize,
+        color: rgb(0.96, 0.96, 0.96),
+        borderColor: rgb(0.8, 0.8, 0.8),
+        borderWidth: 0.5,
+      });
+      page.drawText('Map', {
+        x: clockOutX + 8 + thumbnailSize + 14,
+        y: outThumbnailY + 16,
+        size: 8,
+        font: font,
+        color: rgb(0.6, 0.6, 0.6),
+      });
+    }
     
-    // Multi-line address for clock out
+    // Multi-line address for clock out below thumbnails
     const clockOutAddrLines = wrapAddress(entry.clock_out_address || (isComplete ? '' : '-'));
-    let outAddrY = outIndicatorY - 34;
+    let outAddrY = outThumbnailY - 10;
     for (const line of clockOutAddrLines) {
       page.drawText(line, {
         x: clockOutX + 8,
@@ -1716,7 +1930,7 @@ serve(async (req) => {
             html = generateEmployeeTimecardHtml(typedEntries, companyName, report.name, dateRange, companyTimezone);
             csvContent = generateEmployeeTimecardCSV(typedEntries, companyTimezone);
             // Use the new Time Entry Details PDF generator
-            pdfBytes = await generateTimeEntryDetailsPDF(typedEntries, companyName, report.name, dateRange, companyTimezone);
+            pdfBytes = await generateTimeEntryDetailsPDF(typedEntries, companyName, report.name, dateRange, companyTimezone, supabase);
             attachmentPrefix = 'employee-timecard';
             break;
           case 'project_timecard':
@@ -1735,7 +1949,7 @@ serve(async (req) => {
           default:
             html = generateEmployeeTimecardHtml(typedEntries, companyName, report.name, dateRange, companyTimezone);
             csvContent = generateEmployeeTimecardCSV(typedEntries, companyTimezone);
-            pdfBytes = await generateTimeEntryDetailsPDF(typedEntries, companyName, report.name, dateRange, companyTimezone);
+            pdfBytes = await generateTimeEntryDetailsPDF(typedEntries, companyName, report.name, dateRange, companyTimezone, supabase);
             attachmentPrefix = 'timecard';
         }
 
