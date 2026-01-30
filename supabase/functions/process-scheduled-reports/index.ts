@@ -382,10 +382,10 @@ async function fetchAndEmbedImage(pdfDoc: PDFDocument, imageUrl: string): Promis
   }
 }
 
-// Maximum entries that can include embedded images (memory constraint)
-// With 23+ entries, all images accumulate in PDF document memory before finalization
-// Keep this very low to avoid WORKER_LIMIT errors in Edge Functions
-const MAX_ENTRIES_FOR_IMAGES = 8;
+// Chunking configuration for memory management
+// Each chunk generates a separate PDF document that is merged after processing
+// This allows garbage collection between chunks, preventing memory exhaustion
+const ENTRIES_PER_CHUNK = 6; // 6 entries × 4 images = ~24 images per chunk, ~1.2MB max
 
 // Fetch images for a single entry on-demand (not pre-fetched)
 interface EntryImages {
@@ -438,66 +438,75 @@ async function fetchEntryImages(
 
 // ============= Time Entry Details PDF Generation =============
 
-async function generateTimeEntryDetailsPDF(
-  entries: TimeEntry[], 
-  companyName: string, 
+// Generate a PDF for a single chunk of entries (always includes images since chunk is small)
+async function generateChunkPDF(
+  entries: TimeEntry[],
+  companyName: string,
   reportName: string,
   dateRange: { start: string; end: string },
   timezone: string,
-  supabase: any
-): Promise<Uint8Array> {
+  supabase: any,
+  isFirstChunk: boolean,
+  chunkIndex: number
+): Promise<PDFDocument> {
   const pdfDoc = await PDFDocument.create();
   const font = await pdfDoc.embedFont(StandardFonts.Helvetica);
   const boldFont = await pdfDoc.embedFont(StandardFonts.HelveticaBold);
   
-  const pageWidth = 612; // Letter size
+  const pageWidth = 612;
   const pageHeight = 792;
   const margin = 40;
-  const cardHeight = 185; // Increased height for new layout
+  const cardHeight = 185;
   const cardSpacing = 15;
   
   let page = pdfDoc.addPage([pageWidth, pageHeight]);
   let yPosition = pageHeight - margin;
   
-  // ===== Page Header =====
-  page.drawText(reportName || 'Time Entry Details Report', {
-    x: margin,
-    y: yPosition,
-    size: 18,
-    font: boldFont,
-    color: rgb(0.23, 0.32, 0.96),
-  });
-  yPosition -= 22;
-  
-  page.drawText(companyName, {
-    x: margin,
-    y: yPosition,
-    size: 12,
-    font: font,
-    color: rgb(0.4, 0.4, 0.4),
-  });
-  yPosition -= 18;
-  
-  page.drawText(`Period: ${dateRange.start} - ${dateRange.end}`, {
-    x: margin,
-    y: yPosition,
-    size: 10,
-    font: font,
-    color: rgb(0.4, 0.4, 0.4),
-  });
-  yPosition -= 30;
-  
   // Hour labels for timeline
   const hourLabels = ['6am', '8am', '10am', '12pm', '2pm', '4pm', '6pm', '8pm'];
   const hourValues = [6, 8, 10, 12, 14, 16, 18, 20];
   
-  // Determine if we can include images for this report (memory constraint)
-  const includeImages = entries.length <= MAX_ENTRIES_FOR_IMAGES;
-  if (!includeImages) {
-    console.info(`Skipping images: ${entries.length} entries exceeds limit of ${MAX_ENTRIES_FOR_IMAGES}`);
+  // Only add full header on first chunk
+  if (isFirstChunk) {
+    page.drawText(reportName || 'Time Entry Details Report', {
+      x: margin,
+      y: yPosition,
+      size: 18,
+      font: boldFont,
+      color: rgb(0.23, 0.32, 0.96),
+    });
+    yPosition -= 22;
+    
+    page.drawText(companyName, {
+      x: margin,
+      y: yPosition,
+      size: 12,
+      font: font,
+      color: rgb(0.4, 0.4, 0.4),
+    });
+    yPosition -= 18;
+    
+    page.drawText(`Period: ${dateRange.start} - ${dateRange.end}`, {
+      x: margin,
+      y: yPosition,
+      size: 10,
+      font: font,
+      color: rgb(0.4, 0.4, 0.4),
+    });
+    yPosition -= 30;
+  } else {
+    // Continuation header for subsequent chunks
+    page.drawText(`${reportName || 'Time Entry Details'} (continued)`, {
+      x: margin,
+      y: yPosition,
+      size: 12,
+      font: boldFont,
+      color: rgb(0.4, 0.4, 0.4),
+    });
+    yPosition -= 25;
   }
   
-  // ===== Draw Time Entry Cards =====
+  // Process each entry in this chunk
   for (const entry of entries) {
     // Check if we need a new page
     if (yPosition - cardHeight < margin + 30) {
@@ -505,10 +514,8 @@ async function generateTimeEntryDetailsPDF(
       yPosition = pageHeight - margin;
     }
     
-    // Fetch images for this entry only if within report-level budget
-    const images: EntryImages | null = includeImages 
-      ? await fetchEntryImages(pdfDoc, supabase, entry) 
-      : null;
+    // Always fetch images for chunk entries (chunk size is memory-safe)
+    const images = await fetchEntryImages(pdfDoc, supabase, entry);
     
     const cardTop = yPosition;
     const cardWidth = pageWidth - (margin * 2);
@@ -659,7 +666,7 @@ async function generateTimeEntryDetailsPDF(
       color: rgb(0.1, 0.1, 0.1),
     });
     
-    // Photo and Map thumbnails - positioned to leave room for 3 address lines below
+    // Photo and Map thumbnails
     const thumbnailY = clockInY + panelHeight - 70;
     const thumbnailSize = 40;
     
@@ -680,7 +687,6 @@ async function generateTimeEntryDetailsPDF(
         borderWidth: 0.5,
       });
     } else {
-      // Placeholder
       page.drawRectangle({
         x: clockInX + 8,
         y: thumbnailY,
@@ -716,7 +722,6 @@ async function generateTimeEntryDetailsPDF(
         borderWidth: 0.5,
       });
     } else {
-      // Placeholder
       page.drawRectangle({
         x: clockInX + 8 + thumbnailSize + 4,
         y: thumbnailY,
@@ -735,9 +740,8 @@ async function generateTimeEntryDetailsPDF(
       });
     }
     
-    // Multi-line address below thumbnails (up to 3 lines)
+    // Multi-line address below thumbnails
     const clockInAddrLines = wrapAddress(entry.clock_in_address || '');
-    // Fixed position from panel bottom to ensure text stays within bounds
     const addressBaseY = clockInY + 32;
     for (let i = 0; i < clockInAddrLines.length; i++) {
       page.drawText(clockInAddrLines[i], {
@@ -844,7 +848,6 @@ async function generateTimeEntryDetailsPDF(
     
     let legendX = timelineX;
     for (const item of legendItems) {
-      // Colored square
       page.drawRectangle({
         x: legendX,
         y: legendY - 3,
@@ -852,7 +855,6 @@ async function generateTimeEntryDetailsPDF(
         height: 8,
         color: item.color,
       });
-      // Label
       page.drawText(item.label, {
         x: legendX + 11,
         y: legendY - 2,
@@ -867,7 +869,6 @@ async function generateTimeEntryDetailsPDF(
     const clockOutX = timelineX + timelineWidth + 15;
     const clockOutTime = entry.end_time ? formatTime(entry.end_time, timezone) : 'Active';
     
-    // Red/coral background for Clock Out
     const clockOutBgColor = isComplete ? rgb(1, 0.95, 0.95) : rgb(0.98, 0.96, 0.94);
     page.drawRectangle({
       x: clockOutX,
@@ -897,10 +898,9 @@ async function generateTimeEntryDetailsPDF(
       color: rgb(0.1, 0.1, 0.1),
     });
     
-    // Photo and Map thumbnails for clock out - same position as clock in
+    // Photo and Map thumbnails for clock out
     const outThumbnailY = clockInY + panelHeight - 70;
     
-    // Photo thumbnail
     if (images?.clockOutPhoto) {
       page.drawImage(images.clockOutPhoto, {
         x: clockOutX + 8,
@@ -917,7 +917,6 @@ async function generateTimeEntryDetailsPDF(
         borderWidth: 0.5,
       });
     } else {
-      // Placeholder
       page.drawRectangle({
         x: clockOutX + 8,
         y: outThumbnailY,
@@ -936,7 +935,6 @@ async function generateTimeEntryDetailsPDF(
       });
     }
     
-    // Map thumbnail
     if (images?.clockOutMap) {
       page.drawImage(images.clockOutMap, {
         x: clockOutX + 8 + thumbnailSize + 4,
@@ -953,7 +951,6 @@ async function generateTimeEntryDetailsPDF(
         borderWidth: 0.5,
       });
     } else {
-      // Placeholder
       page.drawRectangle({
         x: clockOutX + 8 + thumbnailSize + 4,
         y: outThumbnailY,
@@ -972,9 +969,8 @@ async function generateTimeEntryDetailsPDF(
       });
     }
     
-    // Multi-line address for clock out below thumbnails (up to 3 lines)
+    // Multi-line address for clock out
     const clockOutAddrLines = wrapAddress(entry.clock_out_address || (isComplete ? '' : '-'));
-    // Fixed position from panel bottom to ensure text stays within bounds
     const outAddressBaseY = clockInY + 32;
     for (let i = 0; i < clockOutAddrLines.length; i++) {
       page.drawText(clockOutAddrLines[i], {
@@ -990,7 +986,7 @@ async function generateTimeEntryDetailsPDF(
     yPosition = cardTop - cardHeight - cardSpacing;
   }
   
-  // ===== Handle empty state =====
+  // Handle empty state
   if (entries.length === 0) {
     page.drawText('No time entries found for this period.', {
       x: margin,
@@ -1001,12 +997,92 @@ async function generateTimeEntryDetailsPDF(
     });
   }
   
-  // ===== Footer on all pages =====
-  const pages = pdfDoc.getPages();
+  return pdfDoc;
+}
+
+// Main function that orchestrates chunked PDF generation
+async function generateTimeEntryDetailsPDF(
+  entries: TimeEntry[], 
+  companyName: string, 
+  reportName: string,
+  dateRange: { start: string; end: string },
+  timezone: string,
+  supabase: any
+): Promise<Uint8Array> {
+  // Split entries into chunks for memory-efficient processing
+  const chunks: TimeEntry[][] = [];
+  for (let i = 0; i < entries.length; i += ENTRIES_PER_CHUNK) {
+    chunks.push(entries.slice(i, i + ENTRIES_PER_CHUNK));
+  }
+  
+  console.info(`Processing ${entries.length} entries in ${chunks.length} chunk(s)`);
+  
+  // If only one chunk, generate directly (no merge overhead)
+  if (chunks.length <= 1) {
+    const pdfDoc = await generateChunkPDF(
+      entries,
+      companyName,
+      reportName,
+      dateRange,
+      timezone,
+      supabase,
+      true,
+      0
+    );
+    
+    // Add footer to all pages
+    const font = await pdfDoc.embedFont(StandardFonts.Helvetica);
+    const pages = pdfDoc.getPages();
+    for (let i = 0; i < pages.length; i++) {
+      const p = pages[i];
+      p.drawText(`Generated by CICO on ${new Date().toLocaleString()} | Page ${i + 1} of ${pages.length}`, {
+        x: 40,
+        y: 20,
+        size: 8,
+        font: font,
+        color: rgb(0.6, 0.6, 0.6),
+      });
+    }
+    
+    return await pdfDoc.save();
+  }
+  
+  // Multiple chunks: generate each chunk PDF and merge pages into final document
+  const finalPdf = await PDFDocument.create();
+  
+  for (let i = 0; i < chunks.length; i++) {
+    console.info(`Processing chunk ${i + 1}/${chunks.length} (${chunks[i].length} entries)`);
+    
+    // Generate PDF for this chunk
+    const chunkPdf = await generateChunkPDF(
+      chunks[i],
+      companyName,
+      reportName,
+      dateRange,
+      timezone,
+      supabase,
+      i === 0, // isFirstChunk
+      i
+    );
+    
+    // Copy all pages from chunk PDF to final PDF
+    // This allows the chunkPdf to be garbage collected after we're done with it
+    const copiedPages = await finalPdf.copyPages(chunkPdf, chunkPdf.getPageIndices());
+    for (const page of copiedPages) {
+      finalPdf.addPage(page);
+    }
+    
+    console.info(`Chunk ${i + 1} complete, ${copiedPages.length} page(s) added`);
+    // chunkPdf goes out of scope here and can be garbage collected
+  }
+  
+  // Add footer to all pages of the final merged document
+  const font = await finalPdf.embedFont(StandardFonts.Helvetica);
+  const pages = finalPdf.getPages();
   for (let i = 0; i < pages.length; i++) {
     const p = pages[i];
     p.drawText(`Generated by CICO on ${new Date().toLocaleString()} | Page ${i + 1} of ${pages.length}`, {
-      x: margin,
+      x: 40,
       y: 20,
       size: 8,
       font: font,
@@ -1014,7 +1090,8 @@ async function generateTimeEntryDetailsPDF(
     });
   }
   
-  return await pdfDoc.save();
+  console.info(`Final PDF has ${pages.length} pages`);
+  return await finalPdf.save();
 }
 
 // ============= Other PDF Generation Functions =============
