@@ -1,197 +1,329 @@
 
-# Redesign PDF Time Entry Cards to Match Tracking Page UI
+
+# Add Photo and Map Thumbnails to PDF Time Entry Cards
 
 ## Overview
 
-The current PDF report cards look significantly different from the tracking page. The plan is to rewrite the `generateTimeEntryDetailsPDF` function in both edge functions to closely match the React `TimeEntryTimelineCard` component's visual design.
+The current PDF report shows text placeholders ("Photo" / "Map" boxes) instead of actual images. This plan will modify the edge functions to fetch and embed real photo thumbnails and Mapbox static map images in the PDF, matching the visual design shown on the tracking page.
 
-## Current vs Target Comparison
+## Current vs Target
 
-| Element | Current PDF | Target (Tracking Page) |
-|---------|-------------|------------------------|
-| Hour labels | None | 6am, 8am, 10am, 12pm, 2pm, 4pm, 6pm, 8pm across top |
-| Timeline bar | Simple filled rectangle with "Work Period" | Colored segments (blue=regular, orange=late, red=overtime, teal=break) |
-| Scheduled window | None | Dashed vertical lines at 8am and 5pm |
-| Timeline labels | Start/end times below | Hour markers above, segment labels inside bars |
-| Legend | None | Colored dots with labels: Regular, Late, Overtime, Break |
-| Clock In panel | Light blue box with "CLOCK IN" | Green background with "Clock In" header |
-| Clock Out panel | Light green/orange box | Red/coral background with "Clock Out" header |
-| Photo/Map indicators | Text "Photo" / "Map" in boxes | Bordered boxes with visual indicators (filled if present, dashed if missing) |
-| Addresses | Single truncated line | Multi-line display (up to 3-4 lines) |
+| Element | Current | Target |
+|---------|---------|--------|
+| Photo indicator | Text "Photo" in colored box | Actual employee photo thumbnail (40x40px) |
+| Map indicator | Text "Map" in colored box | Mapbox static map thumbnail (40x40px) |
+| Missing data | Dashed border box | Dashed border placeholder with icon substitute |
 
----
+## Technical Approach
+
+### Image Embedding with pdf-lib
+
+pdf-lib supports embedding images with:
+```typescript
+// Fetch image bytes
+const imageBytes = await fetch(imageUrl).then(res => res.arrayBuffer());
+
+// Embed based on format
+const image = await pdfDoc.embedJpg(new Uint8Array(imageBytes));
+// or
+const image = await pdfDoc.embedPng(new Uint8Array(imageBytes));
+
+// Draw on page
+page.drawImage(image, { x, y, width: 40, height: 40 });
+```
+
+### Photo URLs
+
+The `timeclock-photos` bucket is private, requiring signed URL generation:
+```typescript
+const { data } = await supabase.storage
+  .from('timeclock-photos')
+  .createSignedUrl(photoPath, 300);
+```
+
+### Map URLs
+
+Mapbox static API generates map thumbnails:
+```typescript
+const mapboxToken = Deno.env.get('MAPBOX_PUBLIC_TOKEN');
+const pinColor = isClockIn ? '22c55e' : 'ef4444';
+const mapUrl = `https://api.mapbox.com/styles/v1/mapbox/streets-v12/static/pin-s+${pinColor}(${longitude},${latitude})/${longitude},${latitude},15/48x48@2x?access_token=${mapboxToken}`;
+```
 
 ## Implementation Tasks
 
-### Task 1: Add Timeline Hour Markers and Tick Lines
+### Task 1: Add Helper Functions for Image Fetching
 
-Draw hour labels above the timeline (6am to 8pm in 2-hour increments) and vertical tick lines within the timeline bar.
-
-```text
-Timeline Layout:
-    6am     8am     10am    12pm    2pm     4pm     6pm     8pm
-     |       |        |       |       |       |       |       |
-    [==================== Working time =====================]
-```
-
-### Task 2: Add Scheduled Work Window Indicator
-
-Draw dashed vertical lines at 8am and 5pm positions to show the scheduled work window (matching the React component's `border-dashed border-primary/30` style).
-
-### Task 3: Implement Segment Coloring Logic
-
-Port the `calculateSegments` logic from `TimeEntryTimelineCard.tsx` to the PDF generator:
-- **Regular** (blue): Work within scheduled hours
-- **Late** (orange): Gap from scheduled start to actual clock-in if >10 min late
-- **Overtime** (red): Work after scheduled end time (5pm)
-- **Break** (teal): Break entries
-
-### Task 4: Add Timeline Legend
-
-Draw a legend row below the timeline with colored squares and labels:
-- Blue square + "Regular"
-- Orange square + "Late"
-- Red square + "Overtime"
-- Teal square + "Break"
-
-### Task 5: Redesign Clock In/Out Panels
-
-Update panel styling to match React component:
-- **Clock In**: Green background (`rgb(0.9, 0.98, 0.9)`), green text for header
-- **Clock Out**: Red/coral background (`rgb(1, 0.95, 0.95)`), red text for header
-- Larger time display
-- Better photo/map placeholder styling (filled vs dashed boxes)
-
-### Task 6: Improve Address Display
-
-Show addresses on multiple lines (wrap at ~20 characters) instead of truncating to a single line.
-
-### Task 7: Adjust Card Layout Proportions
-
-Increase card height to accommodate:
-- Hour labels above timeline
-- Legend below timeline
-- Multi-line addresses
-
----
-
-## Technical Details
-
-### Timeline Positioning Algorithm
+Add helper functions to the edge function:
 
 ```typescript
-// Match the React component's logic
-const timelineStartHour = 6;
-const timelineEndHour = 20;
-const totalHours = timelineEndHour - timelineStartHour; // 14 hours
-
-const getPositionPercent = (hour: number): number => {
-  return ((hour - timelineStartHour) / totalHours) * 100;
-};
-
-// Convert percent to actual X coordinate
-const getTimelineX = (percent: number, timelineX: number, timelineWidth: number): number => {
-  return timelineX + (percent / 100) * timelineWidth;
-};
-```
-
-### Segment Calculation (from React component)
-
-```typescript
-const calculateSegments = (entry, scheduledStartHour = 8, scheduledEndHour = 17) => {
-  const clockInTime = parseISO(entry.start_time);
-  const clockInHour = clockInTime.getHours() + clockInTime.getMinutes() / 60;
-  
-  const clockOutTime = entry.end_time ? parseISO(entry.end_time) : new Date();
-  const clockOutHour = clockOutTime.getHours() + clockOutTime.getMinutes() / 60;
-  
-  const segments = [];
-  
-  // Check if late (>10 min after scheduled start)
-  const scheduledStartMinutes = scheduledStartHour * 60;
-  const clockInMinutes = clockInTime.getHours() * 60 + clockInTime.getMinutes();
-  const isLate = clockInMinutes > scheduledStartMinutes + 10;
-  
-  if (isLate && !entry.is_break) {
-    segments.push({ type: 'late', startHour: scheduledStartHour, endHour: clockInHour });
+// Generate signed URL for private storage bucket
+async function getSignedUrl(supabase: any, bucket: string, path: string): Promise<string | null> {
+  // Normalize path (remove bucket prefix if present)
+  let cleanPath = path;
+  if (path.startsWith(`${bucket}/`)) {
+    cleanPath = path.replace(`${bucket}/`, '');
   }
   
-  // Determine main segment type based on overtime
-  const scheduledEndMinutes = scheduledEndHour * 60;
-  const clockOutMinutes = clockOutTime.getHours() * 60 + clockOutTime.getMinutes();
+  const { data, error } = await supabase.storage.from(bucket).createSignedUrl(cleanPath, 300);
+  if (error) {
+    console.error(`Failed to sign ${bucket}/${cleanPath}:`, error.message);
+    return null;
+  }
+  return data.signedUrl;
+}
+
+// Resolve photo URL (handles full URLs vs storage paths)
+async function resolvePhotoUrl(supabase: any, photoUrl: string | null): Promise<string | null> {
+  if (!photoUrl) return null;
   
-  if (entry.is_break) {
-    segments.push({ type: 'break', startHour: clockInHour, endHour: clockOutHour });
-  } else if (clockInMinutes >= scheduledEndMinutes) {
-    // All overtime
-    segments.push({ type: 'overtime', startHour: clockInHour, endHour: clockOutHour });
-  } else if (clockOutMinutes > scheduledEndMinutes) {
-    // Regular + overtime split
-    segments.push({ type: 'regular', startHour: clockInHour, endHour: scheduledEndHour });
-    segments.push({ type: 'overtime', startHour: scheduledEndHour, endHour: clockOutHour });
-  } else {
-    // Regular only
-    segments.push({ type: 'regular', startHour: clockInHour, endHour: clockOutHour });
+  // If already a full URL, return as-is
+  if (photoUrl.startsWith('http')) {
+    return photoUrl;
   }
   
-  return segments;
-};
+  return getSignedUrl(supabase, 'timeclock-photos', photoUrl);
+}
+
+// Generate Mapbox static map URL
+function getMapUrl(latitude: number | null, longitude: number | null, isClockIn: boolean): string | null {
+  if (!latitude || !longitude) return null;
+  
+  const mapboxToken = Deno.env.get('MAPBOX_PUBLIC_TOKEN');
+  if (!mapboxToken) return null;
+  
+  const pinColor = isClockIn ? '22c55e' : 'ef4444';
+  return `https://api.mapbox.com/styles/v1/mapbox/streets-v12/static/pin-s+${pinColor}(${longitude},${latitude})/${longitude},${latitude},15/48x48@2x?access_token=${mapboxToken}`;
+}
+
+// Fetch image and embed in PDF
+async function fetchAndEmbedImage(pdfDoc: PDFDocument, imageUrl: string): Promise<PDFImage | null> {
+  try {
+    const response = await fetch(imageUrl);
+    if (!response.ok) return null;
+    
+    const contentType = response.headers.get('content-type') || '';
+    const bytes = new Uint8Array(await response.arrayBuffer());
+    
+    if (bytes.length < 100) return null; // Skip if too small (likely error)
+    
+    if (contentType.includes('png')) {
+      return await pdfDoc.embedPng(bytes);
+    } else {
+      return await pdfDoc.embedJpg(bytes);
+    }
+  } catch (error) {
+    console.error('Failed to embed image:', error);
+    return null;
+  }
+}
 ```
 
-### Color Constants
+### Task 2: Pre-fetch All Images Before PDF Generation
+
+Before generating the PDF, fetch all required images:
 
 ```typescript
-const SEGMENT_COLORS = {
-  regular: rgb(0.23, 0.51, 0.96),   // blue-500
-  late: rgb(0.98, 0.57, 0.21),      // orange-500
-  overtime: rgb(0.94, 0.27, 0.27),  // red-500
-  break: rgb(0.25, 0.71, 0.71),     // teal-500
-};
+// Pre-fetch all images for entries
+interface EntryImages {
+  clockInPhoto: PDFImage | null;
+  clockOutPhoto: PDFImage | null;
+  clockInMap: PDFImage | null;
+  clockOutMap: PDFImage | null;
+}
+
+async function prefetchEntryImages(
+  pdfDoc: PDFDocument,
+  supabase: any,
+  entries: TimeEntry[]
+): Promise<Map<string, EntryImages>> {
+  const imageMap = new Map<string, EntryImages>();
+  
+  for (const entry of entries) {
+    const images: EntryImages = {
+      clockInPhoto: null,
+      clockOutPhoto: null,
+      clockInMap: null,
+      clockOutMap: null,
+    };
+    
+    // Fetch clock in photo
+    if (entry.clock_in_photo_url) {
+      const url = await resolvePhotoUrl(supabase, entry.clock_in_photo_url);
+      if (url) {
+        images.clockInPhoto = await fetchAndEmbedImage(pdfDoc, url);
+      }
+    }
+    
+    // Fetch clock out photo
+    if (entry.clock_out_photo_url) {
+      const url = await resolvePhotoUrl(supabase, entry.clock_out_photo_url);
+      if (url) {
+        images.clockOutPhoto = await fetchAndEmbedImage(pdfDoc, url);
+      }
+    }
+    
+    // Fetch clock in map
+    const clockInMapUrl = getMapUrl(entry.clock_in_latitude, entry.clock_in_longitude, true);
+    if (clockInMapUrl) {
+      images.clockInMap = await fetchAndEmbedImage(pdfDoc, clockInMapUrl);
+    }
+    
+    // Fetch clock out map
+    const clockOutMapUrl = getMapUrl(entry.clock_out_latitude, entry.clock_out_longitude, false);
+    if (clockOutMapUrl) {
+      images.clockOutMap = await fetchAndEmbedImage(pdfDoc, clockOutMapUrl);
+    }
+    
+    imageMap.set(entry.id, images);
+  }
+  
+  return imageMap;
+}
 ```
 
----
+### Task 3: Update generateTimeEntryDetailsPDF Function Signature
+
+Pass the Supabase client to the PDF generator:
+
+```typescript
+async function generateTimeEntryDetailsPDF(
+  entries: TimeEntry[], 
+  companyName: string, 
+  reportName: string,
+  dateRange: { start: string; end: string },
+  timezone: string,
+  supabase: any  // Add supabase client parameter
+): Promise<Uint8Array>
+```
+
+### Task 4: Replace Text Placeholders with Actual Images
+
+Modify the Clock In/Out panel rendering to draw images:
+
+```typescript
+// Inside the entry loop, after creating the PDF document:
+const entryImages = await prefetchEntryImages(pdfDoc, supabase, entries);
+
+// For each entry card:
+const images = entryImages.get(entry.id);
+
+// Photo thumbnail (40x40)
+const photoBoxX = clockInX + 8;
+const photoBoxY = indicatorY - 42;
+const photoBoxSize = 40;
+
+if (images?.clockInPhoto) {
+  // Draw actual photo
+  page.drawImage(images.clockInPhoto, {
+    x: photoBoxX,
+    y: photoBoxY,
+    width: photoBoxSize,
+    height: photoBoxSize,
+  });
+  // Add border
+  page.drawRectangle({
+    x: photoBoxX,
+    y: photoBoxY,
+    width: photoBoxSize,
+    height: photoBoxSize,
+    borderColor: rgb(0.7, 0.7, 0.7),
+    borderWidth: 0.5,
+  });
+} else {
+  // Draw placeholder box with dashed border
+  page.drawRectangle({
+    x: photoBoxX,
+    y: photoBoxY,
+    width: photoBoxSize,
+    height: photoBoxSize,
+    color: rgb(0.96, 0.96, 0.96),
+    borderColor: rgb(0.8, 0.8, 0.8),
+    borderWidth: 0.5,
+  });
+  page.drawText('Photo', {
+    x: photoBoxX + 8,
+    y: photoBoxY + 16,
+    size: 8,
+    font: font,
+    color: rgb(0.6, 0.6, 0.6),
+  });
+}
+
+// Map thumbnail (40x40)
+const mapBoxX = photoBoxX + photoBoxSize + 4;
+
+if (images?.clockInMap) {
+  page.drawImage(images.clockInMap, {
+    x: mapBoxX,
+    y: photoBoxY,
+    width: photoBoxSize,
+    height: photoBoxSize,
+  });
+  page.drawRectangle({
+    x: mapBoxX,
+    y: photoBoxY,
+    width: photoBoxSize,
+    height: photoBoxSize,
+    borderColor: rgb(0.7, 0.7, 0.7),
+    borderWidth: 0.5,
+  });
+} else {
+  page.drawRectangle({
+    x: mapBoxX,
+    y: photoBoxY,
+    width: photoBoxSize,
+    height: photoBoxSize,
+    color: rgb(0.96, 0.96, 0.96),
+    borderColor: rgb(0.8, 0.8, 0.8),
+    borderWidth: 0.5,
+  });
+  page.drawText('Map', {
+    x: mapBoxX + 12,
+    y: photoBoxY + 16,
+    size: 8,
+    font: font,
+    color: rgb(0.6, 0.6, 0.6),
+  });
+}
+
+// Same pattern for Clock Out panel...
+```
+
+### Task 5: Adjust Panel Layout for Images
+
+Update panel dimensions to accommodate photo/map thumbnails side by side:
+- Photo: 40x40px at left
+- Map: 40x40px at right
+- Total width needed: ~88px (40 + 4 gap + 40 + padding)
+
+Current panel width is 110px, which is sufficient.
+
+### Task 6: Update process-scheduled-reports Function
+
+Apply the same changes to `supabase/functions/process-scheduled-reports/index.ts` to ensure automated reports also include images.
 
 ## Files to Modify
 
 | File | Changes |
 |------|---------|
-| `supabase/functions/send-test-report/index.ts` | Rewrite `generateTimeEntryDetailsPDF` function |
+| `supabase/functions/send-test-report/index.ts` | Add image helpers, update PDF generation |
 | `supabase/functions/process-scheduled-reports/index.ts` | Same changes for automated reports |
 
----
+## Performance Considerations
 
-## Visual Result
+1. **Parallel fetching**: Use `Promise.all` where possible to fetch multiple images concurrently
+2. **Timeout handling**: Add timeouts for image fetches to prevent hanging
+3. **Graceful degradation**: If an image fails to load, show placeholder instead of failing the entire report
+4. **Image size**: Mapbox static API returns 96x96 (@2x), which will be scaled down to 40x40 for crisp display
 
-After implementation, each card will look like:
+## Testing
 
-```text
-┌──────────────────────────────────────────────────────────────────────────────┐
-│ Thursday, Jan 29 • Felipe Salazar • Project Alpha  [Work] [Complete]        │
-│                                                         Duration: 8h 31m    │
-├──────────────────────────────────────────────────────────────────────────────┤
-│                                                                              │
-│  ┌─────────────┐       6am   8am   10am  12pm  2pm   4pm   6pm   8pm        │
-│  │  Clock In   │        |     ┊      |     |     |     ┊     |     |        │
-│  │   5:00 AM   │       [============ Working time ================]         │
-│  │  [📷] [🗺]  │                                                             │
-│  │ 401 East    │        ■ Regular  ■ Late  ■ Overtime  ■ Break              │
-│  │ Sunset Road │                                                ┌───────────┐
-│  │ Henderson   │                                                │ Clock Out │
-│  │ NV 89011    │                                                │  1:32 PM  │
-│  └─────────────┘                                                │ [📷] [🗺] │
-│                                                                 │ 401 East  │
-│                                                                 │ Sunset Rd │
-│                                                                 │ Henderson │
-│                                                                 └───────────┘
-└──────────────────────────────────────────────────────────────────────────────┘
-```
+After implementation:
+1. Click "Test" on the Daily Time Report from the Reports page
+2. Open the received email and verify:
+   - Employee photos appear in Clock In/Out panels
+   - Mapbox map thumbnails show location with colored pins
+   - Entries without photos/locations show placeholder boxes
+   - Addresses still display below the thumbnails
 
----
-
-## Card Height Adjustment
-
-Current card height: ~150px
-New card height: ~180-200px to accommodate:
-- +15px for hour labels above timeline
-- +15px for legend below timeline
-- +10px for additional address lines
