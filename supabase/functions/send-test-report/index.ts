@@ -191,7 +191,111 @@ function generateWeeklyPayrollCSV(entries: TimeEntry[]): string {
   return csv;
 }
 
-// ============= Time Entry Details PDF Generation (Card-based layout) =============
+// ============= Time Entry Details PDF Generation (Card-based layout matching TimeEntryTimelineCard) =============
+
+// Segment colors matching the React TimeEntryTimelineCard component
+const SEGMENT_COLORS = {
+  regular: rgb(0.23, 0.51, 0.96),   // blue-500
+  late: rgb(0.98, 0.57, 0.21),      // orange-500
+  overtime: rgb(0.94, 0.27, 0.27),  // red-500
+  break: rgb(0.25, 0.71, 0.71),     // teal-500
+};
+
+// Timeline configuration matching React component
+const TIMELINE_START_HOUR = 6;
+const TIMELINE_END_HOUR = 20;
+const TOTAL_HOURS = TIMELINE_END_HOUR - TIMELINE_START_HOUR; // 14 hours
+const SCHEDULED_START_HOUR = 8;
+const SCHEDULED_END_HOUR = 17;
+
+interface TimeSegment {
+  type: 'regular' | 'late' | 'overtime' | 'break';
+  startHour: number;
+  endHour: number;
+}
+
+function getHourFromDate(dateStr: string, timezone: string): number {
+  const date = new Date(dateStr);
+  // Get hours and minutes in the specified timezone
+  const timeStr = date.toLocaleTimeString('en-US', { 
+    hour: '2-digit', 
+    minute: '2-digit',
+    hour12: false,
+    timeZone: timezone
+  });
+  const [hours, minutes] = timeStr.split(':').map(Number);
+  return hours + (minutes / 60);
+}
+
+function calculateSegments(
+  entry: TimeEntry, 
+  timezone: string,
+  scheduledStartHour = SCHEDULED_START_HOUR, 
+  scheduledEndHour = SCHEDULED_END_HOUR
+): TimeSegment[] {
+  const clockInHour = getHourFromDate(entry.start_time, timezone);
+  const clockOutHour = entry.end_time 
+    ? getHourFromDate(entry.end_time, timezone) 
+    : getHourFromDate(new Date().toISOString(), timezone);
+  
+  const segments: TimeSegment[] = [];
+  
+  // Check if late (>10 min after scheduled start)
+  const scheduledStartMinutes = scheduledStartHour * 60;
+  const clockInMinutes = clockInHour * 60;
+  const isLate = clockInMinutes > scheduledStartMinutes + 10;
+  
+  if (isLate && !entry.is_break) {
+    segments.push({ type: 'late', startHour: scheduledStartHour, endHour: clockInHour });
+  }
+  
+  // Determine main segment type based on overtime
+  const scheduledEndMinutes = scheduledEndHour * 60;
+  const clockOutMinutes = clockOutHour * 60;
+  
+  if (entry.is_break) {
+    segments.push({ type: 'break', startHour: clockInHour, endHour: clockOutHour });
+  } else if (clockInMinutes >= scheduledEndMinutes) {
+    // All overtime
+    segments.push({ type: 'overtime', startHour: clockInHour, endHour: clockOutHour });
+  } else if (clockOutMinutes > scheduledEndMinutes) {
+    // Regular + overtime split
+    segments.push({ type: 'regular', startHour: clockInHour, endHour: scheduledEndHour });
+    segments.push({ type: 'overtime', startHour: scheduledEndHour, endHour: clockOutHour });
+  } else {
+    // Regular only
+    segments.push({ type: 'regular', startHour: clockInHour, endHour: clockOutHour });
+  }
+  
+  return segments;
+}
+
+function getPositionPercent(hour: number): number {
+  return ((hour - TIMELINE_START_HOUR) / TOTAL_HOURS) * 100;
+}
+
+function getTimelineX(percent: number, timelineX: number, timelineWidth: number): number {
+  return timelineX + (percent / 100) * timelineWidth;
+}
+
+function wrapAddress(address: string, maxCharsPerLine: number = 20): string[] {
+  if (!address) return ['No address'];
+  const words = address.split(/[\s,]+/);
+  const lines: string[] = [];
+  let currentLine = '';
+  
+  for (const word of words) {
+    if (currentLine.length + word.length + 1 > maxCharsPerLine) {
+      if (currentLine) lines.push(currentLine.trim());
+      currentLine = word;
+    } else {
+      currentLine += (currentLine ? ' ' : '') + word;
+    }
+  }
+  if (currentLine) lines.push(currentLine.trim());
+  
+  return lines.slice(0, 4); // Max 4 lines
+}
 
 async function generateTimeEntryDetailsPDF(
   entries: TimeEntry[], 
@@ -207,8 +311,8 @@ async function generateTimeEntryDetailsPDF(
   const pageWidth = 612; // Letter size
   const pageHeight = 792;
   const margin = 40;
-  const cardHeight = 140; // Height for each time entry card
-  const cardSpacing = 12;
+  const cardHeight = 185; // Increased height for new layout
+  const cardSpacing = 15;
   
   let page = pdfDoc.addPage([pageWidth, pageHeight]);
   let yPosition = pageHeight - margin;
@@ -241,6 +345,10 @@ async function generateTimeEntryDetailsPDF(
   });
   yPosition -= 30;
   
+  // Hour labels for timeline
+  const hourLabels = ['6am', '8am', '10am', '12pm', '2pm', '4pm', '6pm', '8pm'];
+  const hourValues = [6, 8, 10, 12, 14, 16, 18, 20];
+  
   // ===== Draw Time Entry Cards =====
   for (const entry of entries) {
     // Check if we need a new page
@@ -266,9 +374,9 @@ async function generateTimeEntryDetailsPDF(
     // --- Card Header Background ---
     page.drawRectangle({
       x: margin,
-      y: cardTop - 28,
+      y: cardTop - 32,
       width: cardWidth,
-      height: 28,
+      height: 32,
       color: rgb(0.97, 0.97, 0.98),
     });
     
@@ -281,17 +389,17 @@ async function generateTimeEntryDetailsPDF(
     const duration = formatDuration(entry.duration_minutes);
     
     // Date and Employee Name
-    page.drawText(`${dateStr}  •  ${employeeName}  •  ${projectName}`, {
-      x: margin + 10,
-      y: cardTop - 18,
+    page.drawText(`${dateStr}  |  ${employeeName}  |  ${projectName}`, {
+      x: margin + 12,
+      y: cardTop - 20,
       size: 10,
       font: boldFont,
       color: rgb(0.2, 0.2, 0.2),
     });
     
     // Status badges (right side of header)
-    const badgeY = cardTop - 20;
-    let badgeX = margin + cardWidth - 10;
+    const badgeY = cardTop - 22;
+    let badgeX = margin + cardWidth - 12;
     
     // Duration badge
     const durationText = `Duration: ${duration}`;
@@ -301,7 +409,7 @@ async function generateTimeEntryDetailsPDF(
       x: badgeX,
       y: badgeY - 5,
       width: durationWidth,
-      height: 14,
+      height: 16,
       color: rgb(0.9, 0.95, 1),
       borderColor: rgb(0.7, 0.85, 1),
       borderWidth: 0.5,
@@ -323,7 +431,7 @@ async function generateTimeEntryDetailsPDF(
       x: badgeX,
       y: badgeY - 5,
       width: statusWidth,
-      height: 14,
+      height: 16,
       color: isComplete ? rgb(0.9, 1, 0.9) : rgb(1, 0.95, 0.9),
       borderColor: isComplete ? rgb(0.6, 0.9, 0.6) : rgb(1, 0.8, 0.6),
       borderWidth: 0.5,
@@ -345,7 +453,7 @@ async function generateTimeEntryDetailsPDF(
       x: badgeX,
       y: badgeY - 5,
       width: typeWidth,
-      height: 14,
+      height: 16,
       color: isBreak ? rgb(1, 0.95, 0.85) : rgb(0.85, 0.9, 1),
       borderColor: isBreak ? rgb(0.9, 0.7, 0.4) : rgb(0.6, 0.7, 1),
       borderWidth: 0.5,
@@ -359,225 +467,302 @@ async function generateTimeEntryDetailsPDF(
     });
     
     // --- Main Content Area ---
-    const contentTop = cardTop - 38;
-    const panelWidth = 130;
-    const panelHeight = 85;
-    const timelineWidth = cardWidth - (panelWidth * 2) - 40;
+    const contentTop = cardTop - 42;
+    const panelWidth = 110;
+    const panelHeight = 120;
+    const timelineSectionWidth = cardWidth - (panelWidth * 2) - 40;
     
-    // === Clock In Panel ===
+    // === Clock In Panel (Green theme) ===
     const clockInX = margin + 10;
     const clockInY = contentTop - panelHeight;
     
-    // Panel background
+    // Green background for Clock In
     page.drawRectangle({
       x: clockInX,
       y: clockInY,
       width: panelWidth,
       height: panelHeight,
-      color: rgb(0.94, 0.97, 1),
-      borderColor: rgb(0.8, 0.9, 1),
+      color: rgb(0.9, 0.98, 0.9),
+      borderColor: rgb(0.7, 0.9, 0.7),
       borderWidth: 0.5,
     });
     
-    // "CLOCK IN" label
-    page.drawText('CLOCK IN', {
+    // "Clock In" header
+    page.drawText('Clock In', {
       x: clockInX + 8,
-      y: clockInY + panelHeight - 14,
-      size: 8,
+      y: clockInY + panelHeight - 16,
+      size: 10,
       font: boldFont,
-      color: rgb(0.3, 0.5, 0.8),
+      color: rgb(0.13, 0.55, 0.13),
     });
     
-    // Clock in time
+    // Clock in time (larger)
     const clockInTime = formatTime(entry.start_time, timezone);
     page.drawText(clockInTime, {
       x: clockInX + 8,
-      y: clockInY + panelHeight - 30,
-      size: 14,
+      y: clockInY + panelHeight - 36,
+      size: 16,
       font: boldFont,
       color: rgb(0.1, 0.1, 0.1),
     });
     
-    // Photo placeholder
+    // Photo and Map indicators
+    const indicatorY = clockInY + panelHeight - 62;
+    
+    // Photo box
+    const hasClockInPhoto = !!entry.clock_in_photo_url;
     page.drawRectangle({
       x: clockInX + 8,
-      y: clockInY + 28,
-      width: 35,
-      height: 25,
-      color: rgb(0.9, 0.9, 0.9),
-      borderColor: rgb(0.7, 0.7, 0.7),
-      borderWidth: 0.5,
+      y: indicatorY - 20,
+      width: 40,
+      height: 20,
+      color: hasClockInPhoto ? rgb(0.85, 0.92, 0.85) : rgb(0.95, 0.95, 0.95),
+      borderColor: hasClockInPhoto ? rgb(0.5, 0.7, 0.5) : rgb(0.8, 0.8, 0.8),
+      borderWidth: hasClockInPhoto ? 1 : 0.5,
     });
-    page.drawText(entry.clock_in_photo_url ? 'Photo' : '-', {
-      x: clockInX + 18,
-      y: clockInY + 36,
-      size: 10,
-      font: font,
-      color: rgb(0.5, 0.5, 0.5),
+    page.drawText('Photo', {
+      x: clockInX + 17,
+      y: indicatorY - 15,
+      size: 8,
+      font: hasClockInPhoto ? boldFont : font,
+      color: hasClockInPhoto ? rgb(0.3, 0.5, 0.3) : rgb(0.6, 0.6, 0.6),
     });
     
-    // Map placeholder
+    // Map box
+    const hasClockInLocation = !!(entry.clock_in_latitude && entry.clock_in_longitude);
     page.drawRectangle({
-      x: clockInX + 48,
-      y: clockInY + 28,
-      width: 35,
-      height: 25,
-      color: rgb(0.92, 0.96, 0.92),
-      borderColor: rgb(0.7, 0.85, 0.7),
-      borderWidth: 0.5,
+      x: clockInX + 54,
+      y: indicatorY - 20,
+      width: 40,
+      height: 20,
+      color: hasClockInLocation ? rgb(0.85, 0.92, 0.85) : rgb(0.95, 0.95, 0.95),
+      borderColor: hasClockInLocation ? rgb(0.5, 0.7, 0.5) : rgb(0.8, 0.8, 0.8),
+      borderWidth: hasClockInLocation ? 1 : 0.5,
     });
-    page.drawText(entry.clock_in_latitude ? 'Map' : '-', {
-      x: clockInX + 58,
-      y: clockInY + 36,
-      size: 10,
-      font: font,
-      color: rgb(0.4, 0.6, 0.4),
-    });
-    
-    // Address (truncated)
-    const clockInAddr = entry.clock_in_address || 'No address';
-    const truncatedInAddr = clockInAddr.length > 22 ? clockInAddr.substring(0, 20) + '...' : clockInAddr;
-    page.drawText(truncatedInAddr, {
-      x: clockInX + 8,
-      y: clockInY + 12,
-      size: 7,
-      font: font,
-      color: rgb(0.4, 0.4, 0.4),
+    page.drawText('Map', {
+      x: clockInX + 65,
+      y: indicatorY - 15,
+      size: 8,
+      font: hasClockInLocation ? boldFont : font,
+      color: hasClockInLocation ? rgb(0.3, 0.5, 0.3) : rgb(0.6, 0.6, 0.6),
     });
     
-    // === Timeline Bar (Center) ===
+    // Multi-line address
+    const clockInAddrLines = wrapAddress(entry.clock_in_address || '');
+    let addrY = indicatorY - 34;
+    for (const line of clockInAddrLines) {
+      page.drawText(line, {
+        x: clockInX + 8,
+        y: addrY,
+        size: 7,
+        font: font,
+        color: rgb(0.4, 0.4, 0.4),
+      });
+      addrY -= 10;
+    }
+    
+    // === Timeline Section (Center) ===
     const timelineX = clockInX + panelWidth + 15;
-    const timelineY = clockInY + (panelHeight / 2) - 5;
-    const timelineHeight = 20;
+    const timelineWidth = timelineSectionWidth;
+    const timelineBarY = clockInY + panelHeight - 60;
+    const timelineBarHeight = 24;
     
-    // Timeline background
+    // Hour labels above timeline
+    for (let i = 0; i < hourLabels.length; i++) {
+      const percent = getPositionPercent(hourValues[i]);
+      const x = getTimelineX(percent, timelineX, timelineWidth);
+      page.drawText(hourLabels[i], {
+        x: x - 8,
+        y: timelineBarY + timelineBarHeight + 8,
+        size: 7,
+        font: font,
+        color: rgb(0.5, 0.5, 0.5),
+      });
+    }
+    
+    // Timeline background bar
     page.drawRectangle({
       x: timelineX,
-      y: timelineY,
+      y: timelineBarY,
       width: timelineWidth,
-      height: timelineHeight,
-      color: rgb(0.95, 0.95, 0.95),
+      height: timelineBarHeight,
+      color: rgb(0.94, 0.94, 0.94),
       borderColor: rgb(0.85, 0.85, 0.85),
       borderWidth: 0.5,
     });
     
-    // Timeline fill (work period indicator)
-    const fillColor = isBreak ? rgb(1, 0.85, 0.6) : rgb(0.6, 0.8, 1);
-    page.drawRectangle({
-      x: timelineX + 2,
-      y: timelineY + 2,
-      width: timelineWidth - 4,
-      height: timelineHeight - 4,
-      color: fillColor,
-    });
+    // Tick marks for each hour
+    for (let i = 0; i < hourValues.length; i++) {
+      const percent = getPositionPercent(hourValues[i]);
+      const x = getTimelineX(percent, timelineX, timelineWidth);
+      page.drawLine({
+        start: { x, y: timelineBarY },
+        end: { x, y: timelineBarY + timelineBarHeight },
+        thickness: 0.5,
+        color: rgb(0.8, 0.8, 0.8),
+      });
+    }
     
-    // Timeline label
-    const timelineLabel = isBreak ? 'Break Period' : 'Work Period';
-    page.drawText(timelineLabel, {
-      x: timelineX + (timelineWidth / 2) - 20,
-      y: timelineY + 6,
-      size: 8,
-      font: font,
-      color: rgb(0.3, 0.3, 0.3),
-    });
+    // Scheduled window indicators (8am and 5pm dashed lines)
+    const scheduledStartX = getTimelineX(getPositionPercent(SCHEDULED_START_HOUR), timelineX, timelineWidth);
+    const scheduledEndX = getTimelineX(getPositionPercent(SCHEDULED_END_HOUR), timelineX, timelineWidth);
     
-    // Time markers
-    page.drawText(clockInTime, {
-      x: timelineX,
-      y: timelineY - 12,
-      size: 7,
-      font: font,
-      color: rgb(0.5, 0.5, 0.5),
-    });
+    // Draw dashed vertical lines for scheduled window
+    for (let y = timelineBarY; y < timelineBarY + timelineBarHeight; y += 4) {
+      page.drawLine({
+        start: { x: scheduledStartX, y },
+        end: { x: scheduledStartX, y: y + 2 },
+        thickness: 1.5,
+        color: rgb(0.3, 0.5, 0.9),
+        opacity: 0.5,
+      });
+      page.drawLine({
+        start: { x: scheduledEndX, y },
+        end: { x: scheduledEndX, y: y + 2 },
+        thickness: 1.5,
+        color: rgb(0.3, 0.5, 0.9),
+        opacity: 0.5,
+      });
+    }
     
-    const clockOutTime = entry.end_time ? formatTime(entry.end_time, timezone) : 'Active';
-    page.drawText(clockOutTime, {
-      x: timelineX + timelineWidth - 30,
-      y: timelineY - 12,
-      size: 7,
-      font: font,
-      color: rgb(0.5, 0.5, 0.5),
-    });
+    // Calculate and draw segments
+    const segments = calculateSegments(entry, timezone);
+    for (const segment of segments) {
+      const startPercent = getPositionPercent(Math.max(segment.startHour, TIMELINE_START_HOUR));
+      const endPercent = getPositionPercent(Math.min(segment.endHour, TIMELINE_END_HOUR));
+      const segmentStartX = getTimelineX(startPercent, timelineX, timelineWidth);
+      const segmentEndX = getTimelineX(endPercent, timelineX, timelineWidth);
+      const segmentWidth = Math.max(segmentEndX - segmentStartX, 0);
+      
+      if (segmentWidth > 0) {
+        page.drawRectangle({
+          x: segmentStartX,
+          y: timelineBarY + 3,
+          width: segmentWidth,
+          height: timelineBarHeight - 6,
+          color: SEGMENT_COLORS[segment.type],
+        });
+      }
+    }
     
-    // === Clock Out Panel ===
+    // Legend below timeline
+    const legendY = timelineBarY - 20;
+    const legendItems = [
+      { label: 'Regular', color: SEGMENT_COLORS.regular },
+      { label: 'Late', color: SEGMENT_COLORS.late },
+      { label: 'Overtime', color: SEGMENT_COLORS.overtime },
+      { label: 'Break', color: SEGMENT_COLORS.break },
+    ];
+    
+    let legendX = timelineX;
+    for (const item of legendItems) {
+      // Colored square
+      page.drawRectangle({
+        x: legendX,
+        y: legendY - 3,
+        width: 8,
+        height: 8,
+        color: item.color,
+      });
+      // Label
+      page.drawText(item.label, {
+        x: legendX + 11,
+        y: legendY - 2,
+        size: 7,
+        font: font,
+        color: rgb(0.4, 0.4, 0.4),
+      });
+      legendX += font.widthOfTextAtSize(item.label, 7) + 22;
+    }
+    
+    // === Clock Out Panel (Red/Coral theme) ===
     const clockOutX = timelineX + timelineWidth + 15;
+    const clockOutTime = entry.end_time ? formatTime(entry.end_time, timezone) : 'Active';
     
-    // Panel background
-    const clockOutBg = isComplete ? rgb(0.94, 0.98, 0.94) : rgb(0.98, 0.96, 0.94);
+    // Red/coral background for Clock Out
+    const clockOutBgColor = isComplete ? rgb(1, 0.95, 0.95) : rgb(0.98, 0.96, 0.94);
     page.drawRectangle({
       x: clockOutX,
       y: clockInY,
       width: panelWidth,
       height: panelHeight,
-      color: clockOutBg,
-      borderColor: isComplete ? rgb(0.8, 0.9, 0.8) : rgb(0.9, 0.85, 0.8),
+      color: clockOutBgColor,
+      borderColor: isComplete ? rgb(0.9, 0.7, 0.7) : rgb(0.9, 0.85, 0.8),
       borderWidth: 0.5,
     });
     
-    // "CLOCK OUT" label
-    page.drawText('CLOCK OUT', {
+    // "Clock Out" header
+    page.drawText('Clock Out', {
       x: clockOutX + 8,
-      y: clockInY + panelHeight - 14,
-      size: 8,
+      y: clockInY + panelHeight - 16,
+      size: 10,
       font: boldFont,
-      color: isComplete ? rgb(0.3, 0.6, 0.3) : rgb(0.6, 0.5, 0.4),
+      color: isComplete ? rgb(0.8, 0.2, 0.2) : rgb(0.6, 0.5, 0.4),
     });
     
-    // Clock out time
+    // Clock out time (larger)
     page.drawText(clockOutTime, {
       x: clockOutX + 8,
-      y: clockInY + panelHeight - 30,
-      size: 14,
+      y: clockInY + panelHeight - 36,
+      size: 16,
       font: boldFont,
       color: rgb(0.1, 0.1, 0.1),
     });
     
-    // Photo placeholder
+    // Photo and Map indicators for clock out
+    const outIndicatorY = clockInY + panelHeight - 62;
+    
+    // Photo box
+    const hasClockOutPhoto = !!entry.clock_out_photo_url;
     page.drawRectangle({
       x: clockOutX + 8,
-      y: clockInY + 28,
-      width: 35,
-      height: 25,
-      color: rgb(0.9, 0.9, 0.9),
-      borderColor: rgb(0.7, 0.7, 0.7),
-      borderWidth: 0.5,
+      y: outIndicatorY - 20,
+      width: 40,
+      height: 20,
+      color: hasClockOutPhoto ? rgb(0.92, 0.85, 0.85) : rgb(0.95, 0.95, 0.95),
+      borderColor: hasClockOutPhoto ? rgb(0.7, 0.5, 0.5) : rgb(0.8, 0.8, 0.8),
+      borderWidth: hasClockOutPhoto ? 1 : 0.5,
     });
-    page.drawText(entry.clock_out_photo_url ? 'Photo' : '-', {
-      x: clockOutX + 18,
-      y: clockInY + 36,
-      size: 10,
-      font: font,
-      color: rgb(0.5, 0.5, 0.5),
+    page.drawText('Photo', {
+      x: clockOutX + 17,
+      y: outIndicatorY - 15,
+      size: 8,
+      font: hasClockOutPhoto ? boldFont : font,
+      color: hasClockOutPhoto ? rgb(0.5, 0.3, 0.3) : rgb(0.6, 0.6, 0.6),
     });
     
-    // Map placeholder
+    // Map box
+    const hasClockOutLocation = !!(entry.clock_out_latitude && entry.clock_out_longitude);
     page.drawRectangle({
-      x: clockOutX + 48,
-      y: clockInY + 28,
-      width: 35,
-      height: 25,
-      color: rgb(0.92, 0.96, 0.92),
-      borderColor: rgb(0.7, 0.85, 0.7),
-      borderWidth: 0.5,
+      x: clockOutX + 54,
+      y: outIndicatorY - 20,
+      width: 40,
+      height: 20,
+      color: hasClockOutLocation ? rgb(0.92, 0.85, 0.85) : rgb(0.95, 0.95, 0.95),
+      borderColor: hasClockOutLocation ? rgb(0.7, 0.5, 0.5) : rgb(0.8, 0.8, 0.8),
+      borderWidth: hasClockOutLocation ? 1 : 0.5,
     });
-    page.drawText(entry.clock_out_latitude ? 'Map' : '-', {
-      x: clockOutX + 58,
-      y: clockInY + 36,
-      size: 10,
-      font: font,
-      color: rgb(0.4, 0.6, 0.4),
+    page.drawText('Map', {
+      x: clockOutX + 65,
+      y: outIndicatorY - 15,
+      size: 8,
+      font: hasClockOutLocation ? boldFont : font,
+      color: hasClockOutLocation ? rgb(0.5, 0.3, 0.3) : rgb(0.6, 0.6, 0.6),
     });
     
-    // Address (truncated)
-    const clockOutAddr = entry.clock_out_address || (isComplete ? 'No address' : '-');
-    const truncatedOutAddr = clockOutAddr.length > 22 ? clockOutAddr.substring(0, 20) + '...' : clockOutAddr;
-    page.drawText(truncatedOutAddr, {
-      x: clockOutX + 8,
-      y: clockInY + 12,
-      size: 7,
-      font: font,
-      color: rgb(0.4, 0.4, 0.4),
-    });
+    // Multi-line address for clock out
+    const clockOutAddrLines = wrapAddress(entry.clock_out_address || (isComplete ? '' : '-'));
+    let outAddrY = outIndicatorY - 34;
+    for (const line of clockOutAddrLines) {
+      page.drawText(line, {
+        x: clockOutX + 8,
+        y: outAddrY,
+        size: 7,
+        font: font,
+        color: rgb(0.4, 0.4, 0.4),
+      });
+      outAddrY -= 10;
+    }
     
     // Move to next card position
     yPosition = cardTop - cardHeight - cardSpacing;
