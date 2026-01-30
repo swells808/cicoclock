@@ -374,7 +374,10 @@ async function fetchAndEmbedImage(pdfDoc: PDFDocument, imageUrl: string): Promis
   }
 }
 
-// Pre-fetch all images for entries
+// Maximum entries to include images (to avoid memory limits)
+const MAX_ENTRIES_FOR_IMAGES = 10;
+
+// Fetch images for a single entry on-demand (not pre-fetched)
 interface EntryImages {
   clockInPhoto: PDFImage | null;
   clockOutPhoto: PDFImage | null;
@@ -382,56 +385,45 @@ interface EntryImages {
   clockOutMap: PDFImage | null;
 }
 
-async function prefetchEntryImages(
+async function fetchEntryImages(
   pdfDoc: PDFDocument,
   supabase: any,
-  entries: TimeEntry[]
-): Promise<Map<string, EntryImages>> {
-  const imageMap = new Map<string, EntryImages>();
+  entry: TimeEntry
+): Promise<EntryImages> {
+  const images: EntryImages = {
+    clockInPhoto: null,
+    clockOutPhoto: null,
+    clockInMap: null,
+    clockOutMap: null,
+  };
   
-  console.log(`Pre-fetching images for ${entries.length} entries...`);
-  
-  // Process entries in batches to avoid overwhelming the network
-  const batchSize = 5;
-  for (let i = 0; i < entries.length; i += batchSize) {
-    const batch = entries.slice(i, i + batchSize);
+  try {
+    // Fetch photo URLs (resolve storage paths to signed URLs)
+    const [clockInPhotoUrl, clockOutPhotoUrl] = await Promise.all([
+      resolvePhotoUrl(supabase, entry.clock_in_photo_url),
+      resolvePhotoUrl(supabase, entry.clock_out_photo_url),
+    ]);
     
-    await Promise.all(batch.map(async (entry) => {
-      const images: EntryImages = {
-        clockInPhoto: null,
-        clockOutPhoto: null,
-        clockInMap: null,
-        clockOutMap: null,
-      };
-      
-      // Fetch all images for this entry in parallel
-      const [clockInPhotoUrl, clockOutPhotoUrl] = await Promise.all([
-        resolvePhotoUrl(supabase, entry.clock_in_photo_url),
-        resolvePhotoUrl(supabase, entry.clock_out_photo_url),
-      ]);
-      
-      const clockInMapUrl = getMapUrl(entry.clock_in_latitude, entry.clock_in_longitude, true);
-      const clockOutMapUrl = getMapUrl(entry.clock_out_latitude, entry.clock_out_longitude, false);
-      
-      // Fetch and embed all images in parallel
-      const [clockInPhoto, clockOutPhoto, clockInMap, clockOutMap] = await Promise.all([
-        clockInPhotoUrl ? fetchAndEmbedImage(pdfDoc, clockInPhotoUrl) : Promise.resolve(null),
-        clockOutPhotoUrl ? fetchAndEmbedImage(pdfDoc, clockOutPhotoUrl) : Promise.resolve(null),
-        clockInMapUrl ? fetchAndEmbedImage(pdfDoc, clockInMapUrl) : Promise.resolve(null),
-        clockOutMapUrl ? fetchAndEmbedImage(pdfDoc, clockOutMapUrl) : Promise.resolve(null),
-      ]);
-      
-      images.clockInPhoto = clockInPhoto;
-      images.clockOutPhoto = clockOutPhoto;
-      images.clockInMap = clockInMap;
-      images.clockOutMap = clockOutMap;
-      
-      imageMap.set(entry.id, images);
-    }));
+    const clockInMapUrl = getMapUrl(entry.clock_in_latitude, entry.clock_in_longitude, true);
+    const clockOutMapUrl = getMapUrl(entry.clock_out_latitude, entry.clock_out_longitude, false);
+    
+    // Fetch and embed all images in parallel for this single entry
+    const [clockInPhoto, clockOutPhoto, clockInMap, clockOutMap] = await Promise.all([
+      clockInPhotoUrl ? fetchAndEmbedImage(pdfDoc, clockInPhotoUrl) : Promise.resolve(null),
+      clockOutPhotoUrl ? fetchAndEmbedImage(pdfDoc, clockOutPhotoUrl) : Promise.resolve(null),
+      clockInMapUrl ? fetchAndEmbedImage(pdfDoc, clockInMapUrl) : Promise.resolve(null),
+      clockOutMapUrl ? fetchAndEmbedImage(pdfDoc, clockOutMapUrl) : Promise.resolve(null),
+    ]);
+    
+    images.clockInPhoto = clockInPhoto;
+    images.clockOutPhoto = clockOutPhoto;
+    images.clockInMap = clockInMap;
+    images.clockOutMap = clockOutMap;
+  } catch (error) {
+    console.error(`Failed to fetch images for entry ${entry.id}:`, error);
   }
   
-  console.log(`Pre-fetched images for ${imageMap.size} entries`);
-  return imageMap;
+  return images;
 }
 
 // ============= Time Entry Details PDF Generation =============
@@ -489,13 +481,18 @@ async function generateTimeEntryDetailsPDF(
   const hourLabels = ['6am', '8am', '10am', '12pm', '2pm', '4pm', '6pm', '8pm'];
   const hourValues = [6, 8, 10, 12, 14, 16, 18, 20];
   
-  // Pre-fetch all images for entries
-  const entryImages = await prefetchEntryImages(pdfDoc, supabase, entries);
+  // Determine if we should include images (to avoid memory limits)
+  const includeImages = entries.length <= MAX_ENTRIES_FOR_IMAGES;
+  if (!includeImages) {
+    console.log(`Skipping images for ${entries.length} entries (max ${MAX_ENTRIES_FOR_IMAGES}) to avoid memory limits`);
+  }
   
   // ===== Draw Time Entry Cards =====
   for (const entry of entries) {
-    // Get pre-fetched images for this entry
-    const images = entryImages.get(entry.id);
+    // Fetch images for this entry on-demand (only if within limit)
+    const images: EntryImages | null = includeImages 
+      ? await fetchEntryImages(pdfDoc, supabase, entry) 
+      : null;
     // Check if we need a new page
     if (yPosition - cardHeight < margin + 30) {
       page = pdfDoc.addPage([pageWidth, pageHeight]);
