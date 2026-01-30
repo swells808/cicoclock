@@ -1,7 +1,7 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { Resend } from "https://esm.sh/resend@2.0.0";
-import { PDFDocument, StandardFonts, rgb, PDFImage } from "https://esm.sh/pdf-lib@1.17.1";
+import { PDFDocument, StandardFonts, rgb } from "https://esm.sh/pdf-lib@1.17.1";
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -191,124 +191,10 @@ function generateWeeklyPayrollCSV(entries: TimeEntry[]): string {
   return csv;
 }
 
-// ============= Time Entry Details PDF Generation (Card-based layout matching TimeEntryTimelineCard) =============
-
-// Segment colors matching the React TimeEntryTimelineCard component
-const SEGMENT_COLORS = {
-  regular: rgb(0.23, 0.51, 0.96),   // blue-500
-  late: rgb(0.98, 0.57, 0.21),      // orange-500
-  overtime: rgb(0.94, 0.27, 0.27),  // red-500
-  break: rgb(0.25, 0.71, 0.71),     // teal-500
-};
-
-// Timeline configuration matching React component
-const TIMELINE_START_HOUR = 6;
-const TIMELINE_END_HOUR = 20;
-const TOTAL_HOURS = TIMELINE_END_HOUR - TIMELINE_START_HOUR; // 14 hours
-const SCHEDULED_START_HOUR = 8;
-const SCHEDULED_END_HOUR = 17;
-
-interface TimeSegment {
-  type: 'regular' | 'late' | 'overtime' | 'break';
-  startHour: number;
-  endHour: number;
-}
-
-function getHourFromDate(dateStr: string, timezone: string): number {
-  const date = new Date(dateStr);
-  // Get hours and minutes in the specified timezone
-  const timeStr = date.toLocaleTimeString('en-US', { 
-    hour: '2-digit', 
-    minute: '2-digit',
-    hour12: false,
-    timeZone: timezone
-  });
-  const [hours, minutes] = timeStr.split(':').map(Number);
-  return hours + (minutes / 60);
-}
-
-function calculateSegments(
-  entry: TimeEntry, 
-  timezone: string,
-  scheduledStartHour = SCHEDULED_START_HOUR, 
-  scheduledEndHour = SCHEDULED_END_HOUR
-): TimeSegment[] {
-  const clockInHour = getHourFromDate(entry.start_time, timezone);
-  const clockOutHour = entry.end_time 
-    ? getHourFromDate(entry.end_time, timezone) 
-    : getHourFromDate(new Date().toISOString(), timezone);
-  
-  const segments: TimeSegment[] = [];
-  
-  // Check if late (>10 min after scheduled start)
-  const scheduledStartMinutes = scheduledStartHour * 60;
-  const clockInMinutes = clockInHour * 60;
-  const isLate = clockInMinutes > scheduledStartMinutes + 10;
-  
-  if (isLate && !entry.is_break) {
-    segments.push({ type: 'late', startHour: scheduledStartHour, endHour: clockInHour });
-  }
-  
-  // Determine main segment type based on overtime
-  const scheduledEndMinutes = scheduledEndHour * 60;
-  const clockOutMinutes = clockOutHour * 60;
-  
-  if (entry.is_break) {
-    segments.push({ type: 'break', startHour: clockInHour, endHour: clockOutHour });
-  } else if (clockInMinutes >= scheduledEndMinutes) {
-    // All overtime
-    segments.push({ type: 'overtime', startHour: clockInHour, endHour: clockOutHour });
-  } else if (clockOutMinutes > scheduledEndMinutes) {
-    // Regular + overtime split
-    segments.push({ type: 'regular', startHour: clockInHour, endHour: scheduledEndHour });
-    segments.push({ type: 'overtime', startHour: scheduledEndHour, endHour: clockOutHour });
-  } else {
-    // Regular only
-    segments.push({ type: 'regular', startHour: clockInHour, endHour: clockOutHour });
-  }
-  
-  return segments;
-}
-
-function getPositionPercent(hour: number): number {
-  return ((hour - TIMELINE_START_HOUR) / TOTAL_HOURS) * 100;
-}
-
-function getTimelineX(percent: number, timelineX: number, timelineWidth: number): number {
-  return timelineX + (percent / 100) * timelineWidth;
-}
-
-function wrapAddress(address: string, maxCharsPerLine: number = 20): string[] {
-  if (!address) return ['No address'];
-  
-  // Clean up address formatting
-  const cleanAddr = address.replace(/\s+/g, ' ').trim();
-  const words = cleanAddr.split(' ');
-  const lines: string[] = [];
-  let currentLine = '';
-  
-  for (const word of words) {
-    if (currentLine.length + word.length + 1 > maxCharsPerLine) {
-      if (currentLine) lines.push(currentLine);
-      currentLine = word;
-    } else {
-      currentLine += (currentLine ? ' ' : '') + word;
-    }
-  }
-  if (currentLine) lines.push(currentLine);
-  
-  // Return max 3 lines, add ellipsis only if needed
-  if (lines.length > 3) {
-    return [...lines.slice(0, 2), lines[2].substring(0, 16) + '...'];
-  }
-  return lines.slice(0, 3);
-}
-
-// ============= Image Embedding Helpers =============
+// ============= Image URL Helpers =============
 
 // Generate signed URL for private storage bucket
 async function getSignedUrl(supabase: any, bucket: string, path: string): Promise<string | null> {
-  // Normalize path (remove bucket prefix if present)
   let cleanPath = path;
   if (path.startsWith(`${bucket}/`)) {
     cleanPath = path.replace(`${bucket}/`, '');
@@ -334,7 +220,7 @@ async function resolvePhotoUrl(supabase: any, photoUrl: string | null): Promise<
   return getSignedUrl(supabase, 'timeclock-photos', photoUrl);
 }
 
-// Generate Mapbox static map URL - using smaller size to reduce memory
+// Generate Mapbox static map URL
 function getMapUrl(latitude: number | null, longitude: number | null, isClockIn: boolean): string | null {
   if (!latitude || !longitude) return null;
   
@@ -345,109 +231,315 @@ function getMapUrl(latitude: number | null, longitude: number | null, isClockIn:
   }
   
   const pinColor = isClockIn ? '22c55e' : 'ef4444';
-  // Use 48x48 instead of 80x80@2x to reduce image data by ~75%
-  return `https://api.mapbox.com/styles/v1/mapbox/streets-v12/static/pin-s+${pinColor}(${longitude},${latitude})/${longitude},${latitude},15/48x48?access_token=${mapboxToken}`;
+  return `https://api.mapbox.com/styles/v1/mapbox/streets-v12/static/pin-s+${pinColor}(${longitude},${latitude})/${longitude},${latitude},15/80x80@2x?access_token=${mapboxToken}`;
 }
 
-// Fetch image and embed in PDF
-async function fetchAndEmbedImage(pdfDoc: PDFDocument, imageUrl: string): Promise<PDFImage | null> {
-  try {
-    const controller = new AbortController();
-    const timeoutId = setTimeout(() => controller.abort(), 10000); // 10s timeout
-    
-    const response = await fetch(imageUrl, { signal: controller.signal });
-    clearTimeout(timeoutId);
-    
-    if (!response.ok) {
-      console.warn(`Image fetch failed: ${response.status} for ${imageUrl.substring(0, 100)}...`);
-      return null;
-    }
-    
-    const contentType = response.headers.get('content-type') || '';
-    const bytes = new Uint8Array(await response.arrayBuffer());
-    
-    if (bytes.length < 100) {
-      console.warn('Image too small, likely an error response');
-      return null;
-    }
-    
-    if (contentType.includes('png')) {
-      return await pdfDoc.embedPng(bytes);
-    } else {
-      return await pdfDoc.embedJpg(bytes);
-    }
-  } catch (error) {
-    console.error('Failed to embed image:', error);
-    return null;
-  }
+// ============= Timeline Calculation for HTML =============
+
+const TIMELINE_START_HOUR = 6;
+const TIMELINE_END_HOUR = 20;
+const TOTAL_HOURS = TIMELINE_END_HOUR - TIMELINE_START_HOUR;
+const SCHEDULED_START_HOUR = 8;
+const SCHEDULED_END_HOUR = 17;
+
+function getHourFromDate(dateStr: string, timezone: string): number {
+  const date = new Date(dateStr);
+  const timeStr = date.toLocaleTimeString('en-US', { 
+    hour: '2-digit', 
+    minute: '2-digit',
+    hour12: false,
+    timeZone: timezone
+  });
+  const [hours, minutes] = timeStr.split(':').map(Number);
+  return hours + (minutes / 60);
 }
 
-// Memory configuration for Edge Function limits
-// pdf-lib accumulates all embedded images in memory until save() is called
-// copyPages does NOT release memory - it copies image data to the final document
-// Therefore, we must skip images entirely for large reports to avoid WORKER_LIMIT crashes
-const MAX_ENTRIES_FOR_IMAGES = 8; // Safe limit: 8 entries × 4 images × ~50KB = ~1.6MB
-
-// Fetch images for a single entry on-demand (not pre-fetched)
-interface EntryImages {
-  clockInPhoto: PDFImage | null;
-  clockOutPhoto: PDFImage | null;
-  clockInMap: PDFImage | null;
-  clockOutMap: PDFImage | null;
+function getPositionPercent(hour: number): number {
+  return ((hour - TIMELINE_START_HOUR) / TOTAL_HOURS) * 100;
 }
 
-async function fetchEntryImages(
-  pdfDoc: PDFDocument,
-  supabase: any,
-  entry: TimeEntry
-): Promise<EntryImages> {
-  const images: EntryImages = {
-    clockInPhoto: null,
-    clockOutPhoto: null,
-    clockInMap: null,
-    clockOutMap: null,
-  };
+interface TimeSegment {
+  type: 'regular' | 'late' | 'overtime' | 'break';
+  startPercent: number;
+  widthPercent: number;
+}
+
+function calculateHtmlSegments(entry: TimeEntry, timezone: string): TimeSegment[] {
+  const clockInHour = getHourFromDate(entry.start_time, timezone);
+  const clockOutHour = entry.end_time 
+    ? getHourFromDate(entry.end_time, timezone) 
+    : getHourFromDate(new Date().toISOString(), timezone);
   
-  try {
-    // Fetch photo URLs (resolve storage paths to signed URLs)
-    const [clockInPhotoUrl, clockOutPhotoUrl] = await Promise.all([
-      resolvePhotoUrl(supabase, entry.clock_in_photo_url),
-      resolvePhotoUrl(supabase, entry.clock_out_photo_url),
-    ]);
-    
-    const clockInMapUrl = getMapUrl(entry.clock_in_latitude, entry.clock_in_longitude, true);
-    const clockOutMapUrl = getMapUrl(entry.clock_out_latitude, entry.clock_out_longitude, false);
-    
-    // Fetch and embed all images in parallel for this single entry
-    const [clockInPhoto, clockOutPhoto, clockInMap, clockOutMap] = await Promise.all([
-      clockInPhotoUrl ? fetchAndEmbedImage(pdfDoc, clockInPhotoUrl) : Promise.resolve(null),
-      clockOutPhotoUrl ? fetchAndEmbedImage(pdfDoc, clockOutPhotoUrl) : Promise.resolve(null),
-      clockInMapUrl ? fetchAndEmbedImage(pdfDoc, clockInMapUrl) : Promise.resolve(null),
-      clockOutMapUrl ? fetchAndEmbedImage(pdfDoc, clockOutMapUrl) : Promise.resolve(null),
-    ]);
-    
-    images.clockInPhoto = clockInPhoto;
-    images.clockOutPhoto = clockOutPhoto;
-    images.clockInMap = clockInMap;
-    images.clockOutMap = clockOutMap;
-  } catch (error) {
-    console.error(`Failed to fetch images for entry ${entry.id}:`, error);
+  const segments: TimeSegment[] = [];
+  
+  const scheduledStartMinutes = SCHEDULED_START_HOUR * 60;
+  const clockInMinutes = clockInHour * 60;
+  const isLate = clockInMinutes > scheduledStartMinutes + 10;
+  
+  if (isLate && !entry.is_break) {
+    segments.push({ 
+      type: 'late', 
+      startPercent: getPositionPercent(SCHEDULED_START_HOUR), 
+      widthPercent: getPositionPercent(clockInHour) - getPositionPercent(SCHEDULED_START_HOUR) 
+    });
   }
   
-  return images;
+  const scheduledEndMinutes = SCHEDULED_END_HOUR * 60;
+  const clockOutMinutes = clockOutHour * 60;
+  
+  if (entry.is_break) {
+    segments.push({ 
+      type: 'break', 
+      startPercent: getPositionPercent(clockInHour), 
+      widthPercent: getPositionPercent(clockOutHour) - getPositionPercent(clockInHour) 
+    });
+  } else if (clockInMinutes >= scheduledEndMinutes) {
+    segments.push({ 
+      type: 'overtime', 
+      startPercent: getPositionPercent(clockInHour), 
+      widthPercent: getPositionPercent(clockOutHour) - getPositionPercent(clockInHour) 
+    });
+  } else if (clockOutMinutes > scheduledEndMinutes) {
+    const scheduledEndHourFloat = scheduledEndMinutes / 60;
+    segments.push({ 
+      type: 'regular', 
+      startPercent: getPositionPercent(clockInHour), 
+      widthPercent: getPositionPercent(scheduledEndHourFloat) - getPositionPercent(clockInHour) 
+    });
+    segments.push({ 
+      type: 'overtime', 
+      startPercent: getPositionPercent(scheduledEndHourFloat), 
+      widthPercent: getPositionPercent(clockOutHour) - getPositionPercent(scheduledEndHourFloat) 
+    });
+  } else {
+    segments.push({ 
+      type: 'regular', 
+      startPercent: getPositionPercent(clockInHour), 
+      widthPercent: getPositionPercent(clockOutHour) - getPositionPercent(clockInHour) 
+    });
+  }
+  
+  return segments;
 }
 
-// ============= Time Entry Details PDF Generation =============
+// ============= Rich HTML Generation for Time Entry Details (Matching Web UI) =============
 
-// Generate the complete PDF for time entry details
-// Conditionally includes images based on entry count to stay within memory limits
-async function generateTimeEntryDetailsPDF(
-  entries: TimeEntry[], 
-  companyName: string, 
+async function generateTimeEntryDetailsHtml(
+  entries: TimeEntry[],
+  companyName: string,
   reportName: string,
   dateRange: { start: string; end: string },
   timezone: string,
   supabase: any
+): Promise<string> {
+  let totalMinutes = 0;
+  let cardHtml = '';
+  
+  const segmentColors = {
+    regular: '#3b82f6',
+    late: '#f97316',
+    overtime: '#ef4444',
+    break: '#14b8a6',
+  };
+  
+  for (const entry of entries) {
+    totalMinutes += entry.duration_minutes || 0;
+    
+    const employeeName = getEmployeeName(entry);
+    const projectName = entry.projects?.name || 'No Project';
+    const dateStr = formatLongDate(entry.start_time, timezone);
+    const clockInTime = formatTime(entry.start_time, timezone);
+    const clockOutTime = entry.end_time ? formatTime(entry.end_time, timezone) : 'Active';
+    const duration = formatDuration(entry.duration_minutes);
+    const isComplete = entry.end_time !== null;
+    const isBreak = entry.is_break;
+    
+    // Resolve photo URLs (signed URLs for private bucket)
+    const clockInPhotoUrl = await resolvePhotoUrl(supabase, entry.clock_in_photo_url);
+    const clockOutPhotoUrl = await resolvePhotoUrl(supabase, entry.clock_out_photo_url);
+    
+    // Map URLs
+    const clockInMapUrl = getMapUrl(entry.clock_in_latitude, entry.clock_in_longitude, true);
+    const clockOutMapUrl = getMapUrl(entry.clock_out_latitude, entry.clock_out_longitude, false);
+    
+    // Calculate timeline segments
+    const segments = calculateHtmlSegments(entry, timezone);
+    
+    // Build timeline segments HTML
+    let segmentsHtml = '';
+    for (const seg of segments) {
+      segmentsHtml += `<div style="position: absolute; top: 2px; bottom: 2px; left: ${seg.startPercent}%; width: ${Math.max(seg.widthPercent, 0.5)}%; background: ${segmentColors[seg.type]}; border-radius: 3px;"></div>`;
+    }
+    
+    // Build hour ticks
+    let ticksHtml = '';
+    let labelsHtml = '';
+    for (let hour = TIMELINE_START_HOUR; hour <= TIMELINE_END_HOUR; hour += 2) {
+      const percent = getPositionPercent(hour);
+      ticksHtml += `<div style="position: absolute; left: ${percent}%; top: 0; bottom: 0; width: 1px; background: #d1d5db;"></div>`;
+      const labelText = hour > 12 ? `${hour - 12}pm` : hour === 12 ? '12pm' : `${hour}am`;
+      labelsHtml += `<span style="position: absolute; left: ${percent}%; transform: translateX(-50%); font-size: 10px; color: #6b7280;">${labelText}</span>`;
+    }
+    
+    // Scheduled window markers
+    const schedStartPercent = getPositionPercent(SCHEDULED_START_HOUR);
+    const schedEndPercent = getPositionPercent(SCHEDULED_END_HOUR);
+    const schedWindowHtml = `
+      <div style="position: absolute; left: ${schedStartPercent}%; top: 0; bottom: 0; width: 2px; border-left: 2px dashed rgba(59, 130, 246, 0.4);"></div>
+      <div style="position: absolute; left: ${schedEndPercent}%; top: 0; bottom: 0; width: 2px; border-left: 2px dashed rgba(59, 130, 246, 0.4);"></div>
+    `;
+    
+    // Status badge
+    const statusBadge = isComplete
+      ? `<span style="display: inline-flex; align-items: center; gap: 4px; font-size: 11px; background: #dcfce7; color: #166534; padding: 2px 8px; border-radius: 9999px;">&#10003; Complete</span>`
+      : `<span style="display: inline-flex; align-items: center; gap: 4px; font-size: 11px; background: #ffedd5; color: #c2410c; padding: 2px 8px; border-radius: 9999px;">&#9679; Active</span>`;
+    
+    // Type badge
+    const typeBadge = isBreak
+      ? `<span style="font-size: 11px; background: #fef3c7; color: #92400e; padding: 2px 8px; border-radius: 9999px;">Break</span>`
+      : `<span style="font-size: 11px; background: #dbeafe; color: #1d4ed8; padding: 2px 8px; border-radius: 9999px;">Work</span>`;
+    
+    // Clock In Panel
+    const clockInPanel = `
+      <div style="display: flex; flex-direction: column; align-items: center; gap: 6px; padding: 10px; background: #dcfce7; border-radius: 8px; min-width: 100px;">
+        <span style="font-size: 11px; font-weight: 500; color: #166534;">Clock In</span>
+        <span style="font-size: 14px; font-weight: 700; color: #15803d;">${clockInTime}</span>
+        <div style="display: flex; gap: 4px;">
+          ${clockInPhotoUrl ? `<img src="${clockInPhotoUrl}" alt="Photo" style="width: 40px; height: 40px; object-fit: cover; border-radius: 4px; border: 1px solid #86efac;" />` : `<div style="width: 40px; height: 40px; background: #f0fdf4; border: 1px dashed #86efac; border-radius: 4px; display: flex; align-items: center; justify-content: center; font-size: 9px; color: #6b7280;">Photo</div>`}
+          ${clockInMapUrl ? `<img src="${clockInMapUrl}" alt="Map" style="width: 40px; height: 40px; object-fit: cover; border-radius: 4px; border: 1px solid #86efac;" />` : `<div style="width: 40px; height: 40px; background: #f0fdf4; border: 1px dashed #86efac; border-radius: 4px; display: flex; align-items: center; justify-content: center; font-size: 9px; color: #6b7280;">Map</div>`}
+        </div>
+        ${entry.clock_in_address ? `<p style="font-size: 9px; color: #6b7280; text-align: center; margin: 0; max-width: 100px; overflow: hidden; text-overflow: ellipsis;">${entry.clock_in_address}</p>` : ''}
+      </div>
+    `;
+    
+    // Clock Out Panel
+    const clockOutBgColor = isComplete ? '#fee2e2' : '#f5f5f4';
+    const clockOutTextColor = isComplete ? '#dc2626' : '#78716c';
+    const clockOutLabelColor = isComplete ? '#b91c1c' : '#78716c';
+    const clockOutBorderColor = isComplete ? '#fecaca' : '#d6d3d1';
+    
+    const clockOutPanel = `
+      <div style="display: flex; flex-direction: column; align-items: center; gap: 6px; padding: 10px; background: ${clockOutBgColor}; border-radius: 8px; min-width: 100px;">
+        <span style="font-size: 11px; font-weight: 500; color: ${clockOutLabelColor};">Clock Out</span>
+        <span style="font-size: 14px; font-weight: 700; color: ${clockOutTextColor};">${clockOutTime}</span>
+        <div style="display: flex; gap: 4px;">
+          ${clockOutPhotoUrl ? `<img src="${clockOutPhotoUrl}" alt="Photo" style="width: 40px; height: 40px; object-fit: cover; border-radius: 4px; border: 1px solid ${clockOutBorderColor};" />` : `<div style="width: 40px; height: 40px; background: ${isComplete ? '#fef2f2' : '#fafaf9'}; border: 1px dashed ${clockOutBorderColor}; border-radius: 4px; display: flex; align-items: center; justify-content: center; font-size: 9px; color: #6b7280;">Photo</div>`}
+          ${clockOutMapUrl ? `<img src="${clockOutMapUrl}" alt="Map" style="width: 40px; height: 40px; object-fit: cover; border-radius: 4px; border: 1px solid ${clockOutBorderColor};" />` : `<div style="width: 40px; height: 40px; background: ${isComplete ? '#fef2f2' : '#fafaf9'}; border: 1px dashed ${clockOutBorderColor}; border-radius: 4px; display: flex; align-items: center; justify-content: center; font-size: 9px; color: #6b7280;">Map</div>`}
+        </div>
+        ${entry.clock_out_address ? `<p style="font-size: 9px; color: #6b7280; text-align: center; margin: 0; max-width: 100px; overflow: hidden; text-overflow: ellipsis;">${entry.clock_out_address}</p>` : ''}
+      </div>
+    `;
+    
+    // Full card
+    cardHtml += `
+      <div style="border: 1px solid #e5e7eb; border-radius: 8px; margin-bottom: 16px; background: white; overflow: hidden;">
+        <!-- Header -->
+        <div style="display: flex; justify-content: space-between; align-items: center; padding: 10px 16px; background: #f9fafb; border-bottom: 1px solid #e5e7eb; flex-wrap: wrap; gap: 8px;">
+          <div style="display: flex; align-items: center; gap: 8px; flex-wrap: wrap;">
+            <span style="font-weight: 600; font-size: 13px;">${dateStr}</span>
+            <span style="color: #9ca3af;">|</span>
+            <span style="font-size: 13px; font-weight: 500;">${employeeName}</span>
+            <span style="color: #9ca3af;">|</span>
+            <span style="font-size: 13px; color: #6b7280;">${projectName}</span>
+            ${typeBadge}
+            ${statusBadge}
+          </div>
+          <span style="font-size: 13px; font-weight: 500;">Duration: ${duration}</span>
+        </div>
+        
+        <!-- Content -->
+        <div style="display: flex; align-items: stretch; gap: 12px; padding: 16px;">
+          ${clockInPanel}
+          
+          <!-- Timeline Section -->
+          <div style="flex: 1; display: flex; flex-direction: column; justify-content: center; min-width: 200px;">
+            <!-- Hour Labels -->
+            <div style="position: relative; height: 16px; margin-bottom: 4px;">
+              ${labelsHtml}
+            </div>
+            
+            <!-- Timeline Bar -->
+            <div style="position: relative; height: 24px; background: #f3f4f6; border-radius: 6px; overflow: hidden;">
+              ${ticksHtml}
+              ${schedWindowHtml}
+              ${segmentsHtml}
+            </div>
+            
+            <!-- Legend -->
+            <div style="display: flex; gap: 12px; margin-top: 8px; flex-wrap: wrap;">
+              <div style="display: flex; align-items: center; gap: 4px;"><div style="width: 10px; height: 10px; border-radius: 2px; background: #3b82f6;"></div><span style="font-size: 10px; color: #6b7280;">Regular</span></div>
+              <div style="display: flex; align-items: center; gap: 4px;"><div style="width: 10px; height: 10px; border-radius: 2px; background: #f97316;"></div><span style="font-size: 10px; color: #6b7280;">Late</span></div>
+              <div style="display: flex; align-items: center; gap: 4px;"><div style="width: 10px; height: 10px; border-radius: 2px; background: #ef4444;"></div><span style="font-size: 10px; color: #6b7280;">Overtime</span></div>
+              <div style="display: flex; align-items: center; gap: 4px;"><div style="width: 10px; height: 10px; border-radius: 2px; background: #14b8a6;"></div><span style="font-size: 10px; color: #6b7280;">Break</span></div>
+            </div>
+          </div>
+          
+          ${clockOutPanel}
+        </div>
+      </div>
+    `;
+  }
+  
+  if (entries.length === 0) {
+    cardHtml = `
+      <div style="padding: 40px; text-align: center; color: #6b7280; background: #f9fafb; border-radius: 8px;">
+        No time entries found for this period.
+      </div>
+    `;
+  }
+  
+  return `
+    <!DOCTYPE html>
+    <html>
+    <head>
+      <meta charset="utf-8">
+      <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    </head>
+    <body style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; margin: 0; padding: 20px; background-color: #f3f4f6;">
+      <div style="max-width: 900px; margin: 0 auto; background: white; border-radius: 8px; overflow: hidden; box-shadow: 0 1px 3px rgba(0,0,0,0.1);">
+        <div style="background: linear-gradient(135deg, #3b82f6, #1d4ed8); padding: 24px; color: white;">
+          <h1 style="margin: 0 0 8px 0; font-size: 24px;">${reportName || 'Time Entry Details Report'}</h1>
+          <p style="margin: 0; opacity: 0.9;">${companyName}</p>
+        </div>
+        
+        <div style="padding: 16px 24px; background: #f9fafb; border-bottom: 1px solid #e5e7eb;">
+          <p style="margin: 0; color: #6b7280; font-size: 14px;">
+            <strong>Period:</strong> ${dateRange.start} - ${dateRange.end}
+          </p>
+          <p style="margin: 4px 0 0 0; color: #6b7280; font-size: 14px;">
+            <strong>Total Hours:</strong> ${formatDuration(totalMinutes)} &nbsp;|&nbsp; <strong>Entries:</strong> ${entries.length}
+          </p>
+        </div>
+        
+        <div style="padding: 12px 24px; background: #eff6ff; border-bottom: 1px solid #bfdbfe;">
+          <p style="margin: 0; color: #1d4ed8; font-size: 13px;">
+            &#128206; <strong>Attachments:</strong> A tabular PDF summary and CSV file are attached for download.
+          </p>
+        </div>
+        
+        <div style="padding: 24px;">
+          ${cardHtml}
+        </div>
+        
+        <div style="padding: 16px 24px; background: #f9fafb; border-top: 1px solid #e5e7eb; text-align: center;">
+          <p style="margin: 0; color: #9ca3af; font-size: 12px;">
+            Generated by CICO on ${new Date().toLocaleString()}
+          </p>
+        </div>
+      </div>
+    </body>
+    </html>
+  `;
+}
+
+// ============= Simple Tabular PDF for Time Entry Details (No Images) =============
+
+async function generateSimpleTimecardPDF(
+  entries: TimeEntry[], 
+  companyName: string, 
+  reportName: string,
+  dateRange: { start: string; end: string },
+  timezone: string
 ): Promise<Uint8Array> {
   const pdfDoc = await PDFDocument.create();
   const font = await pdfDoc.embedFont(StandardFonts.Helvetica);
@@ -455,559 +547,189 @@ async function generateTimeEntryDetailsPDF(
   
   const pageWidth = 612;
   const pageHeight = 792;
-  const margin = 40;
-  const cardHeight = 185;
-  
-  // Determine if we can include images (memory check)
-  const includeImages = entries.length <= MAX_ENTRIES_FOR_IMAGES;
-  if (!includeImages) {
-    console.info(`Skipping images: ${entries.length} entries exceeds limit of ${MAX_ENTRIES_FOR_IMAGES}`);
-  }
-  
   let page = pdfDoc.addPage([pageWidth, pageHeight]);
-  let yPosition = pageHeight - margin;
+  let yPosition = pageHeight - 50;
   
-  // Hour labels for timeline
-  const hourLabels = ['6am', '8am', '10am', '12pm', '2pm', '4pm', '6pm', '8pm'];
-  const hourValues = [6, 8, 10, 12, 14, 16, 18, 20];
-  
-  // Report header
+  // Header
   page.drawText(reportName || 'Time Entry Details Report', {
-    x: margin,
+    x: 40,
     y: yPosition,
-    size: 18,
+    size: 16,
     font: boldFont,
     color: rgb(0.23, 0.32, 0.96),
   });
-  yPosition -= 22;
+  yPosition -= 20;
   
   page.drawText(companyName, {
-    x: margin,
+    x: 40,
     y: yPosition,
-    size: 12,
+    size: 11,
     font: font,
     color: rgb(0.4, 0.4, 0.4),
   });
-  yPosition -= 18;
+  yPosition -= 16;
   
   page.drawText(`Period: ${dateRange.start} - ${dateRange.end}`, {
-    x: margin,
+    x: 40,
     y: yPosition,
     size: 10,
     font: font,
     color: rgb(0.4, 0.4, 0.4),
   });
-  yPosition -= 15;
+  yPosition -= 12;
   
-  // Add note if images are skipped
-  if (!includeImages) {
-    page.drawText(`Note: Photos excluded from PDF (${entries.length} entries). View full details in the app.`, {
-      x: margin,
+  page.drawText(`Total Entries: ${entries.length}`, {
+    x: 40,
+    y: yPosition,
+    size: 10,
+    font: font,
+    color: rgb(0.4, 0.4, 0.4),
+  });
+  yPosition -= 25;
+  
+  // Table headers
+  const headers = ['Date', 'Employee', 'Project', 'In', 'Out', 'Type', 'Duration'];
+  const colWidths = [70, 90, 80, 55, 55, 40, 55];
+  const colX = [40, 110, 200, 280, 335, 390, 430];
+  
+  // Draw header row
+  page.drawRectangle({
+    x: 38,
+    y: yPosition - 4,
+    width: pageWidth - 76,
+    height: 16,
+    color: rgb(0.95, 0.95, 0.97),
+  });
+  
+  for (let i = 0; i < headers.length; i++) {
+    page.drawText(headers[i], {
+      x: colX[i],
       y: yPosition,
       size: 8,
-      font: font,
-      color: rgb(0.6, 0.4, 0.2),
-    });
-    yPosition -= 15;
-  }
-  yPosition -= 15;
-  
-  // Process each entry
-  for (const entry of entries) {
-    // Check if we need a new page
-    if (yPosition - cardHeight < margin + 30) {
-      page = pdfDoc.addPage([pageWidth, pageHeight]);
-      yPosition = pageHeight - margin;
-    }
-    
-    // Fetch images only if within budget
-    const images = includeImages ? await fetchEntryImages(pdfDoc, supabase, entry) : null;
-    
-    const cardTop = yPosition;
-    const cardWidth = pageWidth - (margin * 2);
-    
-    // --- Card Border ---
-    page.drawRectangle({
-      x: margin,
-      y: cardTop - cardHeight,
-      width: cardWidth,
-      height: cardHeight,
-      borderColor: rgb(0.85, 0.85, 0.85),
-      borderWidth: 1,
-      color: rgb(1, 1, 1),
-    });
-    
-    // --- Card Header Background ---
-    page.drawRectangle({
-      x: margin,
-      y: cardTop - 32,
-      width: cardWidth,
-      height: 32,
-      color: rgb(0.97, 0.97, 0.98),
-    });
-    
-    // --- Header Content ---
-    const employeeName = getEmployeeName(entry);
-    const projectName = entry.projects?.name || 'No Project';
-    const dateStr = formatLongDate(entry.start_time, timezone);
-    const isComplete = entry.end_time !== null;
-    const isBreak = entry.is_break;
-    const duration = formatDuration(entry.duration_minutes);
-    
-    // Date and Employee Name
-    page.drawText(`${dateStr}  |  ${employeeName}  |  ${projectName}`, {
-      x: margin + 12,
-      y: cardTop - 20,
-      size: 10,
       font: boldFont,
       color: rgb(0.2, 0.2, 0.2),
     });
-    
-    // Status badges (right side of header)
-    const badgeY = cardTop - 22;
-    let badgeX = margin + cardWidth - 12;
-    
-    // Duration badge
-    const durationText = `Duration: ${duration}`;
-    const durationWidth = font.widthOfTextAtSize(durationText, 8) + 12;
-    badgeX -= durationWidth;
-    page.drawRectangle({
-      x: badgeX,
-      y: badgeY - 5,
-      width: durationWidth,
-      height: 16,
-      color: rgb(0.9, 0.95, 1),
-      borderColor: rgb(0.7, 0.85, 1),
-      borderWidth: 0.5,
-    });
-    page.drawText(durationText, {
-      x: badgeX + 6,
-      y: badgeY,
-      size: 8,
-      font: font,
-      color: rgb(0.2, 0.4, 0.8),
-    });
-    badgeX -= 8;
-    
-    // Complete/Active badge
-    const statusText = isComplete ? 'Complete' : 'Active';
-    const statusWidth = font.widthOfTextAtSize(statusText, 8) + 12;
-    badgeX -= statusWidth;
-    page.drawRectangle({
-      x: badgeX,
-      y: badgeY - 5,
-      width: statusWidth,
-      height: 16,
-      color: isComplete ? rgb(0.9, 1, 0.9) : rgb(1, 0.95, 0.9),
-      borderColor: isComplete ? rgb(0.6, 0.9, 0.6) : rgb(1, 0.8, 0.6),
-      borderWidth: 0.5,
-    });
-    page.drawText(statusText, {
-      x: badgeX + 6,
-      y: badgeY,
-      size: 8,
-      font: font,
-      color: isComplete ? rgb(0.2, 0.6, 0.2) : rgb(0.8, 0.5, 0.2),
-    });
-    badgeX -= 8;
-    
-    // Work/Break badge
-    const typeText = isBreak ? 'Break' : 'Work';
-    const typeWidth = font.widthOfTextAtSize(typeText, 8) + 12;
-    badgeX -= typeWidth;
-    page.drawRectangle({
-      x: badgeX,
-      y: badgeY - 5,
-      width: typeWidth,
-      height: 16,
-      color: isBreak ? rgb(1, 0.95, 0.85) : rgb(0.85, 0.9, 1),
-      borderColor: isBreak ? rgb(0.9, 0.7, 0.4) : rgb(0.6, 0.7, 1),
-      borderWidth: 0.5,
-    });
-    page.drawText(typeText, {
-      x: badgeX + 6,
-      y: badgeY,
-      size: 8,
-      font: font,
-      color: isBreak ? rgb(0.7, 0.4, 0.1) : rgb(0.3, 0.4, 0.8),
-    });
-    
-    // --- Main Content Area ---
-    const contentTop = cardTop - 42;
-    const panelWidth = 110;
-    const panelHeight = 120;
-    const timelineSectionWidth = cardWidth - (panelWidth * 2) - 40;
-    
-    // === Clock In Panel (Green theme) ===
-    const clockInX = margin + 10;
-    const clockInY = contentTop - panelHeight;
-    
-    // Green background for Clock In
-    page.drawRectangle({
-      x: clockInX,
-      y: clockInY,
-      width: panelWidth,
-      height: panelHeight,
-      color: rgb(0.9, 0.98, 0.9),
-      borderColor: rgb(0.7, 0.9, 0.7),
-      borderWidth: 0.5,
-    });
-    
-    // "Clock In" header
-    page.drawText('Clock In', {
-      x: clockInX + 8,
-      y: clockInY + panelHeight - 16,
-      size: 10,
-      font: boldFont,
-      color: rgb(0.13, 0.55, 0.13),
-    });
-    
-    // Clock in time (larger)
-    const clockInTime = formatTime(entry.start_time, timezone);
-    page.drawText(clockInTime, {
-      x: clockInX + 8,
-      y: clockInY + panelHeight - 36,
-      size: 16,
-      font: boldFont,
-      color: rgb(0.1, 0.1, 0.1),
-    });
-    
-    // Photo and Map thumbnails
-    const thumbnailY = clockInY + panelHeight - 70;
-    const thumbnailSize = 40;
-    
-    // Photo thumbnail
-    if (images?.clockInPhoto) {
-      page.drawImage(images.clockInPhoto, {
-        x: clockInX + 8,
-        y: thumbnailY,
-        width: thumbnailSize,
-        height: thumbnailSize,
-      });
-      page.drawRectangle({
-        x: clockInX + 8,
-        y: thumbnailY,
-        width: thumbnailSize,
-        height: thumbnailSize,
-        borderColor: rgb(0.5, 0.7, 0.5),
-        borderWidth: 0.5,
-      });
-    } else {
-      page.drawRectangle({
-        x: clockInX + 8,
-        y: thumbnailY,
-        width: thumbnailSize,
-        height: thumbnailSize,
-        color: rgb(0.96, 0.96, 0.96),
-        borderColor: rgb(0.8, 0.8, 0.8),
-        borderWidth: 0.5,
-      });
-      page.drawText('Photo', {
-        x: clockInX + 15,
-        y: thumbnailY + 16,
+  }
+  yPosition -= 18;
+  
+  // Draw separator
+  page.drawLine({
+    start: { x: 38, y: yPosition + 10 },
+    end: { x: pageWidth - 38, y: yPosition + 10 },
+    thickness: 0.5,
+    color: rgb(0.8, 0.8, 0.8),
+  });
+  
+  // Entries
+  let totalMinutes = 0;
+  
+  for (const entry of entries) {
+    if (yPosition < 60) {
+      // Footer on current page
+      page.drawText(`Page ${pdfDoc.getPageCount()}`, {
+        x: pageWidth / 2 - 20,
+        y: 30,
         size: 8,
         font: font,
         color: rgb(0.6, 0.6, 0.6),
       });
-    }
-    
-    // Map thumbnail
-    if (images?.clockInMap) {
-      page.drawImage(images.clockInMap, {
-        x: clockInX + 8 + thumbnailSize + 4,
-        y: thumbnailY,
-        width: thumbnailSize,
-        height: thumbnailSize,
-      });
-      page.drawRectangle({
-        x: clockInX + 8 + thumbnailSize + 4,
-        y: thumbnailY,
-        width: thumbnailSize,
-        height: thumbnailSize,
-        borderColor: rgb(0.5, 0.7, 0.5),
-        borderWidth: 0.5,
-      });
-    } else {
-      page.drawRectangle({
-        x: clockInX + 8 + thumbnailSize + 4,
-        y: thumbnailY,
-        width: thumbnailSize,
-        height: thumbnailSize,
-        color: rgb(0.96, 0.96, 0.96),
-        borderColor: rgb(0.8, 0.8, 0.8),
-        borderWidth: 0.5,
-      });
-      page.drawText('Map', {
-        x: clockInX + 8 + thumbnailSize + 14,
-        y: thumbnailY + 16,
-        size: 8,
-        font: font,
-        color: rgb(0.6, 0.6, 0.6),
-      });
-    }
-    
-    // Multi-line address below thumbnails
-    const clockInAddrLines = wrapAddress(entry.clock_in_address || '');
-    const addressBaseY = clockInY + 32;
-    for (let i = 0; i < clockInAddrLines.length; i++) {
-      page.drawText(clockInAddrLines[i], {
-        x: clockInX + 8,
-        y: addressBaseY - (i * 10),
-        size: 7,
-        font: font,
-        color: rgb(0.4, 0.4, 0.4),
-      });
-    }
-    
-    // === Timeline Section (Center) ===
-    const timelineX = clockInX + panelWidth + 15;
-    const timelineWidth = timelineSectionWidth;
-    const timelineBarY = clockInY + panelHeight - 60;
-    const timelineBarHeight = 24;
-    
-    // Hour labels above timeline
-    for (let i = 0; i < hourLabels.length; i++) {
-      const percent = getPositionPercent(hourValues[i]);
-      const x = getTimelineX(percent, timelineX, timelineWidth);
-      page.drawText(hourLabels[i], {
-        x: x - 8,
-        y: timelineBarY + timelineBarHeight + 8,
-        size: 7,
-        font: font,
-        color: rgb(0.5, 0.5, 0.5),
-      });
-    }
-    
-    // Timeline background bar
-    page.drawRectangle({
-      x: timelineX,
-      y: timelineBarY,
-      width: timelineWidth,
-      height: timelineBarHeight,
-      color: rgb(0.94, 0.94, 0.94),
-      borderColor: rgb(0.85, 0.85, 0.85),
-      borderWidth: 0.5,
-    });
-    
-    // Tick marks for each hour
-    for (let i = 0; i < hourValues.length; i++) {
-      const percent = getPositionPercent(hourValues[i]);
-      const x = getTimelineX(percent, timelineX, timelineWidth);
-      page.drawLine({
-        start: { x, y: timelineBarY },
-        end: { x, y: timelineBarY + timelineBarHeight },
-        thickness: 0.5,
-        color: rgb(0.8, 0.8, 0.8),
-      });
-    }
-    
-    // Scheduled window indicators (8am and 5pm dashed lines)
-    const scheduledStartX = getTimelineX(getPositionPercent(SCHEDULED_START_HOUR), timelineX, timelineWidth);
-    const scheduledEndX = getTimelineX(getPositionPercent(SCHEDULED_END_HOUR), timelineX, timelineWidth);
-    
-    // Draw dashed vertical lines for scheduled window
-    for (let y = timelineBarY; y < timelineBarY + timelineBarHeight; y += 4) {
-      page.drawLine({
-        start: { x: scheduledStartX, y },
-        end: { x: scheduledStartX, y: y + 2 },
-        thickness: 1.5,
-        color: rgb(0.3, 0.5, 0.9),
-        opacity: 0.5,
-      });
-      page.drawLine({
-        start: { x: scheduledEndX, y },
-        end: { x: scheduledEndX, y: y + 2 },
-        thickness: 1.5,
-        color: rgb(0.3, 0.5, 0.9),
-        opacity: 0.5,
-      });
-    }
-    
-    // Calculate and draw segments
-    const segments = calculateSegments(entry, timezone);
-    for (const segment of segments) {
-      const startPercent = getPositionPercent(Math.max(segment.startHour, TIMELINE_START_HOUR));
-      const endPercent = getPositionPercent(Math.min(segment.endHour, TIMELINE_END_HOUR));
-      const segmentStartX = getTimelineX(startPercent, timelineX, timelineWidth);
-      const segmentEndX = getTimelineX(endPercent, timelineX, timelineWidth);
-      const segmentWidth = Math.max(segmentEndX - segmentStartX, 0);
       
-      if (segmentWidth > 0) {
-        page.drawRectangle({
-          x: segmentStartX,
-          y: timelineBarY + 3,
-          width: segmentWidth,
-          height: timelineBarHeight - 6,
-          color: SEGMENT_COLORS[segment.type],
+      page = pdfDoc.addPage([pageWidth, pageHeight]);
+      yPosition = pageHeight - 50;
+      
+      // Repeat header on new page
+      page.drawRectangle({
+        x: 38,
+        y: yPosition - 4,
+        width: pageWidth - 76,
+        height: 16,
+        color: rgb(0.95, 0.95, 0.97),
+      });
+      
+      for (let i = 0; i < headers.length; i++) {
+        page.drawText(headers[i], {
+          x: colX[i],
+          y: yPosition,
+          size: 8,
+          font: boldFont,
+          color: rgb(0.2, 0.2, 0.2),
         });
       }
+      yPosition -= 18;
     }
     
-    // Legend below timeline
-    const legendY = timelineBarY - 20;
-    const legendItems = [
-      { label: 'Regular', color: SEGMENT_COLORS.regular },
-      { label: 'Late', color: SEGMENT_COLORS.late },
-      { label: 'Overtime', color: SEGMENT_COLORS.overtime },
-      { label: 'Break', color: SEGMENT_COLORS.break },
+    totalMinutes += entry.duration_minutes || 0;
+    
+    const employeeName = getEmployeeName(entry);
+    const projectName = entry.projects?.name || 'No Project';
+    const date = formatShortDate(entry.start_time, timezone);
+    const clockIn = formatTime(entry.start_time, timezone);
+    const clockOut = entry.end_time ? formatTime(entry.end_time, timezone) : 'Active';
+    const entryType = entry.is_break ? 'Break' : 'Work';
+    const duration = formatDuration(entry.duration_minutes);
+    
+    const rowData = [
+      date,
+      employeeName.substring(0, 14),
+      projectName.substring(0, 12),
+      clockIn,
+      clockOut,
+      entryType,
+      duration
     ];
     
-    let legendX = timelineX;
-    for (const item of legendItems) {
-      page.drawRectangle({
-        x: legendX,
-        y: legendY - 3,
-        width: 8,
-        height: 8,
-        color: item.color,
-      });
-      page.drawText(item.label, {
-        x: legendX + 11,
-        y: legendY - 2,
-        size: 7,
-        font: font,
-        color: rgb(0.4, 0.4, 0.4),
-      });
-      legendX += font.widthOfTextAtSize(item.label, 7) + 22;
-    }
-    
-    // === Clock Out Panel (Red/Coral theme) ===
-    const clockOutX = timelineX + timelineWidth + 15;
-    const clockOutTime = entry.end_time ? formatTime(entry.end_time, timezone) : 'Active';
-    
-    const clockOutBgColor = isComplete ? rgb(1, 0.95, 0.95) : rgb(0.98, 0.96, 0.94);
-    page.drawRectangle({
-      x: clockOutX,
-      y: clockInY,
-      width: panelWidth,
-      height: panelHeight,
-      color: clockOutBgColor,
-      borderColor: isComplete ? rgb(0.9, 0.7, 0.7) : rgb(0.9, 0.85, 0.8),
-      borderWidth: 0.5,
-    });
-    
-    // "Clock Out" header
-    page.drawText('Clock Out', {
-      x: clockOutX + 8,
-      y: clockInY + panelHeight - 16,
-      size: 10,
-      font: boldFont,
-      color: isComplete ? rgb(0.8, 0.2, 0.2) : rgb(0.6, 0.5, 0.4),
-    });
-    
-    // Clock out time (larger)
-    page.drawText(clockOutTime, {
-      x: clockOutX + 8,
-      y: clockInY + panelHeight - 36,
-      size: 16,
-      font: boldFont,
-      color: rgb(0.1, 0.1, 0.1),
-    });
-    
-    // Photo and Map thumbnails for clock out
-    const outThumbnailY = clockInY + panelHeight - 70;
-    
-    if (images?.clockOutPhoto) {
-      page.drawImage(images.clockOutPhoto, {
-        x: clockOutX + 8,
-        y: outThumbnailY,
-        width: thumbnailSize,
-        height: thumbnailSize,
-      });
-      page.drawRectangle({
-        x: clockOutX + 8,
-        y: outThumbnailY,
-        width: thumbnailSize,
-        height: thumbnailSize,
-        borderColor: rgb(0.7, 0.5, 0.5),
-        borderWidth: 0.5,
-      });
-    } else {
-      page.drawRectangle({
-        x: clockOutX + 8,
-        y: outThumbnailY,
-        width: thumbnailSize,
-        height: thumbnailSize,
-        color: rgb(0.96, 0.96, 0.96),
-        borderColor: rgb(0.8, 0.8, 0.8),
-        borderWidth: 0.5,
-      });
-      page.drawText('Photo', {
-        x: clockOutX + 15,
-        y: outThumbnailY + 16,
+    for (let i = 0; i < rowData.length; i++) {
+      page.drawText(rowData[i], {
+        x: colX[i],
+        y: yPosition,
         size: 8,
         font: font,
-        color: rgb(0.6, 0.6, 0.6),
+        color: rgb(0.2, 0.2, 0.2),
       });
     }
-    
-    if (images?.clockOutMap) {
-      page.drawImage(images.clockOutMap, {
-        x: clockOutX + 8 + thumbnailSize + 4,
-        y: outThumbnailY,
-        width: thumbnailSize,
-        height: thumbnailSize,
-      });
-      page.drawRectangle({
-        x: clockOutX + 8 + thumbnailSize + 4,
-        y: outThumbnailY,
-        width: thumbnailSize,
-        height: thumbnailSize,
-        borderColor: rgb(0.7, 0.5, 0.5),
-        borderWidth: 0.5,
-      });
-    } else {
-      page.drawRectangle({
-        x: clockOutX + 8 + thumbnailSize + 4,
-        y: outThumbnailY,
-        width: thumbnailSize,
-        height: thumbnailSize,
-        color: rgb(0.96, 0.96, 0.96),
-        borderColor: rgb(0.8, 0.8, 0.8),
-        borderWidth: 0.5,
-      });
-      page.drawText('Map', {
-        x: clockOutX + 8 + thumbnailSize + 14,
-        y: outThumbnailY + 16,
-        size: 8,
-        font: font,
-        color: rgb(0.6, 0.6, 0.6),
-      });
-    }
-    
-    // Multi-line address for clock out
-    const clockOutAddrLines = wrapAddress(entry.clock_out_address || (isComplete ? '' : '-'));
-    const outAddressBaseY = clockInY + 32;
-    for (let i = 0; i < clockOutAddrLines.length; i++) {
-      page.drawText(clockOutAddrLines[i], {
-        x: clockOutX + 8,
-        y: outAddressBaseY - (i * 10),
-        size: 7,
-        font: font,
-        color: rgb(0.4, 0.4, 0.4),
-      });
-    }
-    
-    // Move to next card position
-    yPosition = cardTop - cardHeight - 15;
+    yPosition -= 13;
   }
   
-  // Handle empty state
+  // Grand total
+  yPosition -= 5;
+  page.drawLine({
+    start: { x: 38, y: yPosition + 10 },
+    end: { x: pageWidth - 38, y: yPosition + 10 },
+    thickness: 1,
+    color: rgb(0.7, 0.7, 0.7),
+  });
+  
+  page.drawText('Total Hours:', {
+    x: 40,
+    y: yPosition,
+    size: 10,
+    font: boldFont,
+    color: rgb(0.2, 0.2, 0.2),
+  });
+  
+  page.drawText(formatDuration(totalMinutes), {
+    x: colX[6],
+    y: yPosition,
+    size: 10,
+    font: boldFont,
+    color: rgb(0.2, 0.2, 0.2),
+  });
+  
+  // Empty state
   if (entries.length === 0) {
     page.drawText('No time entries found for this period.', {
-      x: margin,
+      x: 40,
       y: yPosition,
-      size: 12,
+      size: 10,
       font: font,
       color: rgb(0.5, 0.5, 0.5),
     });
   }
   
-  // Add footer to all pages
+  // Add page numbers to all pages
   const pages = pdfDoc.getPages();
   for (let i = 0; i < pages.length; i++) {
-    const p = pages[i];
-    p.drawText(`Generated by CICO on ${new Date().toLocaleString()} | Page ${i + 1} of ${pages.length}`, {
+    pages[i].drawText(`Generated by CICO | Page ${i + 1} of ${pages.length}`, {
       x: 40,
       y: 20,
       size: 8,
@@ -1016,7 +738,7 @@ async function generateTimeEntryDetailsPDF(
     });
   }
   
-  console.info(`Generated PDF with ${pages.length} pages for ${entries.length} entries (images: ${includeImages ? 'included' : 'skipped'})`);
+  console.info(`Generated simple tabular PDF with ${pages.length} pages for ${entries.length} entries`);
   return await pdfDoc.save();
 }
 
@@ -1298,7 +1020,6 @@ async function generateWeeklyPayrollPDF(
     yPosition -= 14;
   }
   
-  // Grand total
   yPosition -= 5;
   page.drawLine({
     start: { x: 50, y: yPosition + 10 },
@@ -1345,110 +1066,7 @@ async function generateWeeklyPayrollPDF(
   return await pdfDoc.save();
 }
 
-// ============= HTML Generation Functions =============
-
-function generateEmployeeTimecardHtml(
-  entries: TimeEntry[], 
-  companyName: string, 
-  reportName: string,
-  dateRange: { start: string; end: string },
-  timezone: string
-): string {
-  let tableRows = '';
-  let totalMinutes = 0;
-
-  for (const entry of entries) {
-    const name = getEmployeeName(entry);
-    const projectName = entry.projects?.name || 'No Project';
-    const date = formatShortDate(entry.start_time, timezone);
-    const clockIn = formatTime(entry.start_time, timezone);
-    const clockOut = entry.end_time ? formatTime(entry.end_time, timezone) : 'Open';
-    const duration = formatDuration(entry.duration_minutes);
-    const entryType = entry.is_break ? 'Break' : 'Work';
-    const typeColor = entry.is_break ? '#f59e0b' : '#3b82f6';
-    totalMinutes += entry.duration_minutes || 0;
-    
-    tableRows += `
-      <tr>
-        <td style="padding: 12px; border-bottom: 1px solid #e5e7eb;">${name}</td>
-        <td style="padding: 12px; border-bottom: 1px solid #e5e7eb;">${projectName}</td>
-        <td style="padding: 12px; border-bottom: 1px solid #e5e7eb;">${date}</td>
-        <td style="padding: 12px; border-bottom: 1px solid #e5e7eb;">${clockIn}</td>
-        <td style="padding: 12px; border-bottom: 1px solid #e5e7eb;">${clockOut}</td>
-        <td style="padding: 12px; border-bottom: 1px solid #e5e7eb;"><span style="color: ${typeColor}; font-weight: 500;">${entryType}</span></td>
-        <td style="padding: 12px; border-bottom: 1px solid #e5e7eb; font-weight: 600;">${duration}</td>
-      </tr>
-    `;
-  }
-
-  if (entries.length === 0) {
-    tableRows = `
-      <tr>
-        <td colspan="7" style="padding: 24px; text-align: center; color: #6b7280;">
-          No time entries found for this period.
-        </td>
-      </tr>
-    `;
-  }
-
-  return `
-    <!DOCTYPE html>
-    <html>
-    <head>
-      <meta charset="utf-8">
-      <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    </head>
-    <body style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; margin: 0; padding: 20px; background-color: #f3f4f6;">
-      <div style="max-width: 800px; margin: 0 auto; background: white; border-radius: 8px; overflow: hidden; box-shadow: 0 1px 3px rgba(0,0,0,0.1);">
-        <div style="background: linear-gradient(135deg, #3b82f6, #1d4ed8); padding: 24px; color: white;">
-          <h1 style="margin: 0 0 8px 0; font-size: 24px;">${reportName || 'Employee Timecard Report'}</h1>
-          <p style="margin: 0; opacity: 0.9;">${companyName}</p>
-        </div>
-        
-        <div style="padding: 16px 24px; background: #f9fafb; border-bottom: 1px solid #e5e7eb;">
-          <p style="margin: 0; color: #6b7280; font-size: 14px;">
-            <strong>Period:</strong> ${dateRange.start} - ${dateRange.end}
-          </p>
-          <p style="margin: 4px 0 0 0; color: #6b7280; font-size: 14px;">
-            <strong>Total Hours:</strong> ${formatDuration(totalMinutes)}
-          </p>
-        </div>
-        
-        <div style="padding: 12px 24px; background: #eff6ff; border-bottom: 1px solid #bfdbfe;">
-          <p style="margin: 0; color: #1d4ed8; font-size: 13px;">
-            📎 <strong>Attachments:</strong> Detailed PDF (Time Entry Cards) and CSV files are attached.
-          </p>
-        </div>
-        
-        <div style="padding: 0; overflow-x: auto;">
-          <table style="width: 100%; border-collapse: collapse; font-size: 14px;">
-            <thead>
-              <tr style="background: #f9fafb;">
-                <th style="padding: 12px; text-align: left; font-weight: 600; border-bottom: 2px solid #e5e7eb;">Employee</th>
-                <th style="padding: 12px; text-align: left; font-weight: 600; border-bottom: 2px solid #e5e7eb;">Project</th>
-                <th style="padding: 12px; text-align: left; font-weight: 600; border-bottom: 2px solid #e5e7eb;">Date</th>
-                <th style="padding: 12px; text-align: left; font-weight: 600; border-bottom: 2px solid #e5e7eb;">In</th>
-                <th style="padding: 12px; text-align: left; font-weight: 600; border-bottom: 2px solid #e5e7eb;">Out</th>
-                <th style="padding: 12px; text-align: left; font-weight: 600; border-bottom: 2px solid #e5e7eb;">Type</th>
-                <th style="padding: 12px; text-align: left; font-weight: 600; border-bottom: 2px solid #e5e7eb;">Hours</th>
-              </tr>
-            </thead>
-            <tbody>
-              ${tableRows}
-            </tbody>
-          </table>
-        </div>
-        
-        <div style="padding: 16px 24px; background: #f9fafb; border-top: 1px solid #e5e7eb; text-align: center;">
-          <p style="margin: 0; color: #9ca3af; font-size: 12px;">
-            Generated by CICO on ${new Date().toLocaleString()}
-          </p>
-        </div>
-      </div>
-    </body>
-    </html>
-  `;
-}
+// ============= Other HTML Generation Functions =============
 
 function generateProjectTimecardHtml(
   entries: TimeEntry[], 
@@ -1457,7 +1075,6 @@ function generateProjectTimecardHtml(
   dateRange: { start: string; end: string },
   timezone: string
 ): string {
-  // Group entries by project
   const byProject = new Map<string, { name: string; entries: TimeEntry[]; totalMinutes: number }>();
   
   for (const entry of entries) {
@@ -1555,7 +1172,7 @@ function generateProjectTimecardHtml(
         
         <div style="padding: 12px 24px; background: #ecfdf5; border-bottom: 1px solid #a7f3d0;">
           <p style="margin: 0; color: #047857; font-size: 13px;">
-            📎 <strong>Attachments:</strong> PDF and CSV files are attached to this email for download.
+            &#128206; <strong>Attachments:</strong> PDF and CSV files are attached to this email for download.
           </p>
         </div>
         
@@ -1652,7 +1269,7 @@ function generateWeeklyPayrollHtml(
         
         <div style="padding: 12px 24px; background: #f5f3ff; border-bottom: 1px solid #e9d5ff;">
           <p style="margin: 0; color: #6d28d9; font-size: 13px;">
-            📎 <strong>Attachments:</strong> PDF and CSV files are attached to this email for download.
+            &#128206; <strong>Attachments:</strong> PDF and CSV files are attached to this email for download.
           </p>
         </div>
         
@@ -1876,10 +1493,11 @@ serve(async (req) => {
 
     switch (report.report_type) {
       case 'employee_timecard':
-        html = generateEmployeeTimecardHtml(typedEntries, companyName, report.name, dateRange, companyTimezone);
+        // Use rich HTML with photos/maps for email body
+        html = await generateTimeEntryDetailsHtml(typedEntries, companyName, report.name, dateRange, companyTimezone, supabase);
         csvContent = generateEmployeeTimecardCSV(typedEntries, companyTimezone);
-        // Use the new Time Entry Details PDF generator for employee timecard
-        pdfBytes = await generateTimeEntryDetailsPDF(typedEntries, companyName, report.name, dateRange, companyTimezone, supabase);
+        // Use simple tabular PDF (no images) to avoid memory crashes
+        pdfBytes = await generateSimpleTimecardPDF(typedEntries, companyName, report.name, dateRange, companyTimezone);
         attachmentPrefix = 'employee-timecard';
         break;
       case 'project_timecard':
@@ -1896,9 +1514,9 @@ serve(async (req) => {
         attachmentPrefix = 'payroll';
         break;
       default:
-        html = generateEmployeeTimecardHtml(typedEntries, companyName, report.name, dateRange, companyTimezone);
+        html = await generateTimeEntryDetailsHtml(typedEntries, companyName, report.name, dateRange, companyTimezone, supabase);
         csvContent = generateEmployeeTimecardCSV(typedEntries, companyTimezone);
-        pdfBytes = await generateTimeEntryDetailsPDF(typedEntries, companyName, report.name, dateRange, companyTimezone, supabase);
+        pdfBytes = await generateSimpleTimecardPDF(typedEntries, companyName, report.name, dateRange, companyTimezone);
         attachmentPrefix = 'timecard';
     }
 
@@ -1926,55 +1544,48 @@ serve(async (req) => {
 
     if (!emailTo) {
       return new Response(
-        JSON.stringify({ error: 'No recipient email provided and no recipients configured for this report' }),
+        JSON.stringify({ error: 'No recipient email provided or configured' }),
         { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
       );
     }
 
-    // Convert PDF bytes to base64
-    const pdfBase64 = uint8ArrayToBase64(pdfBytes);
-
-    // Create filename with date
-    const dateStr = dateRange.start.replace(/[^a-zA-Z0-9]/g, '-');
-    const csvFilename = `${attachmentPrefix}-${dateStr}.csv`;
-    const pdfFilename = `${attachmentPrefix}-${dateStr}.pdf`;
-
-    const subject = `[TEST] ${getReportTypeName(report.report_type)}: ${report.name || companyName} - ${dateRange.start}`;
-
-    const emailResponse = await resend.emails.send({
+    // Send email with attachments
+    console.log(`Sending test email to: ${emailTo}`);
+    
+    const { data: emailData, error: emailError } = await resend.emails.send({
       from: 'CICO Reports <reports@notifications.battlebornsteel.com>',
-      to: [emailTo],
-      subject,
-      html,
+      to: emailTo,
+      subject: `[TEST] ${report.name || getReportTypeName(report.report_type)} - ${dateRange.start}`,
+      html: html,
       attachments: [
         {
-          filename: csvFilename,
-          content: csvContent,
+          filename: `${attachmentPrefix}-${dateRange.start.replace(/[^a-zA-Z0-9]/g, '-')}.pdf`,
+          content: uint8ArrayToBase64(pdfBytes),
         },
         {
-          filename: pdfFilename,
-          content: pdfBase64,
+          filename: `${attachmentPrefix}-${dateRange.start.replace(/[^a-zA-Z0-9]/g, '-')}.csv`,
+          content: btoa(csvContent),
         }
       ],
     });
 
-    console.log('Test email sent with attachments:', emailResponse);
+    if (emailError) {
+      console.error('Email send error:', emailError);
+      throw emailError;
+    }
+
+    console.log('Test email sent successfully:', emailData);
 
     return new Response(
-      JSON.stringify({ 
-        success: true, 
-        email_response: emailResponse,
-        entries_count: entries?.length || 0,
-        date_range: dateRange,
-        attachments: [csvFilename, pdfFilename]
-      }),
+      JSON.stringify({ success: true, message: 'Test email sent', email_id: emailData?.id }),
       { status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
     );
-  } catch (error) {
+
+  } catch (error: unknown) {
     console.error('Error in send-test-report:', error);
-    const message = error instanceof Error ? error.message : 'Unknown error';
+    const errorMessage = error instanceof Error ? error.message : 'Internal server error';
     return new Response(
-      JSON.stringify({ error: message }),
+      JSON.stringify({ error: errorMessage }),
       { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
     );
   }
