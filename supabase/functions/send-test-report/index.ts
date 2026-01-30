@@ -278,7 +278,7 @@ function getTimelineX(percent: number, timelineX: number, timelineWidth: number)
   return timelineX + (percent / 100) * timelineWidth;
 }
 
-function wrapAddress(address: string, maxCharsPerLine: number = 20): string[] {
+function wrapAddress(address: string, maxCharsPerLine: number = 22): string[] {
   if (!address) return ['No address'];
   const words = address.split(/[\s,]+/);
   const lines: string[] = [];
@@ -294,7 +294,12 @@ function wrapAddress(address: string, maxCharsPerLine: number = 20): string[] {
   }
   if (currentLine) lines.push(currentLine.trim());
   
-  return lines.slice(0, 4); // Max 4 lines
+  // Return max 2 lines, truncate last line with ellipsis if needed
+  if (lines.length > 2) {
+    lines[1] = lines[1].length > 18 ? lines[1].substring(0, 18) + '...' : lines[1] + '...';
+    return lines.slice(0, 2);
+  }
+  return lines.slice(0, 2);
 }
 
 // ============= Image Embedding Helpers =============
@@ -375,7 +380,7 @@ async function fetchAndEmbedImage(pdfDoc: PDFDocument, imageUrl: string): Promis
 }
 
 // Maximum entries to include images (to avoid memory limits)
-const MAX_ENTRIES_FOR_IMAGES = 10;
+const MAX_ENTRIES_FOR_IMAGES = 50;
 
 // Fetch images for a single entry on-demand (not pre-fetched)
 interface EntryImages {
@@ -648,8 +653,8 @@ async function generateTimeEntryDetailsPDF(
       color: rgb(0.1, 0.1, 0.1),
     });
     
-    // Photo and Map thumbnails
-    const thumbnailY = clockInY + panelHeight - 100;
+    // Photo and Map thumbnails - positioned higher to leave room for address
+    const thumbnailY = clockInY + panelHeight - 75;
     const thumbnailSize = 40;
     
     // Photo thumbnail
