@@ -278,28 +278,30 @@ function getTimelineX(percent: number, timelineX: number, timelineWidth: number)
   return timelineX + (percent / 100) * timelineWidth;
 }
 
-function wrapAddress(address: string, maxCharsPerLine: number = 22): string[] {
+function wrapAddress(address: string, maxCharsPerLine: number = 20): string[] {
   if (!address) return ['No address'];
-  const words = address.split(/[\s,]+/);
+  
+  // Clean up address formatting
+  const cleanAddr = address.replace(/\s+/g, ' ').trim();
+  const words = cleanAddr.split(' ');
   const lines: string[] = [];
   let currentLine = '';
   
   for (const word of words) {
     if (currentLine.length + word.length + 1 > maxCharsPerLine) {
-      if (currentLine) lines.push(currentLine.trim());
+      if (currentLine) lines.push(currentLine);
       currentLine = word;
     } else {
       currentLine += (currentLine ? ' ' : '') + word;
     }
   }
-  if (currentLine) lines.push(currentLine.trim());
+  if (currentLine) lines.push(currentLine);
   
-  // Return max 2 lines, truncate last line with ellipsis if needed
-  if (lines.length > 2) {
-    lines[1] = lines[1].length > 18 ? lines[1].substring(0, 18) + '...' : lines[1] + '...';
-    return lines.slice(0, 2);
+  // Return max 3 lines, add ellipsis only if needed
+  if (lines.length > 3) {
+    return [...lines.slice(0, 2), lines[2].substring(0, 16) + '...'];
   }
-  return lines.slice(0, 2);
+  return lines.slice(0, 3);
 }
 
 // ============= Image Embedding Helpers =============
@@ -332,7 +334,7 @@ async function resolvePhotoUrl(supabase: any, photoUrl: string | null): Promise<
   return getSignedUrl(supabase, 'timeclock-photos', photoUrl);
 }
 
-// Generate Mapbox static map URL
+// Generate Mapbox static map URL - using smaller size to reduce memory
 function getMapUrl(latitude: number | null, longitude: number | null, isClockIn: boolean): string | null {
   if (!latitude || !longitude) return null;
   
@@ -343,7 +345,8 @@ function getMapUrl(latitude: number | null, longitude: number | null, isClockIn:
   }
   
   const pinColor = isClockIn ? '22c55e' : 'ef4444';
-  return `https://api.mapbox.com/styles/v1/mapbox/streets-v12/static/pin-s+${pinColor}(${longitude},${latitude})/${longitude},${latitude},15/80x80@2x?access_token=${mapboxToken}`;
+  // Use 48x48 instead of 80x80@2x to reduce image data by ~75%
+  return `https://api.mapbox.com/styles/v1/mapbox/streets-v12/static/pin-s+${pinColor}(${longitude},${latitude})/${longitude},${latitude},15/48x48?access_token=${mapboxToken}`;
 }
 
 // Fetch image and embed in PDF
@@ -379,8 +382,9 @@ async function fetchAndEmbedImage(pdfDoc: PDFDocument, imageUrl: string): Promis
   }
 }
 
-// Maximum entries to include images (each entry can have up to 4 images, so keep this low to avoid memory limits)
-const MAX_ENTRIES_FOR_IMAGES = 15;
+// Per-page image budget - allows images on all pages without hitting memory limits
+// Max 24 images per page (~6 entries × 4 images each)
+const MAX_IMAGES_PER_PAGE = 24;
 
 // Fetch images for a single entry on-demand (not pre-fetched)
 interface EntryImages {
@@ -486,22 +490,30 @@ async function generateTimeEntryDetailsPDF(
   const hourLabels = ['6am', '8am', '10am', '12pm', '2pm', '4pm', '6pm', '8pm'];
   const hourValues = [6, 8, 10, 12, 14, 16, 18, 20];
   
-  // Determine if we should include images (to avoid memory limits)
-  const includeImages = entries.length <= MAX_ENTRIES_FOR_IMAGES;
-  if (!includeImages) {
-    console.log(`Skipping images for ${entries.length} entries (max ${MAX_ENTRIES_FOR_IMAGES}) to avoid memory limits`);
-  }
+  // Per-page image budget to avoid memory limits while still showing images
+  let imagesOnCurrentPage = 0;
   
   // ===== Draw Time Entry Cards =====
   for (const entry of entries) {
-    // Fetch images for this entry on-demand (only if within limit)
-    const images: EntryImages | null = includeImages 
-      ? await fetchEntryImages(pdfDoc, supabase, entry) 
-      : null;
     // Check if we need a new page
     if (yPosition - cardHeight < margin + 30) {
       page = pdfDoc.addPage([pageWidth, pageHeight]);
       yPosition = pageHeight - margin;
+      imagesOnCurrentPage = 0; // Reset image count for new page
+    }
+    
+    // Fetch images for this entry on-demand (only if within per-page budget)
+    const canIncludeImages = imagesOnCurrentPage < MAX_IMAGES_PER_PAGE;
+    const images: EntryImages | null = canIncludeImages 
+      ? await fetchEntryImages(pdfDoc, supabase, entry) 
+      : null;
+    
+    // Track how many images were embedded for this entry
+    if (images) {
+      if (images.clockInPhoto) imagesOnCurrentPage++;
+      if (images.clockInMap) imagesOnCurrentPage++;
+      if (images.clockOutPhoto) imagesOnCurrentPage++;
+      if (images.clockOutMap) imagesOnCurrentPage++;
     }
     
     const cardTop = yPosition;
@@ -653,8 +665,8 @@ async function generateTimeEntryDetailsPDF(
       color: rgb(0.1, 0.1, 0.1),
     });
     
-    // Photo and Map thumbnails - positioned higher to leave room for address
-    const thumbnailY = clockInY + panelHeight - 75;
+    // Photo and Map thumbnails - positioned to leave room for 3 address lines below
+    const thumbnailY = clockInY + panelHeight - 70;
     const thumbnailSize = 40;
     
     // Photo thumbnail
@@ -729,18 +741,18 @@ async function generateTimeEntryDetailsPDF(
       });
     }
     
-    // Multi-line address below thumbnails
+    // Multi-line address below thumbnails (up to 3 lines)
     const clockInAddrLines = wrapAddress(entry.clock_in_address || '');
-    let addrY = thumbnailY - 10;
-    for (const line of clockInAddrLines) {
-      page.drawText(line, {
+    // Fixed position from panel bottom to ensure text stays within bounds
+    const addressBaseY = clockInY + 32;
+    for (let i = 0; i < clockInAddrLines.length; i++) {
+      page.drawText(clockInAddrLines[i], {
         x: clockInX + 8,
-        y: addrY,
+        y: addressBaseY - (i * 10),
         size: 7,
         font: font,
         color: rgb(0.4, 0.4, 0.4),
       });
-      addrY -= 10;
     }
     
     // === Timeline Section (Center) ===
@@ -891,8 +903,8 @@ async function generateTimeEntryDetailsPDF(
       color: rgb(0.1, 0.1, 0.1),
     });
     
-    // Photo and Map thumbnails for clock out
-    const outThumbnailY = clockInY + panelHeight - 100;
+    // Photo and Map thumbnails for clock out - same position as clock in
+    const outThumbnailY = clockInY + panelHeight - 70;
     
     // Photo thumbnail
     if (images?.clockOutPhoto) {
@@ -966,18 +978,18 @@ async function generateTimeEntryDetailsPDF(
       });
     }
     
-    // Multi-line address for clock out below thumbnails
+    // Multi-line address for clock out below thumbnails (up to 3 lines)
     const clockOutAddrLines = wrapAddress(entry.clock_out_address || (isComplete ? '' : '-'));
-    let outAddrY = outThumbnailY - 10;
-    for (const line of clockOutAddrLines) {
-      page.drawText(line, {
+    // Fixed position from panel bottom to ensure text stays within bounds
+    const outAddressBaseY = clockInY + 32;
+    for (let i = 0; i < clockOutAddrLines.length; i++) {
+      page.drawText(clockOutAddrLines[i], {
         x: clockOutX + 8,
-        y: outAddrY,
+        y: outAddressBaseY - (i * 10),
         size: 7,
         font: font,
         color: rgb(0.4, 0.4, 0.4),
       });
-      outAddrY -= 10;
     }
     
     // Move to next card position
