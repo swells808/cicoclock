@@ -1,120 +1,129 @@
 
 
-# Fix PDF Report Images and Address Layout
+# Fix PDF Report: Images Missing & Address Overflow
 
-## Overview
+## Problem Summary
 
-The PDF report has two issues:
-1. **Images not showing** - The `MAX_ENTRIES_FOR_IMAGES = 10` limit is too restrictive, causing all photos and maps to show as placeholders when the report has more than 10 entries
-2. **Address text overflow** - The multi-line addresses extend below the panel boundary because there's insufficient space between the thumbnails and panel bottom
+1. **Images not appearing**: The report has 23 time entries, but `MAX_ENTRIES_FOR_IMAGES = 15` causes ALL images to be skipped
+2. **Addresses truncated badly**: Text is cut off mid-word with only 2 lines allowed
+3. **Memory constraint**: Cannot simply remove the limit as 92+ images will cause WORKER_LIMIT errors
 
-## Root Cause Analysis
+## Solution Strategy: Per-Page Image Limiting
 
-### Issue 1: Images Skipped
-The logs confirm: `Skipping images for 23 entries (max 10) to avoid memory limits`
+Instead of skipping images for the entire report when entry count exceeds threshold, we'll:
+1. **Process images per page** - limit to ~6-8 entries with images per page (3 cards × 2-3 pages worth)
+2. **Reduce Mapbox image size** - request 40x40 instead of 80x80@2x to cut image data by 75%
+3. **Expand address display** - allow 3 lines with proper wrapping
 
-The memory optimization that was added to prevent the `WORKER_LIMIT` error is too aggressive. Since we're now fetching images on-demand per entry (not pre-loading all at once), we can safely increase this limit significantly.
+## Technical Changes
 
-### Issue 2: Address Overflow
-Current layout math:
-- Panel height: 120px
-- Thumbnails at `panelHeight - 100 = 20px` from panel bottom
-- Address starts at `thumbnailY - 10 = 10px` from panel bottom
-- Each address line is 10px tall
-- Max 4 lines = 40px total, going to -30px (below panel)
-
-The address text has 4 lines × 10px = 40px of content trying to fit in only 10px of remaining space.
-
-## Solution
-
-### Fix 1: Remove or Significantly Increase Image Limit
-Since images are fetched on-demand per entry (not all at once), memory usage is bounded. We can safely increase the limit or remove it entirely for reasonable report sizes.
-
-**Change**: Increase `MAX_ENTRIES_FOR_IMAGES` from 10 to 50 in both edge functions.
-
-### Fix 2: Adjust Panel Layout for Address Space
-We need to reposition elements to ensure addresses fit within the panel:
-
-**Option A (Recommended)**: Move thumbnails higher + reduce address line count
-- Move thumbnails to `panelHeight - 80` (instead of -100) giving more space below
-- Limit address to 2 lines max (instead of 4)
-- This keeps cards at the same height
-
-**Option B**: Increase panel height
-- Would require increasing card height, affecting page layout
-
-Going with Option A for minimal disruption.
-
-## Implementation Tasks
-
-### Task 1: Increase Image Limit in Both Functions
-| File | Change |
-|------|--------|
-| `supabase/functions/send-test-report/index.ts` | Change `MAX_ENTRIES_FOR_IMAGES` from `10` to `50` |
-| `supabase/functions/process-scheduled-reports/index.ts` | Same change |
-
-### Task 2: Adjust Address Wrapping
-| File | Change |
-|------|--------|
-| `supabase/functions/send-test-report/index.ts` | Change `wrapAddress` to return max 2 lines instead of 4 |
-| `supabase/functions/process-scheduled-reports/index.ts` | Same change |
-
-### Task 3: Move Thumbnails Up
-Adjust thumbnail Y position to create more room for addresses:
+### 1. Change from Report-Level to Page-Level Image Budget
 
 ```typescript
-// Before:
-const thumbnailY = clockInY + panelHeight - 100;  // 20px from bottom
+// Remove the old threshold check
+// const includeImages = entries.length <= MAX_ENTRIES_FOR_IMAGES;
 
-// After:
-const thumbnailY = clockInY + panelHeight - 75;   // 45px from bottom
+// Track images embedded per page
+const MAX_IMAGES_PER_PAGE = 24; // ~6 entries × 4 images each
+let imagesOnCurrentPage = 0;
+
+// Reset counter when adding new page
+if (yPosition - cardHeight < margin + 30) {
+  page = pdfDoc.addPage([pageWidth, pageHeight]);
+  yPosition = pageHeight - margin;
+  imagesOnCurrentPage = 0; // Reset for new page
+}
+
+// Check per-entry, not per-report
+const canIncludeImages = imagesOnCurrentPage < MAX_IMAGES_PER_PAGE;
+const images = canIncludeImages ? await fetchEntryImages(...) : null;
+
+// Increment counter after embedding
+if (images) {
+  if (images.clockInPhoto) imagesOnCurrentPage++;
+  if (images.clockInMap) imagesOnCurrentPage++;
+  if (images.clockOutPhoto) imagesOnCurrentPage++;
+  if (images.clockOutMap) imagesOnCurrentPage++;
+}
 ```
 
-This gives 35px for address (3+ lines at 10px each), but we'll limit to 2 lines for clean appearance.
+### 2. Reduce Mapbox Image Size
 
-### Task 4: Shorten Address Display
-Modify the `wrapAddress` function:
+Change from 80x80@2x (160×160 actual) to 48x48 (no @2x):
 
 ```typescript
-function wrapAddress(address: string, maxCharsPerLine: number = 22): string[] {
+function getMapUrl(latitude: number | null, longitude: number | null, isClockIn: boolean): string | null {
+  // ... existing checks ...
+  
+  // Smaller size = less memory
+  return `https://api.mapbox.com/styles/v1/mapbox/streets-v12/static/pin-s+${pinColor}(${longitude},${latitude})/${longitude},${latitude},15/48x48?access_token=${mapboxToken}`;
+}
+```
+
+### 3. Improve Address Wrapping
+
+```typescript
+function wrapAddress(address: string, maxCharsPerLine: number = 20): string[] {
   if (!address) return ['No address'];
-  const words = address.split(/[\s,]+/);
+  
+  // Clean up address formatting
+  const cleanAddr = address.replace(/\s+/g, ' ').trim();
+  const words = cleanAddr.split(' ');
   const lines: string[] = [];
   let currentLine = '';
   
   for (const word of words) {
     if (currentLine.length + word.length + 1 > maxCharsPerLine) {
-      if (currentLine) lines.push(currentLine.trim());
+      if (currentLine) lines.push(currentLine);
       currentLine = word;
     } else {
       currentLine += (currentLine ? ' ' : '') + word;
     }
   }
-  if (currentLine) lines.push(currentLine.trim());
+  if (currentLine) lines.push(currentLine);
   
-  // Return max 2 lines, truncate last line with ellipsis if needed
-  if (lines.length > 2) {
-    lines[1] = lines[1].length > 18 ? lines[1].substring(0, 18) + '...' : lines[1] + '...';
-    return lines.slice(0, 2);
+  // Return max 3 lines, add ellipsis only if needed
+  if (lines.length > 3) {
+    return [...lines.slice(0, 2), lines[2].substring(0, 16) + '...'];
   }
-  return lines.slice(0, 2);
+  return lines.slice(0, 3);
 }
+```
+
+### 4. Adjust Panel Layout for 3 Address Lines
+
+Current panel height is 120px. We need to adjust vertical spacing:
+
+```typescript
+// Thumbnails at fixed position from top (after time display)
+const thumbnailY = clockInY + panelHeight - 70;  // Move up slightly
+
+// Address text at fixed position from bottom
+const addressBaseY = clockInY + 32; // 32px from panel bottom
+// Draw 3 lines at addressBaseY, addressBaseY - 10, addressBaseY - 20
 ```
 
 ## Files to Modify
 
 | File | Changes |
 |------|---------|
-| `supabase/functions/send-test-report/index.ts` | Increase `MAX_ENTRIES_FOR_IMAGES` to 50, adjust `wrapAddress` to 2 lines, move thumbnails to `panelHeight - 75` |
-| `supabase/functions/process-scheduled-reports/index.ts` | Same changes for consistency |
+| `supabase/functions/send-test-report/index.ts` | Per-page image budget, smaller Mapbox images, better address wrapping |
+| `supabase/functions/process-scheduled-reports/index.ts` | Same changes |
 
-## Testing
+## Memory Math
 
-After deployment:
-1. Click "Test" on the Daily Time Report from the Reports page
-2. Verify in the received PDF:
-   - Employee photos appear in Clock In/Out panels
-   - Mapbox map thumbnails show with colored pins
-   - Addresses are contained within the panel (2 lines max)
-   - Layout looks clean and consistent
+**Before**: 23 entries × 4 images × ~50KB each = ~4.6MB (hits limit)
+
+**After**: 
+- Max 24 images per page × ~12KB each (smaller Mapbox) = ~300KB per page
+- Pages process and flush, memory doesn't accumulate
+- Report generates successfully with images on every page
+
+## Expected Result
+
+After these changes:
+- Employee photos will appear in Clock In/Out panels
+- Mapbox maps will show location pins
+- Addresses will display 3 readable lines (e.g., "401 East Sunset Road, Henderson, Nevada...")
+- Reports with 50+ entries will still generate successfully
 
