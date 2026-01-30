@@ -745,30 +745,14 @@ function renderReportPopup(
   };
 }
 
-// --- Legacy Report Export Utilities ---
-const sampleEmployeeRows = [
-  { name: "Jane Doe", week: 42, month: 172 },
-  { name: "Alex Lee", week: 39, month: 165 },
-  { name: "John Smith", week: 36, month: 159 },
-  { name: "Taylor Morgan", week: 27, month: 143 },
-  { name: "Chris Evans", week: 20, month: 128 },
-];
+// --- Employee/Project Report Export Utilities ---
 
-const sampleProjectRows = [
-  { name: "Redesign Q3", week: 41, month: 160 },
-  { name: "Project Alpha", week: 37, month: 149 },
-  { name: "Mobile App", week: 31, month: 137 },
-  { name: "New Onboarding", week: 24, month: 111 },
-  { name: "Remote HR", week: 15, month: 97 },
-];
-
-function exportTableAsCSV(type: "employee" | "project") {
-  const rows = type === "employee" ? sampleEmployeeRows : sampleProjectRows;
-  const columns = ["Name", "Week", "Month"];
-  let csv =
-    columns.join(",") +
-    "\n" +
-    rows.map((row) => columns.map((col) => String((row as any)[col.toLowerCase()])).join(",")).join("\n");
+function exportTableAsCSV(type: "employee" | "project", data?: any[]) {
+  const reportData = data || (window as any).currentEmployeeProjectData?.reportData || [];
+  const columns = ["Name", "Hours"];
+  let csv = columns.join(",") + "\n";
+  csv += reportData.map((row: any) => `"${row.name}",${row.hours?.toFixed(1) || 0}`).join("\n");
+  
   const blob = new Blob([csv], { type: "text/csv" });
   const url = window.URL.createObjectURL(blob);
   const a = document.createElement("a");
@@ -776,29 +760,34 @@ function exportTableAsCSV(type: "employee" | "project") {
   a.download = `${type}-report.csv`;
   document.body.appendChild(a);
   a.click();
-  url && window.URL.revokeObjectURL(url);
+  window.URL.revokeObjectURL(url);
   a.remove();
 }
 
-function exportTableAsPDF(type: "employee" | "project") {
-  // @ts-ignore
-  import("jspdf").then(jsPDFImport => {
-    // @ts-ignore
-    import("jspdf-autotable").then(() => {
-      const { jsPDF } = jsPDFImport;
-      const doc = new jsPDF();
-      const rows = type === "employee" ? sampleEmployeeRows : sampleProjectRows;
-      const columns = ["Name", "Week", "Month"];
-      doc.text(`${type === "employee" ? "Employee" : "Project"} Report`, 14, 16);
-      // @ts-ignore
-      doc.autoTable({
-        head: [columns],
-        body: rows.map((row) => columns.map((col) => (row as any)[col.toLowerCase()])),
-        startY: 20,
-      });
-      doc.save(`${type}-report.pdf`);
-    });
+async function exportTableAsPDF(type: "employee" | "project", data?: any[]) {
+  const reportData = data || (window as any).currentEmployeeProjectData?.reportData || [];
+  const jsPDFModule = await import("jspdf");
+  const autoTableModule = await import("jspdf-autotable");
+  
+  const { jsPDF } = jsPDFModule;
+  const doc = new jsPDF();
+  
+  // jspdf-autotable exports autoTable as default
+  const autoTable = autoTableModule.default;
+  
+  const columns = ["Name", "Hours"];
+  doc.setFontSize(16);
+  doc.text(`${type === "employee" ? "Work Hours Per Employee" : "Project Time Distribution"}`, 14, 16);
+  
+  autoTable(doc, {
+    startY: 25,
+    head: [columns],
+    body: reportData.map((row: any) => [row.name, row.hours?.toFixed(1) || "0"]),
+    theme: 'striped',
+    headStyles: { fillColor: [59, 130, 246] },
   });
+  
+  doc.save(`${type}-report.pdf`);
 }
 
 const Reports = () => {
@@ -1013,15 +1002,24 @@ const Reports = () => {
       .gte('start_time', start.toISOString())
       .lte('start_time', end.toISOString());
 
-    // Calculate minutes for each entry
+    // Calculate minutes for each entry, prorating entries that span multiple days
     const timeEntries = rawTimeEntries?.map(entry => {
-      let minutes = entry.duration_minutes;
-      if (!minutes && entry.start_time) {
-        const startTime = new Date(entry.start_time).getTime();
-        const endTime = entry.end_time ? new Date(entry.end_time).getTime() : Date.now();
-        minutes = Math.floor((endTime - startTime) / 1000 / 60);
-      }
-      return { ...entry, calculated_minutes: minutes || 0 };
+      const entryStart = new Date(entry.start_time).getTime();
+      const entryEnd = entry.end_time ? new Date(entry.end_time).getTime() : Date.now();
+      
+      // Clamp to the report's date range to prorate multi-day entries
+      const rangeStart = start.getTime();
+      const rangeEnd = end.getTime();
+      
+      const effectiveStart = Math.max(entryStart, rangeStart);
+      const effectiveEnd = Math.min(entryEnd, rangeEnd);
+      
+      // Calculate only the minutes within the date range
+      const minutes = effectiveStart < effectiveEnd 
+        ? Math.floor((effectiveEnd - effectiveStart) / 1000 / 60)
+        : 0;
+      
+      return { ...entry, calculated_minutes: minutes };
     }) || [];
 
     // Build employee or project reports from fresh data
@@ -1166,9 +1164,10 @@ const Reports = () => {
     `;
     newWin.document.write(html);
     newWin.document.close();
-    // attach utility functions to opener so popup can invoke
-    (window as any).exportTableAsCSV = exportTableAsCSV;
-    (window as any).exportTableAsPDF = exportTableAsPDF;
+    // Store real data and attach export functions to opener so popup can invoke
+    (window as any).currentEmployeeProjectData = { reportData, type: filters.reportType };
+    (window as any).exportTableAsCSV = (type: string) => exportTableAsCSV(type as "employee" | "project", reportData);
+    (window as any).exportTableAsPDF = (type: string) => exportTableAsPDF(type as "employee" | "project", reportData);
   };
 
   return (

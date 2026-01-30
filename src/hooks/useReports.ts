@@ -73,14 +73,24 @@ export const useReports = (startDate?: Date, endDate?: Date) => {
 
       if (timeError) throw timeError;
 
+      // Calculate minutes for each entry, prorating entries that span multiple days
       const timeEntries = rawTimeEntries?.map(entry => {
-        let minutes = entry.duration_minutes;
-        if (!minutes && entry.start_time) {
-          const startTime = new Date(entry.start_time).getTime();
-          const endTime = entry.end_time ? new Date(entry.end_time).getTime() : Date.now();
-          minutes = Math.floor((endTime - startTime) / 1000 / 60);
-        }
-        return { ...entry, calculated_minutes: minutes || 0 };
+        const entryStart = new Date(entry.start_time).getTime();
+        const entryEnd = entry.end_time ? new Date(entry.end_time).getTime() : Date.now();
+        
+        // Clamp to the report's date range to prorate multi-day entries
+        const rangeStart = start.getTime();
+        const rangeEnd = end.getTime();
+        
+        const effectiveStart = Math.max(entryStart, rangeStart);
+        const effectiveEnd = Math.min(entryEnd, rangeEnd);
+        
+        // Calculate only the minutes within the date range
+        const minutes = effectiveStart < effectiveEnd 
+          ? Math.floor((effectiveEnd - effectiveStart) / 1000 / 60)
+          : 0;
+        
+        return { ...entry, calculated_minutes: minutes };
       }) || [];
 
       const totalMinutes = timeEntries?.reduce((sum, entry: any) => {
