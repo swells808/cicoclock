@@ -379,8 +379,8 @@ async function fetchAndEmbedImage(pdfDoc: PDFDocument, imageUrl: string): Promis
   }
 }
 
-// Maximum entries to include images (to avoid memory limits)
-const MAX_ENTRIES_FOR_IMAGES = 50;
+// Maximum entries to include images (each entry can have up to 4 images, so keep this low to avoid memory limits)
+const MAX_ENTRIES_FOR_IMAGES = 15;
 
 // Fetch images for a single entry on-demand (not pre-fetched)
 interface EntryImages {
