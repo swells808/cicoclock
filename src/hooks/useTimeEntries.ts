@@ -14,11 +14,19 @@ export const useTimeEntries = (userId?: string) => {
     queryFn: async () => {
       if (!targetUserId || !company?.id) return [];
       
+      // First get the user's profile to also match by profile_id (for PIN-clocked entries)
+      const { data: profile } = await supabase
+        .from("profiles")
+        .select("id")
+        .eq("user_id", targetUserId)
+        .single();
+
+      // Query time entries matching either user_id OR profile_id
       const { data, error } = await supabase
         .from("time_entries")
         .select("*, projects(*)")
-        .eq("user_id", targetUserId)
         .eq("company_id", company.id)
+        .or(`user_id.eq.${targetUserId}${profile ? `,profile_id.eq.${profile.id}` : ''}`)
         .order("start_time", { ascending: false });
 
       if (error) throw error;
