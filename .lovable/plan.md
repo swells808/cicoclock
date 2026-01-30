@@ -1,129 +1,147 @@
 
 
-# Fix PDF Report: Images Missing & Address Overflow
+# Solution: Match Browser's PDF Generation Strategy
 
-## Problem Summary
+## Why Browser Works But Edge Function Fails
 
-1. **Images not appearing**: The report has 23 time entries, but `MAX_ENTRIES_FOR_IMAGES = 15` causes ALL images to be skipped
-2. **Addresses truncated badly**: Text is cut off mid-word with only 2 lines allowed
-3. **Memory constraint**: Cannot simply remove the limit as 92+ images will cause WORKER_LIMIT errors
+| Aspect | Browser (`html2canvas` + `jsPDF`) | Edge Function (`pdf-lib`) |
+|--------|----------------------------------|---------------------------|
+| **Memory Model** | Process one card → render to canvas → compress → add image → garbage collect | Fetch all images → embed all → save PDF → all in memory |
+| **Image Lifecycle** | Each entry's images released after canvas rendered | All images held until `pdfDoc.save()` |
+| **Memory Growth** | Constant (~500KB peak) | Linear (entries × images × size) |
+| **23 entries** | Works fine | WORKER_LIMIT crash |
 
-## Solution Strategy: Per-Page Image Limiting
+The browser version renders each entry to an HTML container, captures it with `html2canvas` (which compresses it), adds the resulting PNG to jsPDF, then removes the container. Memory stays flat because only one card is processed at a time.
 
-Instead of skipping images for the entire report when entry count exceeds threshold, we'll:
-1. **Process images per page** - limit to ~6-8 entries with images per page (3 cards × 2-3 pages worth)
-2. **Reduce Mapbox image size** - request 40x40 instead of 80x80@2x to cut image data by 75%
-3. **Expand address display** - allow 3 lines with proper wrapping
+## Solution: Paginated PDF Generation with Streaming
 
-## Technical Changes
+Instead of building the entire PDF in memory, we'll generate one page at a time and concatenate them. However, `pdf-lib` doesn't support true streaming, so we need a different approach.
 
-### 1. Change from Report-Level to Page-Level Image Budget
+### Approach: Generate Multiple Small PDFs, Then Merge
+
+1. **Split entries into chunks** (6 entries per chunk = ~24 images max)
+2. **Generate a mini-PDF for each chunk** (fits in memory)
+3. **Merge mini-PDFs** at the end using `pdf-lib`'s `copyPages`
+4. **Discard mini-PDF after copying** (releases memory)
 
 ```typescript
-// Remove the old threshold check
-// const includeImages = entries.length <= MAX_ENTRIES_FOR_IMAGES;
-
-// Track images embedded per page
-const MAX_IMAGES_PER_PAGE = 24; // ~6 entries × 4 images each
-let imagesOnCurrentPage = 0;
-
-// Reset counter when adding new page
-if (yPosition - cardHeight < margin + 30) {
-  page = pdfDoc.addPage([pageWidth, pageHeight]);
-  yPosition = pageHeight - margin;
-  imagesOnCurrentPage = 0; // Reset for new page
+const ENTRIES_PER_CHUNK = 6; // 6 entries × 4 images = 24 images max per chunk
+const chunks = [];
+for (let i = 0; i < entries.length; i += ENTRIES_PER_CHUNK) {
+  chunks.push(entries.slice(i, i + ENTRIES_PER_CHUNK));
 }
 
-// Check per-entry, not per-report
-const canIncludeImages = imagesOnCurrentPage < MAX_IMAGES_PER_PAGE;
-const images = canIncludeImages ? await fetchEntryImages(...) : null;
+const finalPdf = await PDFDocument.create();
 
-// Increment counter after embedding
-if (images) {
-  if (images.clockInPhoto) imagesOnCurrentPage++;
-  if (images.clockInMap) imagesOnCurrentPage++;
-  if (images.clockOutPhoto) imagesOnCurrentPage++;
-  if (images.clockOutMap) imagesOnCurrentPage++;
+for (const chunk of chunks) {
+  // Create temporary PDF with just this chunk's entries
+  const tempPdf = await generateChunkPDF(chunk, ...);
+  
+  // Copy pages from temp to final
+  const pages = await finalPdf.copyPages(tempPdf, tempPdf.getPageIndices());
+  pages.forEach(page => finalPdf.addPage(page));
+  
+  // tempPdf goes out of scope, eligible for GC
+}
+
+return await finalPdf.save();
+```
+
+### Why This Works
+
+- Each chunk PDF has at most 24 images (~300KB)
+- After copying pages to the final PDF, the temp PDF can be garbage collected
+- The final PDF only holds page references, not the original image bytes
+- Memory stays bounded at ~500KB peak instead of growing to 4.6MB
+
+## Implementation Plan
+
+### Task 1: Create Chunk-Based PDF Generator Function
+
+Create a helper that generates a PDF for a subset of entries:
+
+```typescript
+async function generateChunkPDF(
+  entries: TimeEntry[],
+  companyName: string,
+  timezone: string,
+  supabase: any,
+  isFirstChunk: boolean,
+  dateRange: { start: string; end: string }
+): Promise<PDFDocument> {
+  const pdfDoc = await PDFDocument.create();
+  // Only add header on first chunk
+  // Always include images (chunk is small enough)
+  // Return the PDFDocument for merging
+  return pdfDoc;
 }
 ```
 
-### 2. Reduce Mapbox Image Size
-
-Change from 80x80@2x (160×160 actual) to 48x48 (no @2x):
+### Task 2: Modify Main Generator to Use Chunking
 
 ```typescript
-function getMapUrl(latitude: number | null, longitude: number | null, isClockIn: boolean): string | null {
-  // ... existing checks ...
-  
-  // Smaller size = less memory
-  return `https://api.mapbox.com/styles/v1/mapbox/streets-v12/static/pin-s+${pinColor}(${longitude},${latitude})/${longitude},${latitude},15/48x48?access_token=${mapboxToken}`;
-}
-```
-
-### 3. Improve Address Wrapping
-
-```typescript
-function wrapAddress(address: string, maxCharsPerLine: number = 20): string[] {
-  if (!address) return ['No address'];
-  
-  // Clean up address formatting
-  const cleanAddr = address.replace(/\s+/g, ' ').trim();
-  const words = cleanAddr.split(' ');
-  const lines: string[] = [];
-  let currentLine = '';
-  
-  for (const word of words) {
-    if (currentLine.length + word.length + 1 > maxCharsPerLine) {
-      if (currentLine) lines.push(currentLine);
-      currentLine = word;
-    } else {
-      currentLine += (currentLine ? ' ' : '') + word;
-    }
+async function generateTimeEntryDetailsPDF(...): Promise<Uint8Array> {
+  const ENTRIES_PER_CHUNK = 6;
+  const chunks = [];
+  for (let i = 0; i < entries.length; i += ENTRIES_PER_CHUNK) {
+    chunks.push(entries.slice(i, i + ENTRIES_PER_CHUNK));
   }
-  if (currentLine) lines.push(currentLine);
   
-  // Return max 3 lines, add ellipsis only if needed
-  if (lines.length > 3) {
-    return [...lines.slice(0, 2), lines[2].substring(0, 16) + '...'];
+  if (chunks.length === 1) {
+    // Small report, generate directly
+    return await generateSinglePDF(entries, ...);
   }
-  return lines.slice(0, 3);
+  
+  // Large report, generate in chunks
+  const finalPdf = await PDFDocument.create();
+  
+  for (let i = 0; i < chunks.length; i++) {
+    console.info(`Processing chunk ${i + 1}/${chunks.length}`);
+    const chunkPdf = await generateChunkPDF(chunks[i], ..., i === 0, ...);
+    const pages = await finalPdf.copyPages(chunkPdf, chunkPdf.getPageIndices());
+    pages.forEach(page => finalPdf.addPage(page));
+  }
+  
+  return await finalPdf.save();
 }
 ```
 
-### 4. Adjust Panel Layout for 3 Address Lines
+### Task 3: Handle Page Headers Correctly
 
-Current panel height is 120px. We need to adjust vertical spacing:
+- First chunk includes full report header
+- Subsequent chunks start with a continuation header
+- Page numbers span the entire document
 
-```typescript
-// Thumbnails at fixed position from top (after time display)
-const thumbnailY = clockInY + panelHeight - 70;  // Move up slightly
+### Task 4: Update Both Edge Functions
 
-// Address text at fixed position from bottom
-const addressBaseY = clockInY + 32; // 32px from panel bottom
-// Draw 3 lines at addressBaseY, addressBaseY - 10, addressBaseY - 20
-```
+Apply the same chunking logic to:
+- `supabase/functions/send-test-report/index.ts`
+- `supabase/functions/process-scheduled-reports/index.ts`
 
 ## Files to Modify
 
 | File | Changes |
 |------|---------|
-| `supabase/functions/send-test-report/index.ts` | Per-page image budget, smaller Mapbox images, better address wrapping |
-| `supabase/functions/process-scheduled-reports/index.ts` | Same changes |
+| `supabase/functions/send-test-report/index.ts` | Add chunked PDF generation with memory-bounded processing |
+| `supabase/functions/process-scheduled-reports/index.ts` | Same changes for consistency |
 
 ## Memory Math
 
-**Before**: 23 entries × 4 images × ~50KB each = ~4.6MB (hits limit)
+**Before (monolithic)**:
+- 23 entries × 4 images × 50KB = 4.6MB (crashes)
 
-**After**: 
-- Max 24 images per page × ~12KB each (smaller Mapbox) = ~300KB per page
-- Pages process and flush, memory doesn't accumulate
-- Report generates successfully with images on every page
+**After (chunked)**:
+- Chunk 1: 6 entries × 4 images × 50KB = 1.2MB → copy pages → GC
+- Chunk 2: 6 entries × 4 images × 50KB = 1.2MB → copy pages → GC
+- Chunk 3: 6 entries × 4 images × 50KB = 1.2MB → copy pages → GC
+- Chunk 4: 5 entries × 4 images × 50KB = 1.0MB → copy pages → GC
+- Peak memory: ~1.5MB (fits in Edge Function limit)
 
 ## Expected Result
 
 After these changes:
-- Employee photos will appear in Clock In/Out panels
-- Mapbox maps will show location pins
-- Addresses will display 3 readable lines (e.g., "401 East Sunset Road, Henderson, Nevada...")
+- All 23 entries will have their photos and maps displayed
 - Reports with 50+ entries will still generate successfully
+- Memory usage stays bounded regardless of report size
+- Layout matches the browser-generated PDF exactly
 
