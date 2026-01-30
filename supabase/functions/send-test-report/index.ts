@@ -382,9 +382,10 @@ async function fetchAndEmbedImage(pdfDoc: PDFDocument, imageUrl: string): Promis
   }
 }
 
-// Per-page image budget - allows images on all pages without hitting memory limits
-// Max 24 images per page (~6 entries × 4 images each)
-const MAX_IMAGES_PER_PAGE = 24;
+// Maximum entries that can include embedded images (memory constraint)
+// With 23+ entries, all images accumulate in PDF document memory before finalization
+// Keep this very low to avoid WORKER_LIMIT errors in Edge Functions
+const MAX_ENTRIES_FOR_IMAGES = 8;
 
 // Fetch images for a single entry on-demand (not pre-fetched)
 interface EntryImages {
@@ -490,8 +491,11 @@ async function generateTimeEntryDetailsPDF(
   const hourLabels = ['6am', '8am', '10am', '12pm', '2pm', '4pm', '6pm', '8pm'];
   const hourValues = [6, 8, 10, 12, 14, 16, 18, 20];
   
-  // Per-page image budget to avoid memory limits while still showing images
-  let imagesOnCurrentPage = 0;
+  // Determine if we can include images for this report (memory constraint)
+  const includeImages = entries.length <= MAX_ENTRIES_FOR_IMAGES;
+  if (!includeImages) {
+    console.info(`Skipping images: ${entries.length} entries exceeds limit of ${MAX_ENTRIES_FOR_IMAGES}`);
+  }
   
   // ===== Draw Time Entry Cards =====
   for (const entry of entries) {
@@ -499,22 +503,12 @@ async function generateTimeEntryDetailsPDF(
     if (yPosition - cardHeight < margin + 30) {
       page = pdfDoc.addPage([pageWidth, pageHeight]);
       yPosition = pageHeight - margin;
-      imagesOnCurrentPage = 0; // Reset image count for new page
     }
     
-    // Fetch images for this entry on-demand (only if within per-page budget)
-    const canIncludeImages = imagesOnCurrentPage < MAX_IMAGES_PER_PAGE;
-    const images: EntryImages | null = canIncludeImages 
+    // Fetch images for this entry only if within report-level budget
+    const images: EntryImages | null = includeImages 
       ? await fetchEntryImages(pdfDoc, supabase, entry) 
       : null;
-    
-    // Track how many images were embedded for this entry
-    if (images) {
-      if (images.clockInPhoto) imagesOnCurrentPage++;
-      if (images.clockInMap) imagesOnCurrentPage++;
-      if (images.clockOutPhoto) imagesOnCurrentPage++;
-      if (images.clockOutMap) imagesOnCurrentPage++;
-    }
     
     const cardTop = yPosition;
     const cardWidth = pageWidth - (margin * 2);
