@@ -14,6 +14,7 @@ import { useEmployees } from "@/hooks/useEmployees";
 import { useCompany } from "@/contexts/CompanyContext";
 import { useToast } from "@/hooks/use-toast";
 import { PhotoCapture } from "@/components/timeclock/PhotoCapture";
+import { useUserRole } from "@/hooks/useUserRole";
 
 const Timeclock = () => {
   const navigate = useNavigate();
@@ -21,6 +22,7 @@ const Timeclock = () => {
   const { company, companyFeatures } = useCompany();
   const { employees, loading: employeesLoading, authenticatePin } = useEmployees();
   const { toast } = useToast();
+  const { isForeman } = useUserRole();
 
   const [currentTime, setCurrentTime] = useState(new Date());
   const [selectedEmployee, setSelectedEmployee] = useState("");
@@ -515,7 +517,10 @@ const Timeclock = () => {
     const { error: signInError } = await supabase.auth.signInWithPassword({ email: data.user.email ?? "", password });
     setCheckingPassword(false);
     if (signInError) { setPasswordError("Incorrect password. Please try again."); return; }
-    setShowPasswordDialog(false); setTimeout(() => navigate("/dashboard"), 200);
+    setShowPasswordDialog(false);
+    // Foremen go to time-tracking/admin (read-only), others go to dashboard
+    const destination = isForeman ? "/time-tracking/admin" : "/dashboard";
+    setTimeout(() => navigate(destination), 200);
   }
 
   return (
