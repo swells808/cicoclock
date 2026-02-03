@@ -49,11 +49,11 @@ export const useEmployeeDetail = (profileId: string | undefined) => {
       if (error) throw error;
       if (!profile) return null;
 
-      // Fetch user role
+      // Fetch user role - prioritize profile_id for timeclock-only users
       const { data: roleData } = await supabase
         .from("user_roles")
         .select("role")
-        .or(`user_id.eq.${profile.user_id},profile_id.eq.${profile.id}`)
+        .eq("profile_id", profile.id)
         .maybeSingle();
 
       return {

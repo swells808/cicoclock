@@ -2,7 +2,8 @@ import { useState } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Badge } from "@/components/ui/badge";
-import { Shield, Clock, Calendar, Eye, EyeOff } from "lucide-react";
+import { Button } from "@/components/ui/button";
+import { Shield, Clock, Calendar, Eye, EyeOff, Edit } from "lucide-react";
 import { EmployeeProfile } from "@/hooks/useEmployeeDetail";
 import { WeeklyScheduleEditor } from "@/components/employee/WeeklyScheduleEditor";
 import { AttendanceTab } from "@/components/employee/tabs/AttendanceTab";
@@ -12,20 +13,27 @@ import { OvertimeTab } from "@/components/employee/tabs/OvertimeTab";
 interface WorkDetailsTabProps {
   employee: EmployeeProfile;
   onRefetch: () => void;
+  onEdit?: (tab: string) => void;
 }
 
-export const WorkDetailsTab = ({ employee, onRefetch }: WorkDetailsTabProps) => {
+export const WorkDetailsTab = ({ employee, onRefetch, onEdit }: WorkDetailsTabProps) => {
   const [showPin, setShowPin] = useState(false);
 
   return (
     <div className="space-y-6">
       {/* Access & Security */}
       <Card>
-        <CardHeader className="pb-3">
+        <CardHeader className="pb-3 flex flex-row items-center justify-between">
           <CardTitle className="text-lg flex items-center gap-2">
             <Shield className="h-5 w-5 text-muted-foreground" />
             Access & Security
           </CardTitle>
+          {onEdit && (
+            <Button variant="ghost" size="sm" onClick={() => onEdit("access")}>
+              <Edit className="h-4 w-4 mr-1" />
+              Edit
+            </Button>
+          )}
         </CardHeader>
         <CardContent>
           <div className="grid grid-cols-1 md:grid-cols-3 gap-6">

@@ -21,12 +21,13 @@ interface EmployeeEditDialogProps {
   onOpenChange: (open: boolean) => void;
   employee: EmployeeProfile;
   onSave: () => void;
+  initialTab?: string;
 }
 
-export const EmployeeEditDialog = ({ open, onOpenChange, employee, onSave }: EmployeeEditDialogProps) => {
+export const EmployeeEditDialog = ({ open, onOpenChange, employee, onSave, initialTab = "personal" }: EmployeeEditDialogProps) => {
   const { departments } = useDepartments();
   const [saving, setSaving] = useState(false);
-  const [activeTab, setActiveTab] = useState("personal");
+  const [activeTab, setActiveTab] = useState(initialTab);
 
   // Form state
   const [firstName, setFirstName] = useState("");
@@ -92,8 +93,11 @@ export const EmployeeEditDialog = ({ open, onOpenChange, employee, onSave }: Emp
       setEnableLoginMode(false);
       setLoginEmail(employee.email || "");
       setLoginPassword("");
+      
+      // Set initial tab
+      setActiveTab(initialTab);
     }
-  }, [employee, open]);
+  }, [employee, open, initialTab]);
 
   const handlePhotoChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -152,31 +156,29 @@ export const EmployeeEditDialog = ({ open, onOpenChange, employee, onSave }: Emp
 
       if (profileError) throw profileError;
 
-      // Update role if changed
+      // Update role if changed - use profile_id to support timeclock-only users
       if (role !== employee.role) {
-        const userId = employee.user_id;
-        if (userId) {
-          // Check if role record exists
-          const { data: existingRole } = await supabase
-            .from("user_roles")
-            .select("id")
-            .or(`user_id.eq.${userId},profile_id.eq.${employee.id}`)
-            .maybeSingle();
+        // Check if role record exists by profile_id (always present)
+        const { data: existingRole } = await supabase
+          .from("user_roles")
+          .select("id")
+          .eq("profile_id", employee.id)
+          .maybeSingle();
 
-          if (existingRole) {
-            await supabase
-              .from("user_roles")
-              .update({ role: role as "admin" | "supervisor" | "employee" | "foreman" })
-              .eq("id", existingRole.id);
-          } else {
-            await supabase
-              .from("user_roles")
-              .insert({
-                user_id: userId,
-                profile_id: employee.id,
-                role: role as "admin" | "supervisor" | "employee" | "foreman",
-              });
-          }
+        if (existingRole) {
+          await supabase
+            .from("user_roles")
+            .update({ role: role as "admin" | "supervisor" | "employee" | "foreman" })
+            .eq("id", existingRole.id);
+        } else {
+          // Insert new role - user_id can be null for timeclock-only users
+          await supabase
+            .from("user_roles")
+            .insert({
+              user_id: employee.user_id || null,
+              profile_id: employee.id,
+              role: role as "admin" | "supervisor" | "employee" | "foreman",
+            });
         }
       }
 
