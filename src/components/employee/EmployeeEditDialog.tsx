@@ -12,7 +12,8 @@ import { useDepartments } from "@/hooks/useDepartments";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
 import { format } from "date-fns";
-import { CalendarIcon, User, MapPin, Briefcase, Shield, Award, Camera } from "lucide-react";
+import { CalendarIcon, User, MapPin, Briefcase, Shield, Award, Camera, Mail } from "lucide-react";
+import { PRODUCTION_BASE_URL } from "@/lib/constants";
 import { cn } from "@/lib/utils";
 import type { EmployeeProfile } from "@/hooks/useEmployeeDetail";
 
@@ -505,11 +506,37 @@ export const EmployeeEditDialog = ({ open, onOpenChange, employee, onSave, initi
               </p>
             </div>
             {employee.user_id && (
-              <div className="rounded-lg border bg-muted/50 p-4 space-y-2">
-                <p className="text-sm font-medium">Account Information</p>
-                <p className="text-xs text-muted-foreground">
-                  This employee has an associated user account and can log in to the system.
-                </p>
+              <div className="rounded-lg border bg-muted/50 p-4 space-y-3">
+                <div className="space-y-1">
+                  <p className="text-sm font-medium">Account Information</p>
+                  <p className="text-xs text-muted-foreground">
+                    This employee has an associated user account and can log in to the system.
+                  </p>
+                </div>
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  onClick={async () => {
+                    const emailToUse = email || employee.email;
+                    if (!emailToUse) {
+                      toast.error("No email address available for this employee");
+                      return;
+                    }
+                    const redirectUrl = `${PRODUCTION_BASE_URL}/reset-password`;
+                    const { error } = await supabase.auth.resetPasswordForEmail(emailToUse, {
+                      redirectTo: redirectUrl,
+                    });
+                    if (error) {
+                      toast.error(error.message);
+                    } else {
+                      toast.success("Password reset email sent successfully");
+                    }
+                  }}
+                >
+                  <Mail className="h-4 w-4 mr-2" />
+                  Send Password Reset Email
+                </Button>
               </div>
             )}
             {!employee.user_id && (

@@ -11,7 +11,8 @@ import { useDepartments } from '@/hooks/useDepartments';
 import { useCompany } from '@/contexts/CompanyContext';
 import { supabase } from '@/integrations/supabase/client';
 import { toast } from 'sonner';
-import { User, Mail, Phone, Building2, Shield, IdCard, KeyRound, CalendarIcon, Camera } from 'lucide-react';
+import { User, Mail, Phone, Building2, Shield, IdCard, KeyRound, CalendarIcon, Camera, Send } from 'lucide-react';
+import { PRODUCTION_BASE_URL } from '@/lib/constants';
 import { format } from 'date-fns';
 import { cn } from '@/lib/utils';
 import type { User as UserType } from '@/hooks/useUsers';
@@ -520,11 +521,37 @@ export const UserDialog = ({ open, onOpenChange, user, onSave }: UserDialogProps
 
               {/* Enable Login for existing employees without auth account */}
               {isEditing && user && user.user_id && (
-                <div className="rounded-lg border bg-muted/50 p-4 space-y-2">
-                  <p className="text-sm font-medium">Account Information</p>
-                  <p className="text-xs text-muted-foreground">
-                    This employee has an associated login account and can access the dashboard.
-                  </p>
+                <div className="rounded-lg border bg-muted/50 p-4 space-y-3">
+                  <div className="space-y-1">
+                    <p className="text-sm font-medium">Account Information</p>
+                    <p className="text-xs text-muted-foreground">
+                      This employee has an associated login account and can access the dashboard.
+                    </p>
+                  </div>
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    onClick={async () => {
+                      const emailToUse = formData.email || user.email;
+                      if (!emailToUse) {
+                        toast.error("No email address available for this user");
+                        return;
+                      }
+                      const redirectUrl = `${PRODUCTION_BASE_URL}/reset-password`;
+                      const { error } = await supabase.auth.resetPasswordForEmail(emailToUse, {
+                        redirectTo: redirectUrl,
+                      });
+                      if (error) {
+                        toast.error(error.message);
+                      } else {
+                        toast.success("Password reset email sent successfully");
+                      }
+                    }}
+                  >
+                    <Send className="h-4 w-4 mr-2" />
+                    Send Password Reset Email
+                  </Button>
                 </div>
               )}
               

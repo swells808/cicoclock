@@ -21,6 +21,7 @@ export const ROUTES = {
   PRICING: "/pricing",
   CONTACT: "/contact",
   PRIVACY: "/privacy",
+  RESET_PASSWORD: "/reset-password",
   PUBLIC_BADGE: "/badge/:id",
 } as const;
 
