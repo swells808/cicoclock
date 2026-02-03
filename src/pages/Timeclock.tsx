@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from "react";
+import React, { useState, useEffect, useRef, useCallback } from "react";
 import { useNavigate } from "react-router-dom";
 import { useLanguage } from "@/contexts/LanguageContext";
 import { PasswordDialog } from "@/components/PasswordDialog";
@@ -15,6 +15,7 @@ import { useCompany } from "@/contexts/CompanyContext";
 import { useToast } from "@/hooks/use-toast";
 import { PhotoCapture } from "@/components/timeclock/PhotoCapture";
 import { useUserRole } from "@/hooks/useUserRole";
+import { ClockStatusOverlay, ClockStatusType } from "@/components/timeclock/ClockStatusOverlay";
 
 const Timeclock = () => {
   const navigate = useNavigate();
@@ -44,6 +45,9 @@ const Timeclock = () => {
   const [photoAction, setPhotoAction] = useState<'clock_in' | 'clock_out' | null>(null);
   const [isProcessing, setIsProcessing] = useState(false);
   const [manualLookupEmployee, setManualLookupEmployee] = useState<any>(null);
+  const [clockStatusOverlay, setClockStatusOverlay] = useState<ClockStatusType>(null);
+  const [clockStatusMessage, setClockStatusMessage] = useState<string>("");
+  const [clockStatusName, setClockStatusName] = useState<string>("");
   
   // Track if we've already triggered auto-clock for this authenticated employee
   const autoClockTriggeredRef = useRef<string | null>(null);
@@ -98,6 +102,20 @@ const Timeclock = () => {
 
   const isActionEnabled = authenticatedEmployee !== null;
   const isPinRequired = companyFeatures?.employee_pin;
+
+  // Show status overlay with auto-dismiss
+  const showStatusOverlay = useCallback((type: ClockStatusType, name: string, message?: string) => {
+    setClockStatusName(name);
+    setClockStatusMessage(message || "");
+    setClockStatusOverlay(type);
+  }, []);
+
+  const handleStatusDismiss = useCallback(() => {
+    setClockStatusOverlay(null);
+    setClockStatusMessage("");
+    setClockStatusName("");
+    resetForNextUser();
+  }, []);
 
   // Reset screen for next user
   const resetForNextUser = () => {
@@ -383,9 +401,9 @@ const Timeclock = () => {
     
     if (error || !data?.success) { 
       console.error('[Timeclock] Clock in failed:', error || data?.error);
-      toast({ title: "Clock In Failed", description: data?.error || "Please try again.", variant: "destructive" }); 
+      const employeeName = authenticatedEmployee.display_name || authenticatedEmployee.first_name || "Employee";
+      showStatusOverlay("error", employeeName, data?.error || "Clock in failed. Please try again.");
       setIsProcessing(false);
-      setTimeout(() => { resetForNextUser(); }, 2500);
       return; 
     }
     
@@ -416,11 +434,8 @@ const Timeclock = () => {
     }
 
     const employeeName = authenticatedEmployee.display_name || authenticatedEmployee.first_name || "Employee";
-    toast({ title: "Clocked In!", description: `Welcome, ${employeeName}!` });
-
-    setTimeout(() => {
-      resetForNextUser();
-    }, 2500);
+    showStatusOverlay("clock_in", employeeName);
+    setIsProcessing(false);
   };
 
   const handleClockIn = async () => { 
@@ -453,9 +468,9 @@ const Timeclock = () => {
     
     if (error || !data?.success) { 
       console.error('[Timeclock] Clock out failed:', error || data?.error);
-      toast({ title: "Clock Out Failed", description: data?.error || "Please try again.", variant: "destructive" }); 
+      const employeeName = authenticatedEmployee.display_name || authenticatedEmployee.first_name || "Employee";
+      showStatusOverlay("error", employeeName, data?.error || "Clock out failed. Please try again.");
       setIsProcessing(false);
-      setTimeout(() => { resetForNextUser(); }, 2500);
       return; 
     }
     
@@ -473,11 +488,8 @@ const Timeclock = () => {
     }
 
     const employeeName = authenticatedEmployee.display_name || authenticatedEmployee.first_name || "Employee";
-    toast({ title: "Clocked Out!", description: `Goodbye, ${employeeName}!` });
-
-    setTimeout(() => {
-      resetForNextUser();
-    }, 2500);
+    showStatusOverlay("clock_out", employeeName);
+    setIsProcessing(false);
   };
 
   const handleClockOut = async () => { 
@@ -583,6 +595,13 @@ const Timeclock = () => {
         description={photoAction === 'clock_in' ? "Please take a photo to verify your clock in" : "Please take a photo to verify your clock out"} 
         autoCapture={true}
         autoCaptureDelay={3}
+      />
+      <ClockStatusOverlay
+        status={clockStatusOverlay}
+        employeeName={clockStatusName}
+        message={clockStatusMessage}
+        onDismiss={handleStatusDismiss}
+        autoDismissMs={2500}
       />
     </div>
   );
