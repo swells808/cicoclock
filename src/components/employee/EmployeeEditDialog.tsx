@@ -53,6 +53,12 @@ export const EmployeeEditDialog = ({ open, onOpenChange, employee, onSave }: Emp
   const [avatarFile, setAvatarFile] = useState<File | null>(null);
   const [avatarPreview, setAvatarPreview] = useState<string | null>(null);
   const [pin, setPin] = useState("");
+  
+  // Enable login state
+  const [enableLoginMode, setEnableLoginMode] = useState(false);
+  const [loginEmail, setLoginEmail] = useState("");
+  const [loginPassword, setLoginPassword] = useState("");
+  const [creatingLogin, setCreatingLogin] = useState(false);
 
   // Initialize form with employee data
   useEffect(() => {
@@ -81,6 +87,11 @@ export const EmployeeEditDialog = ({ open, onOpenChange, employee, onSave }: Emp
       // Avatar
       setAvatarPreview(employee.avatar_url || null);
       setAvatarFile(null);
+      
+      // Reset enable login state
+      setEnableLoginMode(false);
+      setLoginEmail(employee.email || "");
+      setLoginPassword("");
     }
   }, [employee, open]);
 
@@ -177,6 +188,38 @@ export const EmployeeEditDialog = ({ open, onOpenChange, employee, onSave }: Emp
       toast.error("Failed to update employee");
     } finally {
       setSaving(false);
+    }
+  };
+
+  const handleEnableLogin = async () => {
+    if (!loginEmail || loginPassword.length < 6) {
+      toast.error("Please provide a valid email and password (min 6 characters)");
+      return;
+    }
+
+    setCreatingLogin(true);
+    try {
+      const { data, error } = await supabase.functions.invoke('create-auth-account', {
+        body: {
+          profile_id: employee.id,
+          email: loginEmail,
+          password: loginPassword,
+          role: role
+        }
+      });
+
+      if (error) throw error;
+      if (data?.error) throw new Error(data.error);
+
+      toast.success("Login account created successfully");
+      setEnableLoginMode(false);
+      setLoginPassword("");
+      onSave(); // Refetch employee data to reflect new user_id
+    } catch (error) {
+      console.error("Error creating login account:", error);
+      toast.error(error instanceof Error ? error.message : "Failed to create login account");
+    } finally {
+      setCreatingLogin(false);
     }
   };
 
@@ -468,11 +511,78 @@ export const EmployeeEditDialog = ({ open, onOpenChange, employee, onSave }: Emp
               </div>
             )}
             {!employee.user_id && (
-              <div className="rounded-lg border border-amber-200 bg-amber-50 dark:bg-amber-950/20 dark:border-amber-800 p-4 space-y-2">
-                <p className="text-sm font-medium text-amber-800 dark:text-amber-200">No Login Account</p>
-                <p className="text-xs text-amber-700 dark:text-amber-300">
-                  This employee does not have a login account. They can only use the time clock with their PIN.
-                </p>
+              <div className="rounded-lg border border-amber-200 bg-amber-50 dark:bg-amber-950/20 dark:border-amber-800 p-4 space-y-3">
+                <div className="space-y-1">
+                  <p className="text-sm font-medium text-amber-800 dark:text-amber-200">No Login Account</p>
+                  <p className="text-xs text-amber-700 dark:text-amber-300">
+                    This employee does not have a login account. They can only use the time clock with their PIN.
+                  </p>
+                </div>
+                
+                {!enableLoginMode ? (
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    onClick={() => setEnableLoginMode(true)}
+                    className="w-full"
+                  >
+                    <Shield className="h-4 w-4 mr-2" />
+                    Enable Login Access
+                  </Button>
+                ) : (
+                  <div className="space-y-3 pt-2 border-t border-amber-200 dark:border-amber-800">
+                    <div className="space-y-2">
+                      <Label htmlFor="loginEmail" className="text-amber-800 dark:text-amber-200">
+                        Login Email
+                      </Label>
+                      <Input
+                        id="loginEmail"
+                        type="email"
+                        value={loginEmail}
+                        onChange={(e) => setLoginEmail(e.target.value)}
+                        placeholder="user@example.com"
+                        className="bg-white dark:bg-background"
+                      />
+                    </div>
+                    <div className="space-y-2">
+                      <Label htmlFor="loginPassword" className="text-amber-800 dark:text-amber-200">
+                        Password
+                      </Label>
+                      <Input
+                        id="loginPassword"
+                        type="password"
+                        value={loginPassword}
+                        onChange={(e) => setLoginPassword(e.target.value)}
+                        placeholder="Minimum 6 characters"
+                        className="bg-white dark:bg-background"
+                      />
+                    </div>
+                    <div className="flex gap-2">
+                      <Button
+                        type="button"
+                        variant="outline"
+                        size="sm"
+                        onClick={() => {
+                          setEnableLoginMode(false);
+                          setLoginPassword("");
+                        }}
+                        disabled={creatingLogin}
+                      >
+                        Cancel
+                      </Button>
+                      <Button
+                        type="button"
+                        size="sm"
+                        onClick={handleEnableLogin}
+                        disabled={creatingLogin || !loginEmail || loginPassword.length < 6}
+                        className="flex-1"
+                      >
+                        {creatingLogin ? "Creating..." : "Create Login Account"}
+                      </Button>
+                    </div>
+                  </div>
+                )}
               </div>
             )}
           </TabsContent>
