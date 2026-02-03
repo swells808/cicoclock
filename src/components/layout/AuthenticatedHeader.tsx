@@ -37,9 +37,12 @@ export const AuthenticatedHeader = () => {
     navigate("/");
   };
 
-  // Foremen only see the Clock link
+  // Foremen see Clock and Tracking (read-only)
   const desktopNavItems = isForeman
-    ? [{ label: "Clock", path: "/timeclock" }]
+    ? [
+        { label: "Clock", path: "/timeclock" },
+        { label: "Tracking", path: "/time-tracking/admin" },
+      ]
     : [
         { label: "Dashboard", path: "/dashboard" },
         { label: "Clock", path: "/timeclock" },
@@ -54,9 +57,12 @@ export const AuthenticatedHeader = () => {
           : []),
       ];
 
-  // Mobile nav items - foremen only see Clock
+  // Mobile nav items - foremen see Clock and Tracking
   const mobileNavItems = isForeman
-    ? [{ icon: Clock, label: "Clock", path: "/timeclock" }]
+    ? [
+        { icon: Clock, label: "Clock", path: "/timeclock" },
+        { icon: Clock, label: "Tracking", path: "/time-tracking/admin" },
+      ]
     : [
         { icon: LayoutDashboard, label: t("dashboard") || "Dashboard", path: "/dashboard" },
         { icon: Clock, label: "Clock", path: "/timeclock" },

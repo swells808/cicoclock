@@ -27,7 +27,11 @@ export const ProtectedRoute = ({ children }: ProtectedRouteProps) => {
 
   // Foremen can access /timeclock and /time-tracking/admin (read-only)
   const foremanAllowedPaths = ["/timeclock", "/time-tracking/admin"];
-  if (isForeman && !foremanAllowedPaths.includes(location.pathname)) {
+  const isPathAllowedForForeman = foremanAllowedPaths.some(path => 
+    location.pathname === path || location.pathname.startsWith(path + "/")
+  );
+  
+  if (isForeman && !isPathAllowedForForeman) {
     return <Navigate to="/timeclock" replace />;
   }
 
