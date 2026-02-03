@@ -80,7 +80,7 @@ interface SignedUrls {
 }
 
 const AdminTimeTracking: React.FC = () => {
-  const { isAdmin, isForeman, isLoading: roleLoading } = useUserRole();
+  const { isAdmin, isForeman, isManager, isLoading: roleLoading } = useUserRole();
   const { company } = useCompany();
   const { data: companyFeatures } = useCompanyFeatures();
   const [selectedDate, setSelectedDate] = useState<Date>(new Date());
@@ -323,8 +323,10 @@ const AdminTimeTracking: React.FC = () => {
     );
   }
 
-  // Allow admins and foremen (foremen get read-only access)
-  if (!isAdmin && !isForeman) {
+  // Allow admins, managers (full edit), and foremen (read-only)
+  const canEdit = isAdmin || isManager;
+  
+  if (!isAdmin && !isForeman && !isManager) {
     return (
       <DashboardLayout>
         <div className="py-8 px-4">
@@ -332,7 +334,7 @@ const AdminTimeTracking: React.FC = () => {
             <AlertCircle className="h-4 w-4" />
             <AlertTitle>Access Denied</AlertTitle>
             <AlertDescription>
-              You must be an administrator or foreman to access this page.
+              You must be an administrator, manager, or foreman to access this page.
             </AlertDescription>
           </Alert>
         </div>
@@ -474,11 +476,11 @@ const AdminTimeTracking: React.FC = () => {
                   key={transformedEntry.id}
                   entry={transformedEntry}
                   onReviewClick={
-                    transformedEntry.flagStatus === 'flagged' && isAdmin && companyFeatures?.face_verification
+                    transformedEntry.flagStatus === 'flagged' && canEdit && companyFeatures?.face_verification
                       ? () => handleReviewClick(transformedEntry.id)
                       : undefined
                   }
-                  onEdit={isAdmin ? () => {
+                  onEdit={canEdit ? () => {
                     const originalEntry = filteredEntries.find(e => e.id === transformedEntry.id);
                     if (originalEntry) handleEdit(originalEntry);
                   } : undefined}
@@ -488,7 +490,7 @@ const AdminTimeTracking: React.FC = () => {
           )}
         </div>
 
-        {isAdmin && (
+        {canEdit && (
           <EditTimeEntryDialog
             open={editDialogOpen}
             onOpenChange={setEditDialogOpen}
@@ -501,7 +503,7 @@ const AdminTimeTracking: React.FC = () => {
           />
         )}
 
-        {isAdmin && companyFeatures?.face_verification && (
+        {canEdit && companyFeatures?.face_verification && (
           <FaceReviewDialog
             open={reviewDialogOpen}
             onOpenChange={setReviewDialogOpen}

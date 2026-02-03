@@ -25,7 +25,7 @@ import { cn } from "@/lib/utils";
 
 export const AuthenticatedHeader = () => {
   const { user, signOut } = useAuth();
-  const { isAdmin, isSupervisor, isForeman } = useUserRole();
+  const { isAdmin, isSupervisor, isForeman, isManager } = useUserRole();
   const { t } = useLanguage();
   const location = useLocation();
   const navigate = useNavigate();
@@ -37,8 +37,8 @@ export const AuthenticatedHeader = () => {
     navigate("/");
   };
 
-  // Foremen see Clock and Tracking (read-only)
-  const desktopNavItems = isForeman
+  // Foremen and Managers see Clock and Tracking (foremen read-only, managers full edit)
+  const desktopNavItems = (isForeman || isManager)
     ? [
         { label: "Clock", path: "/timeclock" },
         { label: "Tracking", path: "/time-tracking/admin" },
@@ -57,8 +57,8 @@ export const AuthenticatedHeader = () => {
           : []),
       ];
 
-  // Mobile nav items - foremen see Clock and Tracking
-  const mobileNavItems = isForeman
+  // Mobile nav items - foremen and managers see Clock and Tracking
+  const mobileNavItems = (isForeman || isManager)
     ? [
         { icon: Clock, label: "Clock", path: "/timeclock" },
         { icon: Clock, label: "Tracking", path: "/time-tracking/admin" },
