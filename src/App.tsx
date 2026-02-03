@@ -30,6 +30,7 @@ import NotFound from "./pages/NotFound";
 import AdminTimeTracking from "./pages/AdminTimeTracking";
 import TaskQrCodes from "./pages/TaskQrCodes";
 import EmployeeDetail from "./pages/EmployeeDetail";
+import ResetPassword from "./pages/ResetPassword";
 
 const queryClient = new QueryClient();
 
@@ -53,6 +54,7 @@ const App = () => (
                 <Route path="/about" element={<About />} />
                 <Route path="/contact" element={<Contact />} />
                 <Route path="/privacy" element={<Privacy />} />
+                <Route path="/reset-password" element={<ResetPassword />} />
                 <Route path="/badge/:profileId" element={<PublicBadge />} />
 
                 {/* Protected Routes */}
