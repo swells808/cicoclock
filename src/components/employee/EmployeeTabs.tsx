@@ -11,9 +11,10 @@ import { EmployeeProfile } from "@/hooks/useEmployeeDetail";
 interface EmployeeTabsProps {
   employee: EmployeeProfile;
   onRefetch: () => void;
+  onEdit?: (tab: string) => void;
 }
 
-export const EmployeeTabs = ({ employee, onRefetch }: EmployeeTabsProps) => {
+export const EmployeeTabs = ({ employee, onRefetch, onEdit }: EmployeeTabsProps) => {
   const [searchParams, setSearchParams] = useSearchParams();
   const defaultTab = searchParams.get("tab") || "personal";
 
@@ -47,11 +48,11 @@ export const EmployeeTabs = ({ employee, onRefetch }: EmployeeTabsProps) => {
 
       <div className="mt-6">
         <TabsContent value="personal" className="m-0">
-          <PersonalInfoTab employee={employee} />
+          <PersonalInfoTab employee={employee} onEdit={onEdit} />
         </TabsContent>
 
         <TabsContent value="work" className="m-0">
-          <WorkDetailsTab employee={employee} onRefetch={onRefetch} />
+          <WorkDetailsTab employee={employee} onRefetch={onRefetch} onEdit={onEdit} />
         </TabsContent>
 
         <TabsContent value="certifications" className="m-0">

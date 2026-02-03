@@ -12,6 +12,12 @@ const EmployeeDetail = () => {
   const navigate = useNavigate();
   const { employee, loading, error, refetch, navigation } = useEmployeeDetail(id);
   const [isEditDialogOpen, setIsEditDialogOpen] = useState(false);
+  const [editDialogTab, setEditDialogTab] = useState("personal");
+
+  const handleEditFromTab = (tab: string) => {
+    setEditDialogTab(tab);
+    setIsEditDialogOpen(true);
+  };
 
   if (loading) {
     return (
@@ -57,11 +63,15 @@ const EmployeeDetail = () => {
           employee={employee} 
           navigation={navigation}
           onRefetch={refetch}
-          onEditEmployee={() => setIsEditDialogOpen(true)}
+          onEditEmployee={() => {
+            setEditDialogTab("personal");
+            setIsEditDialogOpen(true);
+          }}
         />
         <EmployeeTabs 
           employee={employee} 
           onRefetch={refetch}
+          onEdit={handleEditFromTab}
         />
       </div>
 
@@ -70,6 +80,7 @@ const EmployeeDetail = () => {
         onOpenChange={setIsEditDialogOpen}
         employee={employee}
         onSave={refetch}
+        initialTab={editDialogTab}
       />
     </DashboardLayout>
   );

@@ -6,9 +6,10 @@ import { format } from "date-fns";
 
 interface PersonalInfoTabProps {
   employee: EmployeeProfile;
+  onEdit?: (tab: string) => void;
 }
 
-export const PersonalInfoTab = ({ employee }: PersonalInfoTabProps) => {
+export const PersonalInfoTab = ({ employee, onEdit }: PersonalInfoTabProps) => {
   const fullName = [employee.first_name, employee.last_name].filter(Boolean).join(" ") 
     || employee.display_name 
     || "—";
@@ -34,6 +35,12 @@ export const PersonalInfoTab = ({ employee }: PersonalInfoTabProps) => {
             <User className="h-5 w-5 text-muted-foreground" />
             Personal Information
           </CardTitle>
+          {onEdit && (
+            <Button variant="ghost" size="sm" onClick={() => onEdit("personal")}>
+              <Edit className="h-4 w-4 mr-1" />
+              Edit
+            </Button>
+          )}
         </CardHeader>
         <CardContent className="space-y-4">
           <div className="grid grid-cols-2 gap-4">
@@ -64,6 +71,12 @@ export const PersonalInfoTab = ({ employee }: PersonalInfoTabProps) => {
             <Phone className="h-5 w-5 text-muted-foreground" />
             Contact Information
           </CardTitle>
+          {onEdit && (
+            <Button variant="ghost" size="sm" onClick={() => onEdit("contact")}>
+              <Edit className="h-4 w-4 mr-1" />
+              Edit
+            </Button>
+          )}
         </CardHeader>
         <CardContent className="space-y-4">
           <div>
@@ -106,6 +119,12 @@ export const PersonalInfoTab = ({ employee }: PersonalInfoTabProps) => {
             <MapPin className="h-5 w-5 text-muted-foreground" />
             Address
           </CardTitle>
+          {onEdit && (
+            <Button variant="ghost" size="sm" onClick={() => onEdit("contact")}>
+              <Edit className="h-4 w-4 mr-1" />
+              Edit
+            </Button>
+          )}
         </CardHeader>
         <CardContent className="space-y-4">
           <div>
@@ -150,6 +169,12 @@ export const PersonalInfoTab = ({ employee }: PersonalInfoTabProps) => {
             <Building className="h-5 w-5 text-muted-foreground" />
             Employment Overview
           </CardTitle>
+          {onEdit && (
+            <Button variant="ghost" size="sm" onClick={() => onEdit("work")}>
+              <Edit className="h-4 w-4 mr-1" />
+              Edit
+            </Button>
+          )}
         </CardHeader>
         <CardContent className="space-y-4">
           <div className="grid grid-cols-2 gap-4">

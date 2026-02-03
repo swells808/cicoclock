@@ -60,10 +60,10 @@ export const useUsers = () => {
 
       if (rolesError) throw rolesError;
 
-      // Create user roles lookup - handle both authenticated users (user_id) and CSV users (profile.id)
+      // Create user roles lookup - prioritize profile_id for CSV/timeclock-only users
       const rolesLookup = (userRoles || []).reduce((acc: Record<string, string>, r: any) => {
-        if (r.user_id) acc[r.user_id] = r.role;
-        if (r.profile_id) acc[r.profile_id] = r.role;
+        if (r.profile_id) acc[r.profile_id] = r.role;  // Profile-based (for timeclock-only)
+        if (r.user_id) acc[r.user_id] = r.role;        // User-based (for auth users)
         return acc;
       }, {});
 
