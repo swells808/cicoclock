@@ -57,6 +57,8 @@ serve(async (req) => {
       );
     }
 
+    console.log(`Creating auth account for profile ${profile_id} with email ${email}`);
+
     const { data: authData, error: createAuthError } = await supabase.auth.admin.createUser({
       email,
       password,
@@ -76,6 +78,23 @@ serve(async (req) => {
       );
     }
 
+    console.log(`Auth user created with id: ${authData.user?.id}`);
+
+    // Delete any auto-generated profile created by the handle_new_user trigger
+    // This happens because the trigger fires when a new auth user is created
+    const { error: deleteAutoProfile } = await supabase
+      .from('profiles')
+      .delete()
+      .eq('user_id', authData.user?.id)
+      .neq('id', profile_id);  // Don't delete the original profile
+
+    if (deleteAutoProfile) {
+      console.log('No auto-created profile to delete or error:', deleteAutoProfile.message);
+    } else {
+      console.log('Cleaned up any auto-created duplicate profile');
+    }
+
+    // Now safely update the original profile with the new user_id
     const { error: updateError } = await supabase
       .from('profiles')
       .update({ 
@@ -86,19 +105,49 @@ serve(async (req) => {
 
     if (updateError) {
       console.error('Error updating profile:', updateError);
+      // Return success anyway since the auth account was created
+    } else {
+      console.log(`Profile ${profile_id} updated with user_id ${authData.user?.id}`);
     }
 
+    // Handle role assignment - check if role already exists for this profile
     if (role && authData.user) {
-      const { error: roleError } = await supabase
+      const { data: existingRole } = await supabase
         .from('user_roles')
-        .insert({
-          user_id: authData.user.id,
-          profile_id: profile_id,
-          role
-        });
+        .select('id')
+        .eq('profile_id', profile_id)
+        .maybeSingle();
 
-      if (roleError) {
-        console.error('Error creating user role:', roleError);
+      if (existingRole) {
+        // Update existing role with the new user_id
+        const { error: roleUpdateError } = await supabase
+          .from('user_roles')
+          .update({
+            user_id: authData.user.id,
+            role
+          })
+          .eq('id', existingRole.id);
+
+        if (roleUpdateError) {
+          console.error('Error updating user role:', roleUpdateError);
+        } else {
+          console.log(`Updated existing role ${existingRole.id} with user_id`);
+        }
+      } else {
+        // Create new role record
+        const { error: roleError } = await supabase
+          .from('user_roles')
+          .insert({
+            user_id: authData.user.id,
+            profile_id: profile_id,
+            role
+          });
+
+        if (roleError) {
+          console.error('Error creating user role:', roleError);
+        } else {
+          console.log(`Created new role for profile ${profile_id}`);
+        }
       }
     }
 

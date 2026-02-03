@@ -148,26 +148,25 @@ export const UserDialog = ({ open, onOpenChange, user, onSave }: UserDialogProps
 
         if (profileError) throw profileError;
 
-        // Update role if changed
-        const roleKey = user.user_id || user.id;
+        // Update role if changed - always use profile_id for lookup (it always exists)
         const { data: existingRole } = await supabase
           .from('user_roles')
           .select('id')
-          .or(`user_id.eq.${roleKey},profile_id.eq.${user.id}`)
+          .eq('profile_id', user.id)
           .maybeSingle();
 
         if (existingRole) {
           await supabase
             .from('user_roles')
-            .update({ role: formData.role as 'admin' | 'supervisor' | 'employee' })
+            .update({ role: formData.role as 'admin' | 'supervisor' | 'employee' | 'foreman' })
             .eq('id', existingRole.id);
         } else {
           await supabase
             .from('user_roles')
             .insert({
-              user_id: user.user_id || user.id,
+              user_id: user.user_id || null,
               profile_id: user.id,
-              role: formData.role as 'admin' | 'supervisor' | 'employee',
+              role: formData.role as 'admin' | 'supervisor' | 'employee' | 'foreman',
             });
         }
 
