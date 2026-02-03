@@ -12,13 +12,14 @@ export interface User {
   avatar?: string;
   avatar_url?: string;
   department?: string;
+  department_id?: string | null;
   phone?: string;
   projects?: string[];
   hoursLogged?: number;
   first_name?: string;
   last_name?: string;
   display_name?: string;
-  user_id: string;
+  user_id: string | null;
   employeeId?: string;
   pin?: string;
   date_of_hire?: string;
@@ -90,6 +91,7 @@ export const useUsers = () => {
           avatar: profile.avatar_url,
           avatar_url: profile.avatar_url,
           department: profile.departments?.name || 'No Department',
+          department_id: profile.department_id,
           phone: profile.phone,
           projects: [],
           hoursLogged: 0,
