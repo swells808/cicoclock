@@ -59,6 +59,12 @@ export const UserDialog = ({ open, onOpenChange, user, onSave }: UserDialogProps
     }
   };
 
+  // Enable login state (for editing existing users without auth)
+  const [enableLoginMode, setEnableLoginMode] = useState(false);
+  const [loginEmail, setLoginEmail] = useState('');
+  const [loginPassword, setLoginPassword] = useState('');
+  const [creatingLogin, setCreatingLogin] = useState(false);
+
   useEffect(() => {
     if (user) {
       setFormData({
@@ -66,8 +72,8 @@ export const UserDialog = ({ open, onOpenChange, user, onSave }: UserDialogProps
         last_name: user.last_name || '',
         email: user.email || '',
         phone: user.phone || '',
-        department_id: '',
-        role: user.role === 'Admin' ? 'admin' : user.role === 'Manager' ? 'supervisor' : 'employee',
+        department_id: user.department_id || '',
+        role: user.role === 'Admin' ? 'admin' : user.role === 'Manager' ? 'supervisor' : user.role === 'Foreman' ? 'foreman' : 'employee',
         status: user.status.toLowerCase(),
         employee_id: user.employeeId || '',
         pin: user.pin || '',
@@ -75,6 +81,10 @@ export const UserDialog = ({ open, onOpenChange, user, onSave }: UserDialogProps
       setDateOfHire(user.date_of_hire ? new Date(user.date_of_hire) : undefined);
       setAvatarPreview(user.avatar_url || null);
       setAvatarFile(null);
+      // Reset enable login state
+      setEnableLoginMode(false);
+      setLoginEmail(user.email || '');
+      setLoginPassword('');
     } else {
       setFormData({
         first_name: '',
@@ -92,6 +102,9 @@ export const UserDialog = ({ open, onOpenChange, user, onSave }: UserDialogProps
       setDateOfHire(undefined);
       setAvatarFile(null);
       setAvatarPreview(null);
+      setEnableLoginMode(false);
+      setLoginEmail('');
+      setLoginPassword('');
     }
   }, [user, open]);
 
@@ -501,6 +514,119 @@ export const UserDialog = ({ open, onOpenChange, user, onSave }: UserDialogProps
                       <p className="text-xs text-muted-foreground">
                         User will be able to change this after first login
                       </p>
+                    </div>
+                  )}
+                </div>
+              )}
+
+              {/* Enable Login for existing employees without auth account */}
+              {isEditing && user && user.user_id && (
+                <div className="rounded-lg border bg-muted/50 p-4 space-y-2">
+                  <p className="text-sm font-medium">Account Information</p>
+                  <p className="text-xs text-muted-foreground">
+                    This employee has an associated login account and can access the dashboard.
+                  </p>
+                </div>
+              )}
+              
+              {isEditing && user && !user.user_id && (
+                <div className="rounded-lg border border-amber-200 bg-amber-50 dark:bg-amber-950/20 dark:border-amber-800 p-4 space-y-3">
+                  <div className="space-y-1">
+                    <p className="text-sm font-medium text-amber-800 dark:text-amber-200">No Login Account</p>
+                    <p className="text-xs text-amber-700 dark:text-amber-300">
+                      This employee does not have a login account. They can only use the time clock with their PIN.
+                    </p>
+                  </div>
+                  
+                  {!enableLoginMode ? (
+                    <Button
+                      type="button"
+                      variant="outline"
+                      size="sm"
+                      onClick={() => setEnableLoginMode(true)}
+                      className="w-full"
+                    >
+                      <Shield className="h-4 w-4 mr-2" />
+                      Enable Login Access
+                    </Button>
+                  ) : (
+                    <div className="space-y-3 pt-2 border-t border-amber-200 dark:border-amber-800">
+                      <div className="space-y-2">
+                        <Label htmlFor="loginEmail" className="text-amber-800 dark:text-amber-200">
+                          Login Email
+                        </Label>
+                        <Input
+                          id="loginEmail"
+                          type="email"
+                          value={loginEmail}
+                          onChange={(e) => setLoginEmail(e.target.value)}
+                          placeholder="user@example.com"
+                          className="bg-white dark:bg-background"
+                        />
+                      </div>
+                      <div className="space-y-2">
+                        <Label htmlFor="loginPassword" className="text-amber-800 dark:text-amber-200">
+                          Password
+                        </Label>
+                        <Input
+                          id="loginPassword"
+                          type="password"
+                          value={loginPassword}
+                          onChange={(e) => setLoginPassword(e.target.value)}
+                          placeholder="Minimum 6 characters"
+                          className="bg-white dark:bg-background"
+                        />
+                      </div>
+                      <div className="flex gap-2">
+                        <Button
+                          type="button"
+                          variant="outline"
+                          size="sm"
+                          onClick={() => {
+                            setEnableLoginMode(false);
+                            setLoginPassword('');
+                          }}
+                          disabled={creatingLogin}
+                        >
+                          Cancel
+                        </Button>
+                        <Button
+                          type="button"
+                          size="sm"
+                          onClick={async () => {
+                            if (!loginEmail || loginPassword.length < 6) {
+                              toast.error('Please provide a valid email and password (min 6 characters)');
+                              return;
+                            }
+                            setCreatingLogin(true);
+                            try {
+                              const { data, error } = await supabase.functions.invoke('create-auth-account', {
+                                body: {
+                                  profile_id: user.id,
+                                  email: loginEmail,
+                                  password: loginPassword,
+                                  role: formData.role
+                                }
+                              });
+                              if (error) throw error;
+                              if (data?.error) throw new Error(data.error);
+                              toast.success('Login account created successfully');
+                              setEnableLoginMode(false);
+                              setLoginPassword('');
+                              onSave();
+                            } catch (error) {
+                              console.error('Error creating login account:', error);
+                              toast.error(error instanceof Error ? error.message : 'Failed to create login account');
+                            } finally {
+                              setCreatingLogin(false);
+                            }
+                          }}
+                          disabled={creatingLogin || !loginEmail || loginPassword.length < 6}
+                          className="flex-1"
+                        >
+                          {creatingLogin ? 'Creating...' : 'Create Login Account'}
+                        </Button>
+                      </div>
                     </div>
                   )}
                 </div>
