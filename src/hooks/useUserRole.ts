@@ -26,6 +26,7 @@ export const useUserRole = () => {
   const isSupervisor = roles?.includes("supervisor") ?? false;
   const isEmployee = roles?.includes("employee") ?? false;
   const isForeman = roles?.includes("foreman") ?? false;
+  const isManager = roles?.includes("manager") ?? false;
 
   const hasRole = (role: UserRole) => roles?.includes(role) ?? false;
 
@@ -35,6 +36,7 @@ export const useUserRole = () => {
     isSupervisor,
     isEmployee,
     isForeman,
+    isManager,
     hasRole,
     isLoading,
   };

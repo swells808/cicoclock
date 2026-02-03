@@ -10,7 +10,7 @@ interface ProtectedRouteProps {
 
 export const ProtectedRoute = ({ children }: ProtectedRouteProps) => {
   const { user, loading: authLoading } = useAuth();
-  const { isForeman, isLoading: rolesLoading } = useUserRole();
+  const { isForeman, isManager, isLoading: rolesLoading } = useUserRole();
   const location = useLocation();
 
   if (authLoading || rolesLoading) {
@@ -23,6 +23,16 @@ export const ProtectedRoute = ({ children }: ProtectedRouteProps) => {
 
   if (!user) {
     return <Navigate to="/login" state={{ from: location }} replace />;
+  }
+
+  // Managers can access /timeclock and /time-tracking/admin (full edit)
+  const managerAllowedPaths = ["/timeclock", "/time-tracking/admin"];
+  const isPathAllowedForManager = managerAllowedPaths.some(path => 
+    location.pathname === path || location.pathname.startsWith(path + "/")
+  );
+  
+  if (isManager && !isPathAllowedForManager) {
+    return <Navigate to="/timeclock" replace />;
   }
 
   // Foremen can access /timeclock and /time-tracking/admin (read-only)
