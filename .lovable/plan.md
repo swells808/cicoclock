@@ -1,144 +1,145 @@
 
 
-# Fix Role Saving and Enable Login in UserDialog
+# Add Password Reset Email for Users with Login Accounts
 
-## Root Cause Analysis
+## Overview
 
-### Issue 1: Role Changes Not Saving
+This plan addresses two related issues:
+1. Adding a "Send Password Reset Email" button for users who already have login accounts
+2. Creating the missing `/reset-password` page that handles the password reset flow
+3. Fixing the localhost:3000 domain issue (requires Supabase dashboard configuration)
 
-The role update logic in `UserDialog.tsx` (lines 151-172) has a bug:
+## Current State
 
-```typescript
-const roleKey = user.user_id || user.id;  // For null user_id, uses profile.id
-const { data: existingRole } = await supabase
-  .from('user_roles')
-  .select('id')
-  .or(`user_id.eq.${roleKey},profile_id.eq.${user.id}`)  // This query syntax can fail
-  .maybeSingle();
-```
-
-**Problem**: The `.or()` query with string interpolation doesn't handle cases properly. It should query by `profile_id` first (which always exists), not by `user_id`.
-
-### Issue 2: Enable Login Creates Duplicate Profile
-
-The `create-auth-account` edge function creates an auth user, which triggers `handle_new_user()` database trigger. This trigger automatically creates a **new profile** for the auth user. Then the edge function tries to update the **original profile** with the new `user_id`, but fails because another profile already has that `user_id`.
-
-**Evidence from logs**:
-```
-Error updating profile: duplicate key value violates unique constraint "profiles_user_id_key"
-```
-
-**Current database state for employee 1143**:
-- Original profile: `85ed33ab-5536-4ed1-9522-96ae6016bde4` - has `user_id: NULL`
-- Duplicate profile: `931c56f8-6e04-4a19-82cf-9e3c47dffccc` - has `user_id: b6a79525-...`
-- Role record: points to correct profile_id but has the auth user_id
+- **UserDialog.tsx**: Shows "Account Information" for users with `user_id` but has no password reset option
+- **EmployeeEditDialog.tsx**: Same situation - shows account exists but no way to trigger password reset
+- **ResetPasswordDialog.tsx**: Only allows admins to manually set a new password (doesn't use email flow)
+- **Login.tsx**: Has "Forgot Password" that calls `resetPasswordForEmail` but redirects to `/reset-password` which doesn't exist
+- **Supabase Dashboard**: Currently configured with `localhost:3000` as Site URL
 
 ## Solution
 
-### Fix 1: UserDialog Role Update Logic
+### 1. Add "Send Password Reset Email" Button
 
-Change role lookup to use `profile_id` only (which always exists):
+Add a button to both dialogs for users who have login accounts:
 
+**UserDialog.tsx** (Access & Security tab, lines ~521-529):
+- Add a "Send Password Reset Email" button next to "Account Information"
+- On click, calls `supabase.auth.resetPasswordForEmail()` with user's email
+- Uses production domain constant for the redirect URL
+
+**EmployeeEditDialog.tsx** (Access tab, lines ~507-514):
+- Same functionality as UserDialog
+
+### 2. Create Reset Password Page
+
+Create `src/pages/ResetPassword.tsx`:
+- Handles the password reset callback from email link
+- Allows user to enter and confirm new password
+- Uses `supabase.auth.updateUser({ password })` to set new password
+- Shows success message and redirects to login
+
+### 3. Add Route for Reset Password
+
+Update `src/App.tsx`:
+- Add public route for `/reset-password`
+
+### 4. Supabase Dashboard Configuration (Manual)
+
+**You need to update these settings in Supabase Dashboard:**
+
+1. Go to **Authentication** > **URL Configuration**
+2. Set **Site URL** to: `https://clock.cicotimeclock.com`
+3. Add to **Redirect URLs**:
+   - `https://clock.cicotimeclock.com/reset-password`
+   - `https://cicoclock.lovable.app/reset-password`
+   - Preview URL if needed for testing
+
+## Technical Details
+
+### Password Reset Email Flow
+```
+Admin clicks "Send Password Reset Email"
+    ↓
+supabase.auth.resetPasswordForEmail(email, { redirectTo })
+    ↓
+Supabase sends email with link to /reset-password?token=...
+    ↓
+User clicks link, lands on ResetPassword page
+    ↓
+Page detects auth recovery event
+    ↓
+User enters new password
+    ↓
+supabase.auth.updateUser({ password })
+    ↓
+Redirect to login
+```
+
+### Files to Create/Modify
+
+| File | Action | Description |
+|------|--------|-------------|
+| `src/pages/ResetPassword.tsx` | Create | New page for password reset flow |
+| `src/App.tsx` | Modify | Add route for `/reset-password` |
+| `src/components/users/UserDialog.tsx` | Modify | Add reset email button for users with login |
+| `src/components/employee/EmployeeEditDialog.tsx` | Modify | Add reset email button for employees with login |
+| `src/lib/constants.ts` | Modify | Add RESET_PASSWORD route constant |
+
+### Key Code Snippets
+
+**Send Reset Email Button:**
 ```typescript
-// Look up existing role by profile_id (always present)
-const { data: existingRole } = await supabase
-  .from('user_roles')
-  .select('id')
-  .eq('profile_id', user.id)
-  .maybeSingle();
-
-if (existingRole) {
-  const { error: roleError } = await supabase
-    .from('user_roles')
-    .update({ role: formData.role })
-    .eq('id', existingRole.id);
-  if (roleError) throw roleError;
-} else {
-  const { error: roleError } = await supabase
-    .from('user_roles')
-    .insert({
-      user_id: user.user_id || null,  // NULL is fine now
-      profile_id: user.id,
-      role: formData.role
+<Button
+  type="button"
+  variant="outline"
+  size="sm"
+  onClick={async () => {
+    const redirectUrl = `${PRODUCTION_BASE_URL}/reset-password`;
+    const { error } = await supabase.auth.resetPasswordForEmail(email, {
+      redirectTo: redirectUrl,
     });
-  if (roleError) throw roleError;
-}
+    if (error) {
+      toast.error(error.message);
+    } else {
+      toast.success("Password reset email sent successfully");
+    }
+  }}
+>
+  <Mail className="h-4 w-4 mr-2" />
+  Send Password Reset Email
+</Button>
 ```
 
-### Fix 2: Edge Function - Handle Duplicate Profiles
-
-Update `create-auth-account` to:
-1. Delete any auto-created profile from the trigger
-2. Then update the original profile with the new `user_id`
-
+**Reset Password Page Core Logic:**
 ```typescript
-// After creating auth user, delete the auto-generated profile from trigger
-const { error: deleteAutoProfile } = await supabase
-  .from('profiles')
-  .delete()
-  .eq('user_id', authData.user?.id)
-  .neq('id', profile_id);  // Don't delete the original profile
+useEffect(() => {
+  supabase.auth.onAuthStateChange((event, session) => {
+    if (event === 'PASSWORD_RECOVERY') {
+      setCanReset(true);
+    }
+  });
+}, []);
 
-// Now safely update the original profile
-const { error: updateError } = await supabase
-  .from('profiles')
-  .update({ 
-    user_id: authData.user?.id,
-    email 
-  })
-  .eq('id', profile_id);
-```
-
-### Fix 3: Update Existing User Roles Query
-
-Also fix the edge function to check for existing roles before inserting (to avoid duplicates):
-
-```typescript
-if (role && authData.user) {
-  // Check if role already exists for this profile
-  const { data: existingRole } = await supabase
-    .from('user_roles')
-    .select('id')
-    .eq('profile_id', profile_id)
-    .maybeSingle();
-    
-  if (existingRole) {
-    await supabase
-      .from('user_roles')
-      .update({ user_id: authData.user.id, role })
-      .eq('id', existingRole.id);
-  } else {
-    await supabase
-      .from('user_roles')
-      .insert({ user_id: authData.user.id, profile_id, role });
+const handleSubmit = async () => {
+  const { error } = await supabase.auth.updateUser({ 
+    password: newPassword 
+  });
+  if (!error) {
+    navigate('/login');
   }
-}
+};
 ```
 
-## Files to Modify
+## Manual Steps Required
 
-| File | Changes |
-|------|---------|
-| `src/components/users/UserDialog.tsx` | Fix role lookup to use `profile_id` only |
-| `supabase/functions/create-auth-account/index.ts` | Handle duplicate profiles and existing roles |
+After implementation, you must configure Supabase:
 
-## Database Cleanup Required
+1. **Supabase Dashboard** > **Authentication** > **URL Configuration**
+2. Update **Site URL**: `https://clock.cicotimeclock.com`
+3. Add **Redirect URLs**:
+   - `https://clock.cicotimeclock.com/reset-password`
+   - `https://cicoclock.lovable.app/reset-password`
 
-After the fix is deployed, clean up the duplicate profile:
-
-```sql
--- Delete the auto-created duplicate profile
-DELETE FROM profiles WHERE id = '931c56f8-6e04-4a19-82cf-9e3c47dffccc';
-
--- Update the original profile with the user_id
-UPDATE profiles 
-SET user_id = 'b6a79525-f048-46a8-b11a-e36a753a9d9b' 
-WHERE id = '85ed33ab-5536-4ed1-9522-96ae6016bde4';
-```
-
-## Validation
-
-After implementation:
-1. Open employee 1143, change role, save - role should persist on re-open
-2. For a different timeclock-only employee, click "Enable Login Access", create account - on re-open it should show "Account Information" instead of the warning
+This ensures password reset emails use your production domain instead of localhost:3000.
 
