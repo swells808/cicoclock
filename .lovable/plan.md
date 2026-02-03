@@ -1,170 +1,144 @@
 
 
-# Fix Role Saving and Improve "Enable Login" Discoverability
+# Fix Role Saving and Enable Login in UserDialog
 
-## Issues Identified
+## Root Cause Analysis
 
-### Issue 1: Role Cannot Be Saved for Timeclock-Only Users
+### Issue 1: Role Changes Not Saving
 
-**Root Cause**: The `user_roles` table has a `user_id NOT NULL` constraint with a foreign key to `auth.users(id)`. This means:
-- Roles can ONLY be saved for employees who have an auth account
-- Timeclock-only employees (created via CSV import or without login) cannot have roles assigned
-
-**Current Code Problem** (lines 156-181 in EmployeeEditDialog.tsx):
-```typescript
-if (role !== employee.role) {
-  const userId = employee.user_id;  // NULL for timeclock-only users!
-  if (userId) {
-    // Only runs if user has auth account - skipped for timeclock-only!
-  }
-}
-```
-
-### Issue 2: "Enable Login" Button Location
-
-The "Enable Login Access" button exists in the code but is located in the **Access tab** of the edit dialog. Users may not realize they need to:
-1. Click the "..." menu in the employee header
-2. Select "Edit Employee"  
-3. Navigate to the "Access" tab
-
-## Solution
-
-### Database Change Required
-
-Modify the `user_roles` table to allow `user_id` to be nullable when `profile_id` is provided:
-
-```sql
-ALTER TABLE public.user_roles ALTER COLUMN user_id DROP NOT NULL;
-```
-
-This allows roles to be stored for timeclock-only users using just their `profile_id`.
-
-### Code Changes
-
-**File: `src/components/employee/EmployeeEditDialog.tsx`**
-
-Fix the role saving logic to use `profile_id` as the primary lookup:
+The role update logic in `UserDialog.tsx` (lines 151-172) has a bug:
 
 ```typescript
-// Updated role saving logic
-if (role !== employee.role) {
-  // Look up existing role by profile_id (always present)
-  const { data: existingRole } = await supabase
-    .from("user_roles")
-    .select("id")
-    .eq("profile_id", employee.id)
-    .maybeSingle();
-
-  if (existingRole) {
-    // Update existing role
-    await supabase
-      .from("user_roles")
-      .update({ role: role as "admin" | "supervisor" | "employee" | "foreman" })
-      .eq("id", existingRole.id);
-  } else {
-    // Insert new role - user_id can now be null
-    await supabase
-      .from("user_roles")
-      .insert({
-        user_id: employee.user_id || null,  // NULL for timeclock-only
-        profile_id: employee.id,
-        role: role as "admin" | "supervisor" | "employee" | "foreman",
-      });
-  }
-}
-```
-
-**File: `src/hooks/useEmployeeDetail.ts`**
-
-Update the role fetch query to prioritize `profile_id` lookup:
-
-```typescript
-// Fetch user role - prioritize profile_id for timeclock-only users
-const { data: roleData } = await supabase
-  .from("user_roles")
-  .select("role")
-  .eq("profile_id", profile.id)
+const roleKey = user.user_id || user.id;  // For null user_id, uses profile.id
+const { data: existingRole } = await supabase
+  .from('user_roles')
+  .select('id')
+  .or(`user_id.eq.${roleKey},profile_id.eq.${user.id}`)  // This query syntax can fail
   .maybeSingle();
 ```
 
-**File: `src/hooks/useUsers.ts`**
+**Problem**: The `.or()` query with string interpolation doesn't handle cases properly. It should query by `profile_id` first (which always exists), not by `user_id`.
 
-Update the roles lookup to include profile-only roles:
+### Issue 2: Enable Login Creates Duplicate Profile
 
-```typescript
-// Create user roles lookup - prioritize profile_id for CSV users
-const rolesLookup = (userRoles || []).reduce((acc: Record<string, string>, r: any) => {
-  if (r.profile_id) acc[r.profile_id] = r.role;  // Profile-based (for timeclock-only)
-  if (r.user_id) acc[r.user_id] = r.role;        // User-based (for auth users)
-  return acc;
-}, {});
+The `create-auth-account` edge function creates an auth user, which triggers `handle_new_user()` database trigger. This trigger automatically creates a **new profile** for the auth user. Then the edge function tries to update the **original profile** with the new `user_id`, but fails because another profile already has that `user_id`.
+
+**Evidence from logs**:
+```
+Error updating profile: duplicate key value violates unique constraint "profiles_user_id_key"
 ```
 
-### UI Improvement: Add Prominent "Edit" Buttons
+**Current database state for employee 1143**:
+- Original profile: `85ed33ab-5536-4ed1-9522-96ae6016bde4` - has `user_id: NULL`
+- Duplicate profile: `931c56f8-6e04-4a19-82cf-9e3c47dffccc` - has `user_id: b6a79525-...`
+- Role record: points to correct profile_id but has the auth user_id
 
-Add direct edit buttons to the read-only info cards that open the dialog to the relevant tab.
+## Solution
 
-**File: `src/components/employee/tabs/PersonalInfoTab.tsx`**
+### Fix 1: UserDialog Role Update Logic
 
-Add edit button to each card header:
+Change role lookup to use `profile_id` only (which always exists):
 
 ```typescript
-interface PersonalInfoTabProps {
-  employee: EmployeeProfile;
-  onEdit?: (tab: string) => void;  // New prop
+// Look up existing role by profile_id (always present)
+const { data: existingRole } = await supabase
+  .from('user_roles')
+  .select('id')
+  .eq('profile_id', user.id)
+  .maybeSingle();
+
+if (existingRole) {
+  const { error: roleError } = await supabase
+    .from('user_roles')
+    .update({ role: formData.role })
+    .eq('id', existingRole.id);
+  if (roleError) throw roleError;
+} else {
+  const { error: roleError } = await supabase
+    .from('user_roles')
+    .insert({
+      user_id: user.user_id || null,  // NULL is fine now
+      profile_id: user.id,
+      role: formData.role
+    });
+  if (roleError) throw roleError;
 }
-
-// In card headers:
-<div className="flex justify-between items-center">
-  <h3>Personal Information</h3>
-  {onEdit && (
-    <Button variant="ghost" size="sm" onClick={() => onEdit("personal")}>
-      <Edit className="h-4 w-4 mr-1" /> Edit
-    </Button>
-  )}
-</div>
 ```
 
-**File: `src/components/employee/EmployeeEditDialog.tsx`**
+### Fix 2: Edge Function - Handle Duplicate Profiles
 
-Add support for opening to a specific tab:
+Update `create-auth-account` to:
+1. Delete any auto-created profile from the trigger
+2. Then update the original profile with the new `user_id`
 
 ```typescript
-interface EmployeeEditDialogProps {
-  open: boolean;
-  onOpenChange: (open: boolean) => void;
-  employee: EmployeeProfile;
-  onSave: () => void;
-  initialTab?: string;  // New prop
-}
+// After creating auth user, delete the auto-generated profile from trigger
+const { error: deleteAutoProfile } = await supabase
+  .from('profiles')
+  .delete()
+  .eq('user_id', authData.user?.id)
+  .neq('id', profile_id);  // Don't delete the original profile
 
-// In useEffect:
-setActiveTab(initialTab || "personal");
+// Now safely update the original profile
+const { error: updateError } = await supabase
+  .from('profiles')
+  .update({ 
+    user_id: authData.user?.id,
+    email 
+  })
+  .eq('id', profile_id);
 ```
 
-**File: `src/components/employee/EmployeeTabs.tsx`**
+### Fix 3: Update Existing User Roles Query
 
-Pass the edit handler through to child tabs.
+Also fix the edge function to check for existing roles before inserting (to avoid duplicates):
+
+```typescript
+if (role && authData.user) {
+  // Check if role already exists for this profile
+  const { data: existingRole } = await supabase
+    .from('user_roles')
+    .select('id')
+    .eq('profile_id', profile_id)
+    .maybeSingle();
+    
+  if (existingRole) {
+    await supabase
+      .from('user_roles')
+      .update({ user_id: authData.user.id, role })
+      .eq('id', existingRole.id);
+  } else {
+    await supabase
+      .from('user_roles')
+      .insert({ user_id: authData.user.id, profile_id, role });
+  }
+}
+```
 
 ## Files to Modify
 
 | File | Changes |
 |------|---------|
-| Database migration | Make `user_id` nullable in `user_roles` table |
-| `src/components/employee/EmployeeEditDialog.tsx` | Fix role save logic, add `initialTab` prop |
-| `src/hooks/useEmployeeDetail.ts` | Fix role fetch to use `profile_id` |
-| `src/hooks/useUsers.ts` | Fix roles lookup to prioritize `profile_id` |
-| `src/pages/EmployeeDetail.tsx` | Add `initialTab` state for edit dialog |
-| `src/components/employee/EmployeeTabs.tsx` | Pass `onEdit` callback to child tabs |
-| `src/components/employee/tabs/PersonalInfoTab.tsx` | Add Edit buttons to cards |
-| `src/components/employee/tabs/WorkDetailsTab.tsx` | Add Edit button to Access card (where "Enable Login" is) |
+| `src/components/users/UserDialog.tsx` | Fix role lookup to use `profile_id` only |
+| `supabase/functions/create-auth-account/index.ts` | Handle duplicate profiles and existing roles |
 
-## Expected Outcome
+## Database Cleanup Required
 
-After these changes:
+After the fix is deployed, clean up the duplicate profile:
 
-1. **Role changes will save** for all employees, including timeclock-only users
-2. **Clear "Edit" buttons** will appear on each information card
-3. **Easy access to "Enable Login"**: Clicking Edit on the Access & Security section opens directly to the Access tab where the "Enable Login Access" button is located
-4. Users won't need to hunt through menus to find editing options
+```sql
+-- Delete the auto-created duplicate profile
+DELETE FROM profiles WHERE id = '931c56f8-6e04-4a19-82cf-9e3c47dffccc';
+
+-- Update the original profile with the user_id
+UPDATE profiles 
+SET user_id = 'b6a79525-f048-46a8-b11a-e36a753a9d9b' 
+WHERE id = '85ed33ab-5536-4ed1-9522-96ae6016bde4';
+```
+
+## Validation
+
+After implementation:
+1. Open employee 1143, change role, save - role should persist on re-open
+2. For a different timeclock-only employee, click "Enable Login Access", create account - on re-open it should show "Account Information" instead of the warning
 
