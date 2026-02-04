@@ -16,6 +16,7 @@ import { useToast } from "@/hooks/use-toast";
 import { PhotoCapture } from "@/components/timeclock/PhotoCapture";
 import { useUserRole } from "@/hooks/useUserRole";
 import { ClockStatusOverlay, ClockStatusType } from "@/components/timeclock/ClockStatusOverlay";
+import { verifyFace, formatEmbeddingForPgvector } from "@/lib/faceVerification";
 
 const Timeclock = () => {
   const navigate = useNavigate();
@@ -43,6 +44,7 @@ const Timeclock = () => {
   const [clockStatus, setClockStatus] = useState<'out' | 'in'>('out');
   const [showPhotoCapture, setShowPhotoCapture] = useState(false);
   const [photoAction, setPhotoAction] = useState<'clock_in' | 'clock_out' | null>(null);
+  const [pendingPhotoBlob, setPendingPhotoBlob] = useState<Blob | null>(null);
   const [isProcessing, setIsProcessing] = useState(false);
   const [manualLookupEmployee, setManualLookupEmployee] = useState<any>(null);
   const [clockStatusOverlay, setClockStatusOverlay] = useState<ClockStatusType>(null);
@@ -125,6 +127,7 @@ const Timeclock = () => {
     setClockStatus('out');
     setShowPhotoCapture(false);
     setPhotoAction(null);
+    setPendingPhotoBlob(null);
     setIsProcessing(false);
     setManualLookupEmployee(null);
     setShowManualInput(false);
@@ -312,14 +315,18 @@ const Timeclock = () => {
 
   const handlePhotoCapture = async (photoBlob: Blob) => {
     try {
+      // Store the blob for face verification after clock action
+      setPendingPhotoBlob(photoBlob);
       const photoUrl = await uploadPhoto(photoBlob, photoAction!);
       setShowPhotoCapture(false);
-      if (photoAction === 'clock_in') await performClockIn(photoUrl); else if (photoAction === 'clock_out') await performClockOut(photoUrl);
+      if (photoAction === 'clock_in') await performClockIn(photoUrl, photoBlob); 
+      else if (photoAction === 'clock_out') await performClockOut(photoUrl, photoBlob);
     } catch (error) {
       toast({ title: "Photo Upload Failed", description: "Continuing without photo.", variant: "destructive" });
       if (photoAction === 'clock_in') await performClockIn(); else if (photoAction === 'clock_out') await performClockOut();
     }
     setPhotoAction(null);
+    setPendingPhotoBlob(null);
   };
 
   // Get current geolocation with Mapbox reverse geocoding for better accuracy
@@ -381,7 +388,86 @@ const Timeclock = () => {
     });
   };
 
-  const performClockIn = async (photoUrl?: string) => {
+  // Client-side face verification helper
+  const runFaceVerification = async (
+    timeEntryId: string,
+    photoBlob: Blob,
+    photoUrl: string
+  ) => {
+    if (!companyFeatures?.face_verification || !authenticatedEmployee?.avatar_url) {
+      console.log('[FaceVerify] Skipped:', { 
+        face_verification: companyFeatures?.face_verification, 
+        avatar_url: !!authenticatedEmployee?.avatar_url 
+      });
+      return;
+    }
+
+    // Check if employee has face embedding enrolled
+    const { data: profileData } = await supabase
+      .from('profiles')
+      .select('face_embedding, face_enrollment_status')
+      .eq('id', authenticatedEmployee.id)
+      .single();
+
+    if (!profileData?.face_embedding || profileData.face_enrollment_status !== 'enrolled') {
+      console.log('[FaceVerify] Employee not enrolled, logging skipped status');
+      Promise.resolve(supabase.from('face_verifications').insert({
+        time_entry_id: timeEntryId,
+        profile_id: authenticatedEmployee.id,
+        company_id: company!.id,
+        clock_photo_url: photoUrl,
+        profile_photo_url: authenticatedEmployee.avatar_url,
+        status: 'skipped',
+        match_reason: 'enrollment_missing',
+        verification_version: 'faceapi-v1',
+      })).catch(() => {});
+      return;
+    }
+
+    try {
+      // Parse the embedding from pgvector format
+      const embeddingStr = profileData.face_embedding as string;
+      const embedding = JSON.parse(embeddingStr.replace(/^\[|\]$/g, (m) => m)) as number[];
+
+      console.log('[FaceVerify] Running client-side verification');
+      const result = await verifyFace(photoBlob, embedding);
+
+      // Log verification result
+      Promise.resolve(supabase.from('face_verifications').insert({
+        time_entry_id: timeEntryId,
+        profile_id: authenticatedEmployee.id,
+        company_id: company!.id,
+        clock_photo_url: photoUrl,
+        profile_photo_url: authenticatedEmployee.avatar_url,
+        captured_face_embedding: result.embedding ? formatEmbeddingForPgvector(result.embedding) : null,
+        match_distance: result.distance ?? null,
+        match_threshold: 0.55,
+        is_match: result.pass ?? null,
+        match_reason: result.reason,
+        status: result.ok ? (result.pass ? 'verified' : 'no_match') : 'error',
+        confidence_score: result.distance != null ? Math.max(0, 1 - result.distance) : null,
+        verified_at: new Date().toISOString(),
+        verification_version: 'faceapi-v1',
+      })).catch(console.error);
+
+      console.log('[FaceVerify] Result:', result);
+    } catch (error) {
+      console.error('[FaceVerify] Error:', error);
+      // Log error but don't block clock action
+      Promise.resolve(supabase.from('face_verifications').insert({
+        time_entry_id: timeEntryId,
+        profile_id: authenticatedEmployee.id,
+        company_id: company!.id,
+        clock_photo_url: photoUrl,
+        profile_photo_url: authenticatedEmployee.avatar_url,
+        status: 'error',
+        match_reason: 'model_load_failed',
+        verification_version: 'faceapi-v1',
+      })).catch(() => {});
+    }
+  };
+
+  const performClockIn = async (photoUrl?: string, photoBlob?: Blob) => {
     if (!authenticatedEmployee || !company) return;
     setIsProcessing(true);
     
@@ -407,30 +493,9 @@ const Timeclock = () => {
       return; 
     }
     
-    // Fire-and-forget face verification
-    if (companyFeatures?.face_verification && photoUrl && authenticatedEmployee?.avatar_url) {
-      console.log('[FaceVerify] Invoking verify-face with:', {
-        time_entry_id: data.data?.id,
-        profile_id: authenticatedEmployee.id,
-        company_id: company.id,
-        clock_photo_url: photoUrl,
-        profile_photo_url: authenticatedEmployee.avatar_url,
-      });
-      supabase.functions.invoke('verify-face', {
-        body: {
-          time_entry_id: data.data?.id,
-          profile_id: authenticatedEmployee.id,
-          company_id: company.id,
-          clock_photo_url: photoUrl,
-          profile_photo_url: authenticatedEmployee.avatar_url,
-        },
-      }).then((res) => {
-        console.log('[FaceVerify] Response:', res);
-      }).catch((err) => {
-        console.error('[FaceVerify] Error:', err);
-      });
-    } else {
-      console.log('[FaceVerify] Skipped:', { face_verification: companyFeatures?.face_verification, photoUrl: !!photoUrl, avatar_url: !!authenticatedEmployee?.avatar_url });
+    // Fire-and-forget face verification (client-side)
+    if (photoUrl && photoBlob && data.data?.id) {
+      runFaceVerification(data.data.id, photoBlob, photoUrl).catch(console.error);
     }
 
     const employeeName = authenticatedEmployee.display_name || authenticatedEmployee.first_name || "Employee";
@@ -447,7 +512,7 @@ const Timeclock = () => {
     } 
   };
 
-  const performClockOut = async (photoUrl?: string) => {
+  const performClockOut = async (photoUrl?: string, photoBlob?: Blob) => {
     if (!activeTimeEntry || !authenticatedEmployee || !company) return;
     setIsProcessing(true);
     
@@ -474,17 +539,9 @@ const Timeclock = () => {
       return; 
     }
     
-    // Fire-and-forget face verification
-    if (companyFeatures?.face_verification && photoUrl && authenticatedEmployee?.avatar_url) {
-      supabase.functions.invoke('verify-face', {
-        body: {
-          time_entry_id: data.data.id,
-          profile_id: authenticatedEmployee.id,
-          company_id: company.id,
-          clock_photo_url: photoUrl,
-          profile_photo_url: authenticatedEmployee.avatar_url,
-        },
-      }).catch(() => {}); // Suppress unhandled rejection
+    // Fire-and-forget face verification (client-side)
+    if (photoUrl && photoBlob && data.data?.id) {
+      runFaceVerification(data.data.id, photoBlob, photoUrl).catch(console.error);
     }
 
     const employeeName = authenticatedEmployee.display_name || authenticatedEmployee.first_name || "Employee";
