@@ -1,123 +1,103 @@
 
-# Plan: Add Managers to Auto Clock-Out Email Alerts
+# Plan: Add Regular & Overtime Hours to Daily Timecard Report
 
 ## Overview
-Modify the `auto-close-overtime-shifts` edge function to include managers in the email notification chain. Managers will only receive alerts for employees in their assigned department, while admins continue to receive all alerts company-wide.
+Enhance the Daily Timecard report to display **regular hours**, **overtime hours**, and **total hours** for each employee, aggregated by employee for the selected date.
 
 ## Current Behavior
-- When an employee's shift exceeds 12 hours without clocking out, it's automatically closed at 11:59:59 PM
-- Email alerts are sent to all users with the `admin` role in the company
-- Managers are not notified
+- Displays individual time entries as separate rows
+- Shows: Employee, Project, Clock In, Clock Out, Duration
+- No distinction between regular and overtime hours
 
 ## New Behavior
-- Admins receive alerts for **all** auto-closed entries (unchanged)
-- Managers receive alerts **only for employees in their department**
-- If a manager is also in the same department as an affected employee, they get notified
-- Duplicate emails are prevented (if someone is both admin and manager)
+- Aggregates all time entries per employee for the selected date
+- Shows three distinct hour columns:
+  - **Regular Hours**: Time worked within the employee's scheduled hours
+  - **Overtime Hours**: Time worked beyond the employee's scheduled hours
+  - **Total Hours**: Sum of regular + overtime
+- Uses employee's schedule (or department schedule, or default 8-hour workday) to determine the threshold
 
-## Data Model
+## Overtime Calculation Logic
 
 ```text
-+------------------+       +------------------+       +------------------+
-|   user_roles     |       |    profiles      |       |   departments    |
-+------------------+       +------------------+       +------------------+
-| user_id (FK)     |<----->| user_id          |       | id               |
-| role (enum)      |       | department_id ---|------>| name             |
-| profile_id (FK)  |       | company_id       |       | company_id       |
-+------------------+       | email            |       +------------------+
-                           +------------------+
+For each employee on the selected date:
+
+1. Get the employee's schedule for that day of week
+   - Check employee_schedules table first
+   - Fall back to department_schedules if no custom schedule
+   - Fall back to default (8 hours/day) if no department schedule
+
+2. Calculate scheduled hours for the day
+   - If start_time and end_time exist: (end_time - start_time)
+   - Default: 8 hours (480 minutes)
+
+3. Sum all time entries for the employee that day
+
+4. Regular Hours = min(total_worked, scheduled_hours)
+5. Overtime Hours = max(0, total_worked - scheduled_hours)
 ```
 
-## Implementation Steps
+## UI Changes
 
-### Step 1: Enhance Time Entries Query
-Modify the `overtimeEntries` query to include the employee's `department_id` from the profile.
+### Before (Individual Entries)
+| Employee | Project | Clock In | Clock Out | Duration |
+|----------|---------|----------|-----------|----------|
+| John Doe | Site A  | 8:00 AM  | 12:00 PM  | 4h 0m    |
+| John Doe | Site A  | 1:00 PM  | 6:00 PM   | 5h 0m    |
+| Jane Doe | Site B  | 9:00 AM  | 5:00 PM   | 8h 0m    |
 
-**File:** `supabase/functions/auto-close-overtime-shifts/index.ts`
+### After (Aggregated with Hours Breakdown)
+| Employee | Regular Hours | Overtime Hours | Total Hours |
+|----------|---------------|----------------|-------------|
+| John Doe | 8h 0m         | 1h 0m          | 9h 0m       |
+| Jane Doe | 8h 0m         | 0h 0m          | 8h 0m       |
 
-```typescript
-profiles!time_entries_profile_id_fkey(
-  id,
-  first_name,
-  last_name,
-  display_name,
-  employee_id,
-  department_id  // Add this field
-),
-```
+## Technical Implementation
 
-### Step 2: Extract Affected Department IDs
-After grouping entries by company, collect unique department IDs from affected employees.
+### Step 1: Fetch Schedules for Affected Employees
+Query `employee_schedules` and `department_schedules` tables to determine each employee's scheduled hours for the selected day of week.
 
-```typescript
-const affectedDepartmentIds = [...new Set(
-  entries
-    .map(entry => (entry.profiles as any)?.department_id)
-    .filter(Boolean)
-)];
-```
+### Step 2: Aggregate Time Entries by Employee
+Group all time entries by employee (using `profile_id` or `user_id`), summing their `duration_minutes`.
 
-### Step 3: Fetch Manager Emails by Department
-Query profiles that:
-1. Are in the same company
-2. Are in one of the affected departments
-3. Have the `manager` role
+### Step 3: Calculate Regular vs Overtime
+For each employee:
+- Look up their scheduled hours for the day
+- Apply the calculation logic above
 
-```typescript
-// Only fetch if there are affected departments
-if (affectedDepartmentIds.length > 0) {
-  // Get profiles in affected departments
-  const { data: deptProfiles } = await supabase
-    .from('profiles')
-    .select('id, email, user_id, department_id')
-    .eq('company_id', companyId)
-    .in('department_id', affectedDepartmentIds)
-    .not('email', 'is', null);
-
-  // Filter to those with manager role
-  for (const profile of deptProfiles || []) {
-    if (profile.user_id) {
-      const { data: roleData } = await supabase
-        .from('user_roles')
-        .select('role')
-        .eq('user_id', profile.user_id)
-        .eq('role', 'manager')
-        .maybeSingle();
-
-      if (roleData && profile.email) {
-        managerEmails.push(profile.email);
-      }
-    }
-  }
-}
-```
-
-### Step 4: Combine Recipients and Deduplicate
-Merge admin and manager email lists, removing duplicates.
-
-```typescript
-const allRecipientEmails = [...new Set([...adminEmails, ...managerEmails])];
-```
-
-### Step 5: Update Email Sending Logic
-Use the combined recipient list instead of just admin emails.
-
-### Step 6: Add Department Column to Email (Enhancement)
-Optionally add a "Department" column to the email table so managers can quickly identify their employees.
+### Step 4: Update Table Display
+Replace the individual entry view with an aggregated employee summary showing the three hour columns.
 
 ## Files to Modify
 
 | File | Changes |
 |------|---------|
-| `supabase/functions/auto-close-overtime-shifts/index.ts` | Add manager email fetching logic, include department_id in query |
+| `src/components/reports/DailyTimecardReport.tsx` | Add schedule fetching, aggregate entries by employee, calculate regular/overtime hours, update table structure |
 
-## Testing Considerations
-- Test with an employee who has no department assigned (should still work, just no manager notified)
-- Test with a manager who is also an admin (should only receive one email)
-- Test with multiple departments affected (each manager should be notified)
-- Verify admins still receive all notifications regardless of department
+## Edge Cases Handled
+- **No schedule defined**: Falls back to 8-hour workday
+- **Day off in schedule**: All hours count as overtime
+- **Active/incomplete entries**: Calculate duration from start_time to now
+- **Multiple entries per employee**: Sum all durations before splitting regular/overtime
 
-## Technical Notes
-- The `manager` role is part of the `app_role` enum (confirmed in `src/lib/constants.ts`)
-- Manager-department association is via `profiles.department_id` - the manager must be assigned to the same department as the employee they manage
-- No database schema changes required - all necessary fields already exist
+## Data Flow
+
+```text
+┌─────────────────┐     ┌──────────────────────┐     ┌─────────────────┐
+│  time_entries   │────▶│ Group by employee    │────▶│ Per-employee    │
+│  (for the day)  │     │ Sum duration_minutes │     │ total minutes   │
+└─────────────────┘     └──────────────────────┘     └────────┬────────┘
+                                                              │
+┌─────────────────┐     ┌──────────────────────┐              │
+│employee_schedules│───▶│ Scheduled hours for  │◀─────────────┘
+│dept_schedules   │     │ day of week          │
+└─────────────────┘     └──────────┬───────────┘
+                                   │
+                        ┌──────────▼───────────┐
+                        │ Calculate:           │
+                        │ • Regular = min(     │
+                        │     total, scheduled)│
+                        │ • Overtime = max(0,  │
+                        │     total - scheduled)│
+                        └──────────────────────┘
+```
