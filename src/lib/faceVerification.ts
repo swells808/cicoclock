@@ -116,12 +116,12 @@ export interface VerificationResult {
  * Run full face verification comparing clock photo to profile embedding.
  * @param clockPhotoBlob - The photo blob captured during clock action
  * @param profileEmbedding - The stored 128-d embedding from user profile
- * @param threshold - Match threshold (default 0.55, lower = stricter)
+ * @param threshold - Match threshold (default 0.60, lower = stricter)
  */
 export async function verifyFace(
   clockPhotoBlob: Blob,
   profileEmbedding: number[],
-  threshold: number = 0.55
+  threshold: number = 0.60
 ): Promise<VerificationResult> {
   try {
     await loadFaceModelsOnce();
