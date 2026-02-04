@@ -49,6 +49,8 @@ export const CompanyForm: React.FC = () => {
     employee_pin: false,
     face_verification: false,
     mapbox_public_token: '',
+    overtime_enabled: false,
+    overtime_daily_threshold_hours: 8,
   });
 
   useEffect(() => {
@@ -74,6 +76,8 @@ export const CompanyForm: React.FC = () => {
         employee_pin: companyFeatures.employee_pin,
         face_verification: companyFeatures.face_verification ?? false,
         mapbox_public_token: companyFeatures.mapbox_public_token || '',
+        overtime_enabled: (companyFeatures as any).overtime_enabled ?? false,
+        overtime_daily_threshold_hours: (companyFeatures as any).overtime_daily_threshold_hours ?? 8,
       });
     }
   }, [company, companyFeatures]);
@@ -161,6 +165,8 @@ export const CompanyForm: React.FC = () => {
           employee_pin: features.employee_pin,
           face_verification: features.face_verification,
           mapbox_public_token: features.mapbox_public_token,
+          overtime_enabled: features.overtime_enabled,
+          overtime_daily_threshold_hours: features.overtime_daily_threshold_hours,
           updated_at: new Date().toISOString(),
         })
         .eq('company_id', company.id);
@@ -402,6 +408,42 @@ export const CompanyForm: React.FC = () => {
               checked={features.face_verification}
               onCheckedChange={(checked) => setFeatures({ ...features, face_verification: checked })}
             />
+          </div>
+
+          <div className="space-y-4 pt-4 border-t">
+            <div className="flex items-center justify-between">
+              <div className="space-y-0.5">
+                <Label>Overtime Tracking</Label>
+                <p className="text-sm text-muted-foreground">Track overtime hours on reports</p>
+              </div>
+              <Switch
+                checked={features.overtime_enabled}
+                onCheckedChange={(checked) => setFeatures({ ...features, overtime_enabled: checked })}
+              />
+            </div>
+            
+            {features.overtime_enabled && (
+              <div className="ml-0 space-y-2 p-4 bg-muted/50 rounded-lg">
+                <Label htmlFor="overtime_threshold">Daily Hours Threshold</Label>
+                <p className="text-sm text-muted-foreground">Hours worked per day before overtime kicks in</p>
+                <Select
+                  value={String(features.overtime_daily_threshold_hours)}
+                  onValueChange={(value) => setFeatures({ ...features, overtime_daily_threshold_hours: Number(value) })}
+                >
+                  <SelectTrigger className="w-[180px]">
+                    <SelectValue placeholder="Select hours" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="6">6 hours</SelectItem>
+                    <SelectItem value="7">7 hours</SelectItem>
+                    <SelectItem value="8">8 hours (default)</SelectItem>
+                    <SelectItem value="9">9 hours</SelectItem>
+                    <SelectItem value="10">10 hours</SelectItem>
+                    <SelectItem value="12">12 hours</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+            )}
           </div>
 
           <div className="space-y-2 pt-4 border-t">
