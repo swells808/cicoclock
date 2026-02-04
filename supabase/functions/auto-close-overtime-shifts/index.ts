@@ -76,8 +76,10 @@ serve(async (req) => {
           first_name,
           last_name,
           display_name,
-          employee_id
+          employee_id,
+          department_id
         ),
+        departments(name),
         projects(name)
       `)
       .is('end_time', null)
@@ -173,18 +175,59 @@ serve(async (req) => {
 
       console.log(`Found ${adminEmails.length} admin emails for company ${companyId}`);
 
-      // Send email notification to admins
-      if (resend && adminEmails.length > 0) {
+      // Get unique department IDs from affected employees
+      const affectedDepartmentIds = [...new Set(
+        entries
+          .map(entry => (entry.profiles as any)?.department_id)
+          .filter(Boolean)
+      )] as string[];
+
+      console.log(`Affected departments: ${affectedDepartmentIds.length}`);
+
+      // Fetch managers for affected departments
+      const managerEmails: string[] = [];
+      if (affectedDepartmentIds.length > 0) {
+        const { data: deptProfiles } = await supabase
+          .from('profiles')
+          .select('id, email, user_id, department_id')
+          .eq('company_id', companyId)
+          .in('department_id', affectedDepartmentIds)
+          .not('email', 'is', null);
+
+        for (const profile of deptProfiles || []) {
+          if (profile.user_id) {
+            const { data: roleData } = await supabase
+              .from('user_roles')
+              .select('role')
+              .eq('user_id', profile.user_id)
+              .eq('role', 'manager')
+              .maybeSingle();
+
+            if (roleData && profile.email) {
+              managerEmails.push(profile.email);
+            }
+          }
+        }
+      }
+
+      console.log(`Found ${managerEmails.length} manager emails for affected departments`);
+
+      // Combine and deduplicate admin and manager emails
+      const allRecipientEmails = [...new Set([...adminEmails, ...managerEmails])];
+
+      // Send email notification to admins and managers
+      if (resend && allRecipientEmails.length > 0) {
         const companyName = company?.company_name || 'Your Company';
         const timezone = company?.timezone || 'America/Los_Angeles';
         
-        // Build the employee list HTML
+        // Build the employee list HTML with department column
         const employeeListHtml = entries.map(entry => {
           const profile = entry.profiles as any;
           const employeeName = profile?.display_name || 
             `${profile?.first_name || ''} ${profile?.last_name || ''}`.trim() || 
             'Unknown Employee';
           const employeeId = profile?.employee_id || 'N/A';
+          const departmentName = (entry.departments as any)?.name || 'Unassigned';
           const projectName = (entry.projects as any)?.name || 'No Project';
           const startTime = new Date(entry.start_time);
           const formattedStart = startTime.toLocaleString('en-US', { 
@@ -197,6 +240,7 @@ serve(async (req) => {
             <tr>
               <td style="padding: 8px; border: 1px solid #e5e7eb;">${employeeName}</td>
               <td style="padding: 8px; border: 1px solid #e5e7eb;">${employeeId}</td>
+              <td style="padding: 8px; border: 1px solid #e5e7eb;">${departmentName}</td>
               <td style="padding: 8px; border: 1px solid #e5e7eb;">${projectName}</td>
               <td style="padding: 8px; border: 1px solid #e5e7eb;">${formattedStart}</td>
             </tr>
@@ -225,6 +269,7 @@ serve(async (req) => {
                   <tr style="background-color: #f3f4f6;">
                     <th style="padding: 12px 8px; border: 1px solid #e5e7eb; text-align: left;">Employee</th>
                     <th style="padding: 12px 8px; border: 1px solid #e5e7eb; text-align: left;">ID</th>
+                    <th style="padding: 12px 8px; border: 1px solid #e5e7eb; text-align: left;">Department</th>
                     <th style="padding: 12px 8px; border: 1px solid #e5e7eb; text-align: left;">Project</th>
                     <th style="padding: 12px 8px; border: 1px solid #e5e7eb; text-align: left;">Clock In</th>
                   </tr>
@@ -252,16 +297,16 @@ serve(async (req) => {
         try {
           const { error: emailError } = await resend.emails.send({
             from: 'CICO Alerts <reports@notifications.battlebornsteel.com>',
-            to: adminEmails,
+            to: allRecipientEmails,
             subject: `⚠️ Auto Clock-Out: ${entries.length} employee(s) exceeded ${MAX_SHIFT_HOURS}-hour shift limit`,
             html: emailHtml,
           });
 
           if (emailError) {
-            console.error('Failed to send admin notification email:', emailError);
+            console.error('Failed to send notification email:', emailError);
           } else {
-            emailsSent.push(...adminEmails);
-            console.log(`Sent notification email to ${adminEmails.length} admins for company ${companyId}`);
+            emailsSent.push(...allRecipientEmails);
+            console.log(`Sent notification email to ${allRecipientEmails.length} recipients (${adminEmails.length} admins, ${managerEmails.length} managers) for company ${companyId}`);
           }
         } catch (emailErr) {
           console.error('Email send error:', emailErr);
