@@ -276,17 +276,19 @@ const Timeclock = () => {
         return; 
       }
 
-      console.log('[Timeclock] Badge verified, looking for employee with id:', profileId);
-      console.log('[Timeclock] Available employees:', employees.map(e => ({ id: e.id, name: e.display_name })));
-      
-      const employee = employees.find(emp => emp.id === profileId);
-      if (!employee) { 
-        console.log('[Timeclock] Employee not found in local list');
-        toast({ title: "Employee Not Found", description: "This badge is not associated with an active employee", variant: "destructive" }); 
-        return; 
-      }
+      // Use employee data from verify-badge response (edge function bypasses RLS)
+      // This is more reliable than local lookup which may fail for non-admin users
+      const employee = {
+        id: profileId,
+        user_id: data.employee.user_id,
+        display_name: data.employee.display_name,
+        first_name: data.employee.first_name,
+        last_name: data.employee.last_name,
+        avatar_url: data.employee.avatar_url,
+        pin: data.employee.has_pin ? 'exists' : null // Mark PIN exists without exposing it
+      };
 
-      console.log('[Timeclock] Found employee:', employee);
+      console.log('[Timeclock] Using employee from badge response:', employee);
       setSelectedEmployee(employee.id); 
       setShowBadgeScanner(false);
       toast({ title: "Badge Verified", description: `Welcome, ${employee.display_name}!` });
