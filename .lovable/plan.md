@@ -1,67 +1,123 @@
-# Replace Azure Face API with Client-Side face-api.js Verification
 
-## ✅ IMPLEMENTATION COMPLETE
+# Plan: Add Managers to Auto Clock-Out Email Alerts
 
-This plan has been implemented. The Azure Face API dependency has been replaced with client-side face verification using face-api.js (MIT license) with TensorFlow.js.
+## Overview
+Modify the `auto-close-overtime-shifts` edge function to include managers in the email notification chain. Managers will only receive alerts for employees in their assigned department, while admins continue to receive all alerts company-wide.
 
-## What Was Implemented
+## Current Behavior
+- When an employee's shift exceeds 12 hours without clocking out, it's automatically closed at 11:59:59 PM
+- Email alerts are sent to all users with the `admin` role in the company
+- Managers are not notified
 
-### 1. Database Changes ✅
-- Added `pgvector` extension for vector storage
-- Added `face_embedding vector(128)` column to profiles
-- Added `face_embedding_updated_at` and `face_enrollment_status` columns to profiles
-- Extended `face_verifications` table with new columns: `captured_face_embedding`, `match_distance`, `match_threshold`, `match_reason`, `verification_version`
-- Added RLS policy for inserting face verifications
+## New Behavior
+- Admins receive alerts for **all** auto-closed entries (unchanged)
+- Managers receive alerts **only for employees in their department**
+- If a manager is also in the same department as an affected employee, they get notified
+- Duplicate emails are prevented (if someone is both admin and manager)
 
-### 2. Model Assets ✅
-- Downloaded face-api.js model files to `/public/models/`:
-  - `tiny_face_detector_model-*` (face detection)
-  - `face_landmark_68_model-*` (landmarks)
-  - `face_recognition_model-*` (128-d embeddings)
+## Data Model
 
-### 3. New Files Created ✅
-- `src/lib/faceVerification.ts` - Core face-api.js wrapper with:
-  - `loadFaceModelsOnce()` - Lazy model loading
-  - `getDescriptorFromImage()` - Extract 128-d embedding
-  - `euclideanDistance()` - Compare embeddings
-  - `verifyFace()` - Full verification pipeline
-  - `extractEmbeddingFromUrl()` - Enrollment helper
-  - `formatEmbeddingForPgvector()` - Database formatting
+```text
++------------------+       +------------------+       +------------------+
+|   user_roles     |       |    profiles      |       |   departments    |
++------------------+       +------------------+       +------------------+
+| user_id (FK)     |<----->| user_id          |       | id               |
+| role (enum)      |       | department_id ---|------>| name             |
+| profile_id (FK)  |       | company_id       |       | company_id       |
++------------------+       | email            |       +------------------+
+                           +------------------+
+```
 
-- `src/hooks/useFaceEnrollment.ts` - Hook for enrolling faces when profile photos are uploaded
+## Implementation Steps
 
-### 4. Modified Files ✅
-- `src/pages/Timeclock.tsx` - Replaced Azure verify-face calls with client-side `runFaceVerification()`
-- `src/components/employee/EmployeeEditDialog.tsx` - Added face enrollment on profile photo upload
+### Step 1: Enhance Time Entries Query
+Modify the `overtimeEntries` query to include the employee's `department_id` from the profile.
 
-### 5. Dependencies ✅
-- Added `face-api.js@^0.22.2`
+**File:** `supabase/functions/auto-close-overtime-shifts/index.ts`
 
-## How It Works
+```typescript
+profiles!time_entries_profile_id_fkey(
+  id,
+  first_name,
+  last_name,
+  display_name,
+  employee_id,
+  department_id  // Add this field
+),
+```
 
-### Enrollment Flow
-1. Admin uploads/changes employee profile photo
-2. `useFaceEnrollment` hook extracts 128-d face embedding using face-api.js
-3. Embedding stored in `profiles.face_embedding` as pgvector
-4. Status set to `enrolled` or `failed`
+### Step 2: Extract Affected Department IDs
+After grouping entries by company, collect unique department IDs from affected employees.
 
-### Verification Flow
-1. Employee clocks in/out with photo
-2. Photo uploaded to storage (unchanged)
-3. Client-side verification runs in parallel (fire-and-forget):
-   - Load face-api models (cached after first use)
-   - Extract embedding from clock photo
-   - Fetch stored embedding from profile
-   - Compute Euclidean distance
-   - Log result to `face_verifications` table
-4. Clock action never blocks on verification
+```typescript
+const affectedDepartmentIds = [...new Set(
+  entries
+    .map(entry => (entry.profiles as any)?.department_id)
+    .filter(Boolean)
+)];
+```
 
-## Configuration
-- Default threshold: 0.55 (Euclidean distance)
-- Lower = stricter matching
-- Can be stored in `company_features` for per-tenant configuration later
+### Step 3: Fetch Manager Emails by Department
+Query profiles that:
+1. Are in the same company
+2. Are in one of the affected departments
+3. Have the `manager` role
 
-## Performance
-- Model loading: ~2-3 seconds on first use, cached thereafter
-- Embedding extraction: ~200-500ms per image
-- Non-blocking: Verification runs after clock action succeeds
+```typescript
+// Only fetch if there are affected departments
+if (affectedDepartmentIds.length > 0) {
+  // Get profiles in affected departments
+  const { data: deptProfiles } = await supabase
+    .from('profiles')
+    .select('id, email, user_id, department_id')
+    .eq('company_id', companyId)
+    .in('department_id', affectedDepartmentIds)
+    .not('email', 'is', null);
+
+  // Filter to those with manager role
+  for (const profile of deptProfiles || []) {
+    if (profile.user_id) {
+      const { data: roleData } = await supabase
+        .from('user_roles')
+        .select('role')
+        .eq('user_id', profile.user_id)
+        .eq('role', 'manager')
+        .maybeSingle();
+
+      if (roleData && profile.email) {
+        managerEmails.push(profile.email);
+      }
+    }
+  }
+}
+```
+
+### Step 4: Combine Recipients and Deduplicate
+Merge admin and manager email lists, removing duplicates.
+
+```typescript
+const allRecipientEmails = [...new Set([...adminEmails, ...managerEmails])];
+```
+
+### Step 5: Update Email Sending Logic
+Use the combined recipient list instead of just admin emails.
+
+### Step 6: Add Department Column to Email (Enhancement)
+Optionally add a "Department" column to the email table so managers can quickly identify their employees.
+
+## Files to Modify
+
+| File | Changes |
+|------|---------|
+| `supabase/functions/auto-close-overtime-shifts/index.ts` | Add manager email fetching logic, include department_id in query |
+
+## Testing Considerations
+- Test with an employee who has no department assigned (should still work, just no manager notified)
+- Test with a manager who is also an admin (should only receive one email)
+- Test with multiple departments affected (each manager should be notified)
+- Verify admins still receive all notifications regardless of department
+
+## Technical Notes
+- The `manager` role is part of the `app_role` enum (confirmed in `src/lib/constants.ts`)
+- Manager-department association is via `profiles.department_id` - the manager must be assigned to the same department as the employee they manage
+- No database schema changes required - all necessary fields already exist
