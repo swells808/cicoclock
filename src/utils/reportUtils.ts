@@ -24,6 +24,8 @@ export interface ReportUser {
 export interface ReportEmployeeData {
   name: string;
   hours: number;
+  regularHours?: number;
+  overtimeHours?: number;
 }
 
 export interface ReportProjectData {
@@ -42,9 +44,16 @@ export function buildRealTableHTML(
   type: "employee" | "project",
   data: ReportEmployeeData[] | ReportProjectData[],
   title?: string,
-  dateRange?: { start: Date; end: Date }
+  dateRange?: { start: Date; end: Date },
+  includeOvertimeColumns?: boolean
 ) {
-  const columns = ["Name", "Hours"];
+  // For employee reports with overtime enabled, show additional columns
+  const hasOvertimeData = type === "employee" && includeOvertimeColumns && 
+    (data as ReportEmployeeData[]).some(d => d.regularHours !== undefined);
+  
+  const columns = hasOvertimeData 
+    ? ["Name", "Regular Hours", "Overtime Hours", "Total Hours"]
+    : ["Name", "Hours"];
 
   let html = title ? `
     <!DOCTYPE html>
@@ -60,6 +69,7 @@ export function buildRealTableHTML(
         td { padding: 12px; border: 1px solid #ddd; }
         tr:nth-child(even) { background-color: #fafafa; }
         .total-row { font-weight: bold; background-color: #e8f5e9 !important; }
+        .overtime { color: #ea580c; font-weight: 500; }
         @media print { body { padding: 0; } }
       </style>
     </head>
@@ -78,11 +88,29 @@ export function buildRealTableHTML(
     "</tr></thead><tbody>";
 
   let totalHours = 0;
+  let totalRegular = 0;
+  let totalOvertime = 0;
 
   table += data
     .map(
       (row) => {
         totalHours += row.hours || 0;
+        
+        if (hasOvertimeData) {
+          const empRow = row as ReportEmployeeData;
+          totalRegular += empRow.regularHours || 0;
+          totalOvertime += empRow.overtimeHours || 0;
+          
+          const overtimeClass = (empRow.overtimeHours || 0) > 0 ? "class='overtime'" : "";
+          
+          return `<tr>
+            <td style='padding:8px;'>${empRow.name}</td>
+            <td style='padding:8px;'>${(empRow.regularHours || 0).toFixed(1)}</td>
+            <td style='padding:8px;' ${overtimeClass}>${(empRow.overtimeHours || 0).toFixed(1)}</td>
+            <td style='padding:8px;font-weight:500;'>${empRow.hours.toFixed(1)}</td>
+          </tr>`;
+        }
+        
         return "<tr>" +
           columns
             .map((col) => `<td style='padding:8px;'>${(row as any)[col.toLowerCase()] ?? ""}</td>`)
@@ -93,10 +121,19 @@ export function buildRealTableHTML(
     .join("");
 
   if (title) {
-    table += `<tr style='font-weight:bold;background-color:#e8f5e9;'>
-      <td style='padding:8px;'>Total</td>
-      <td style='padding:8px;'>${totalHours.toFixed(1)}</td>
-    </tr>`;
+    if (hasOvertimeData) {
+      table += `<tr style='font-weight:bold;background-color:#e8f5e9;'>
+        <td style='padding:8px;'>Total</td>
+        <td style='padding:8px;'>${totalRegular.toFixed(1)}</td>
+        <td style='padding:8px;'>${totalOvertime.toFixed(1)}</td>
+        <td style='padding:8px;'>${totalHours.toFixed(1)}</td>
+      </tr>`;
+    } else {
+      table += `<tr style='font-weight:bold;background-color:#e8f5e9;'>
+        <td style='padding:8px;'>Total</td>
+        <td style='padding:8px;'>${totalHours.toFixed(1)}</td>
+      </tr>`;
+    }
   }
 
   table += "</tbody></table>";
@@ -133,12 +170,33 @@ export function calculateTotalHours(entries: { duration_minutes?: number | null 
   }, 0);
 }
 
-export function exportRealDataAsCSV(type: "employee" | "project", data: ReportEmployeeData[] | ReportProjectData[]) {
-  const columns = ["Name", "Hours"];
-  let csv =
-    columns.join(",") +
-    "\n" +
-    data.map((row) => columns.map((col) => String((row as any)[col.toLowerCase()])).join(",")).join("\n");
+export function exportRealDataAsCSV(
+  type: "employee" | "project", 
+  data: ReportEmployeeData[] | ReportProjectData[],
+  includeOvertimeColumns?: boolean
+) {
+  const hasOvertimeData = type === "employee" && includeOvertimeColumns && 
+    (data as ReportEmployeeData[]).some(d => d.regularHours !== undefined);
+  
+  const columns = hasOvertimeData 
+    ? ["Name", "Regular Hours", "Overtime Hours", "Total Hours"]
+    : ["Name", "Hours"];
+  
+  let csv = columns.join(",") + "\n";
+  
+  csv += data.map((row) => {
+    if (hasOvertimeData) {
+      const empRow = row as ReportEmployeeData;
+      return [
+        `"${empRow.name}"`,
+        (empRow.regularHours || 0).toFixed(1),
+        (empRow.overtimeHours || 0).toFixed(1),
+        empRow.hours.toFixed(1)
+      ].join(",");
+    }
+    return columns.map((col) => String((row as any)[col.toLowerCase()])).join(",");
+  }).join("\n");
+  
   const blob = new Blob([csv], { type: "text/csv" });
   const url = window.URL.createObjectURL(blob);
   const a = document.createElement("a");
