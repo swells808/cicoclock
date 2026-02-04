@@ -230,6 +230,8 @@ export type Database = {
           geolocation: boolean
           id: string
           mapbox_public_token: string | null
+          overtime_daily_threshold_hours: number
+          overtime_enabled: boolean
           photo_capture: boolean
           updated_at: string
         }
@@ -241,6 +243,8 @@ export type Database = {
           geolocation?: boolean
           id?: string
           mapbox_public_token?: string | null
+          overtime_daily_threshold_hours?: number
+          overtime_enabled?: boolean
           photo_capture?: boolean
           updated_at?: string
         }
@@ -252,6 +256,8 @@ export type Database = {
           geolocation?: boolean
           id?: string
           mapbox_public_token?: string | null
+          overtime_daily_threshold_hours?: number
+          overtime_enabled?: boolean
           photo_capture?: boolean
           updated_at?: string
         }
