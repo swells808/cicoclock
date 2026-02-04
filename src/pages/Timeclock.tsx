@@ -441,7 +441,7 @@ const Timeclock = () => {
         profile_photo_url: authenticatedEmployee.avatar_url,
         captured_face_embedding: result.embedding ? formatEmbeddingForPgvector(result.embedding) : null,
         match_distance: result.distance ?? null,
-        match_threshold: 0.55,
+        match_threshold: 0.60,
         is_match: result.pass ?? null,
         match_reason: result.reason,
         status: result.ok ? (result.pass ? 'verified' : 'no_match') : 'error',
