@@ -27,7 +27,7 @@ serve(async (req) => {
 
     const { data: profile, error: profileError } = await supabase
       .from('profiles')
-      .select('*, departments(name)')
+      .select('id, user_id, display_name, first_name, last_name, avatar_url, status, pin, departments(name)')
       .eq('id', profile_id)
       .eq('company_id', company_id)
       .single();
@@ -52,14 +52,21 @@ serve(async (req) => {
       .eq('id', company_id)
       .single();
 
+    // Return full employee details needed for timeclock operations
+    // PIN is returned as has_pin boolean for security (actual PIN not exposed)
     return new Response(
       JSON.stringify({
         valid: true,
         employee: {
-          name: profile.display_name || `${profile.first_name} ${profile.last_name}`,
-          employee_id: profile.employee_id,
+          id: profile.id,
+          user_id: profile.user_id,
+          display_name: profile.display_name || `${profile.first_name} ${profile.last_name}`.trim(),
+          first_name: profile.first_name,
+          last_name: profile.last_name,
+          avatar_url: profile.avatar_url,
           department: (profile.departments as { name?: string } | null)?.name,
-          status: profile.status
+          status: profile.status,
+          has_pin: !!profile.pin // Boolean flag only, don't expose actual PIN
         },
         company: company?.company_name
       }),
