@@ -19,6 +19,7 @@ import { CompanyForm } from "@/components/settings/CompanyForm";
 import { DepartmentManagement } from "@/components/settings/DepartmentManagement";
 import { BadgeTemplateDesigner } from "@/components/badge/BadgeTemplateDesigner";
 import { PhotoMigrationPanel } from "@/components/admin/PhotoMigrationPanel";
+import { FaceEnrollmentPanel } from "@/components/admin/FaceEnrollmentPanel";
 import { TaskQrCodesPanel } from "@/components/settings/TaskQrCodesPanel";
 import { useAuth } from "@/contexts/AuthContext";
 import { useToast } from "@/hooks/use-toast";
@@ -424,6 +425,7 @@ const Settings = () => {
           <TabsContent value="system">
             <div className="space-y-6">
               <h2 className="text-xl font-semibold">System Administration</h2>
+              <FaceEnrollmentPanel />
               <PhotoMigrationPanel />
             </div>
           </TabsContent>
