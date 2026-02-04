@@ -747,11 +747,27 @@ function renderReportPopup(
 
 // --- Employee/Project Report Export Utilities ---
 
-function exportTableAsCSV(type: "employee" | "project", data?: any[]) {
+function exportTableAsCSV(type: "employee" | "project", data?: any[], includeOvertimeColumns?: boolean) {
   const reportData = data || (window as any).currentEmployeeProjectData?.reportData || [];
-  const columns = ["Name", "Hours"];
+  const hasOvertimeData = type === "employee" && includeOvertimeColumns && 
+    reportData.some((row: any) => row.regularHours !== undefined);
+  
+  const columns = hasOvertimeData 
+    ? ["Name", "Regular Hours", "Overtime Hours", "Total Hours"]
+    : ["Name", "Hours"];
+  
   let csv = columns.join(",") + "\n";
-  csv += reportData.map((row: any) => `"${row.name}",${row.hours?.toFixed(1) || 0}`).join("\n");
+  csv += reportData.map((row: any) => {
+    if (hasOvertimeData) {
+      return [
+        `"${row.name}"`,
+        (row.regularHours || 0).toFixed(1),
+        (row.overtimeHours || 0).toFixed(1),
+        (row.hours || 0).toFixed(1)
+      ].join(",");
+    }
+    return `"${row.name}",${row.hours?.toFixed(1) || 0}`;
+  }).join("\n");
   
   const blob = new Blob([csv], { type: "text/csv" });
   const url = window.URL.createObjectURL(blob);
@@ -764,8 +780,11 @@ function exportTableAsCSV(type: "employee" | "project", data?: any[]) {
   a.remove();
 }
 
-async function exportTableAsPDF(type: "employee" | "project", data?: any[]) {
+async function exportTableAsPDF(type: "employee" | "project", data?: any[], includeOvertimeColumns?: boolean) {
   const reportData = data || (window as any).currentEmployeeProjectData?.reportData || [];
+  const hasOvertimeData = type === "employee" && includeOvertimeColumns && 
+    reportData.some((row: any) => row.regularHours !== undefined);
+  
   const jsPDFModule = await import("jspdf");
   const autoTableModule = await import("jspdf-autotable");
   
@@ -775,14 +794,27 @@ async function exportTableAsPDF(type: "employee" | "project", data?: any[]) {
   // jspdf-autotable exports autoTable as default
   const autoTable = autoTableModule.default;
   
-  const columns = ["Name", "Hours"];
+  const columns = hasOvertimeData 
+    ? ["Name", "Regular Hours", "Overtime Hours", "Total Hours"]
+    : ["Name", "Hours"];
+  
   doc.setFontSize(16);
   doc.text(`${type === "employee" ? "Work Hours Per Employee" : "Project Time Distribution"}`, 14, 16);
   
   autoTable(doc, {
     startY: 25,
     head: [columns],
-    body: reportData.map((row: any) => [row.name, row.hours?.toFixed(1) || "0"]),
+    body: reportData.map((row: any) => {
+      if (hasOvertimeData) {
+        return [
+          row.name,
+          (row.regularHours || 0).toFixed(1),
+          (row.overtimeHours || 0).toFixed(1),
+          (row.hours || 0).toFixed(1)
+        ];
+      }
+      return [row.name, row.hours?.toFixed(1) || "0"];
+    }),
     theme: 'striped',
     headStyles: { fillColor: [59, 130, 246] },
   });
@@ -1024,38 +1056,165 @@ const Reports = () => {
 
     // Build employee or project reports from fresh data
     let reportData: any[] = [];
+    let overtimeEnabled = false;
 
     if (filters.reportType === 'employee') {
-      const employeeHours = timeEntries.reduce((acc, entry: any) => {
+      // Fetch company features for overtime settings
+      const { data: companyFeatures } = await supabase
+        .from('company_features')
+        .select('overtime_enabled, overtime_daily_threshold_hours')
+        .eq('company_id', companyId)
+        .maybeSingle();
+
+      overtimeEnabled = companyFeatures?.overtime_enabled ?? false;
+      const dailyThresholdHours = companyFeatures?.overtime_daily_threshold_hours ?? 8;
+      const dailyThresholdMinutes = dailyThresholdHours * 60;
+
+      // Get unique profile IDs for schedule lookup
+      const profileIds = [...new Set(
+        timeEntries
+          .map((e: any) => e.profile_id || userProfiles[e.user_id]?.id)
+          .filter(Boolean)
+      )] as string[];
+
+      // Fetch employee schedules for all days
+      const { data: employeeSchedules } = await supabase
+        .from('employee_schedules')
+        .select('profile_id, day_of_week, start_time, end_time, is_day_off')
+        .in('profile_id', profileIds.length > 0 ? profileIds : ['none']);
+
+      // Build employee schedule map: profileId -> dayOfWeek -> schedule
+      const employeeScheduleMap: Record<string, Record<number, { start_time: string | null; end_time: string | null; is_day_off: boolean }>> = {};
+      (employeeSchedules || []).forEach((s: any) => {
+        if (!employeeScheduleMap[s.profile_id]) {
+          employeeScheduleMap[s.profile_id] = {};
+        }
+        employeeScheduleMap[s.profile_id][s.day_of_week] = {
+          start_time: s.start_time,
+          end_time: s.end_time,
+          is_day_off: s.is_day_off ?? false,
+        };
+      });
+
+      // Get department IDs for fallback schedules
+      const departmentIds = [...new Set(
+        Object.values(userProfiles).map((p: any) => p.department_id).filter(Boolean)
+      )] as string[];
+
+      // Fetch department schedules
+      const { data: departmentSchedules } = await supabase
+        .from('department_schedules')
+        .select('department_id, day_of_week, start_time, end_time, is_day_off')
+        .in('department_id', departmentIds.length > 0 ? departmentIds : ['none']);
+
+      // Build department schedule map
+      const departmentScheduleMap: Record<string, Record<number, { start_time: string | null; end_time: string | null; is_day_off: boolean }>> = {};
+      (departmentSchedules || []).forEach((s: any) => {
+        if (!departmentScheduleMap[s.department_id]) {
+          departmentScheduleMap[s.department_id] = {};
+        }
+        departmentScheduleMap[s.department_id][s.day_of_week] = {
+          start_time: s.start_time,
+          end_time: s.end_time,
+          is_day_off: s.is_day_off ?? false,
+        };
+      });
+
+      // Helper function to get scheduled minutes for a day
+      const getScheduledMinutes = (profileId: string, departmentId: string | undefined, dayOfWeek: number): number => {
+        // Check employee schedule first
+        const empSchedule = employeeScheduleMap[profileId]?.[dayOfWeek];
+        if (empSchedule) {
+          if (empSchedule.is_day_off) return 0;
+          if (empSchedule.start_time && empSchedule.end_time) {
+            const [startH, startM] = empSchedule.start_time.split(':').map(Number);
+            const [endH, endM] = empSchedule.end_time.split(':').map(Number);
+            return (endH * 60 + endM) - (startH * 60 + startM);
+          }
+        }
+        // Check department schedule
+        if (departmentId) {
+          const deptSchedule = departmentScheduleMap[departmentId]?.[dayOfWeek];
+          if (deptSchedule) {
+            if (deptSchedule.is_day_off) return 0;
+            if (deptSchedule.start_time && deptSchedule.end_time) {
+              const [startH, startM] = deptSchedule.start_time.split(':').map(Number);
+              const [endH, endM] = deptSchedule.end_time.split(':').map(Number);
+              return (endH * 60 + endM) - (startH * 60 + startM);
+            }
+          }
+        }
+        // Default to configured threshold
+        return dailyThresholdMinutes;
+      };
+
+      // Group time entries by employee AND by date to calculate daily overtime
+      const employeeDailyMinutes: Record<string, Record<string, number>> = {};
+      const employeeMetadata: Record<string, { name: string; departmentId?: string }> = {};
+
+      timeEntries.forEach((entry: any) => {
         const profile = entry.profile_id 
           ? userProfiles[entry.profile_id] 
           : userProfiles[entry.user_id];
         const name = `${profile?.first_name || ''} ${profile?.last_name || ''}`.trim() ||
                     profile?.display_name ||
                     'Unknown User';
-        const hours = entry.calculated_minutes / 60;
-        
         const entryKey = entry.profile_id || entry.user_id || 'unknown';
+        const entryDate = format(new Date(entry.start_time), 'yyyy-MM-dd');
 
-        if (!acc[entryKey]) {
-          acc[entryKey] = {
-            name,
-            hours: 0,
-            odId: entryKey,
-            departmentId: profile?.department_id
-          };
+        if (!employeeDailyMinutes[entryKey]) {
+          employeeDailyMinutes[entryKey] = {};
+          employeeMetadata[entryKey] = { name, departmentId: profile?.department_id };
         }
-        acc[entryKey].hours += hours;
+        if (!employeeDailyMinutes[entryKey][entryDate]) {
+          employeeDailyMinutes[entryKey][entryDate] = 0;
+        }
+        employeeDailyMinutes[entryKey][entryDate] += entry.calculated_minutes || 0;
+      });
 
-        return acc;
-      }, {} as Record<string, any>);
+      // Calculate regular vs overtime for each employee
+      const employeeHours: Record<string, { name: string; hours: number; regularHours: number; overtimeHours: number; departmentId?: string }> = {};
 
-      let employeeReportData = Object.values(employeeHours).map((data: any) => ({
+      Object.entries(employeeDailyMinutes).forEach(([profileId, dailyMinutes]) => {
+        const metadata = employeeMetadata[profileId];
+        let totalMinutes = 0;
+        let totalRegular = 0;
+        let totalOvertime = 0;
+
+        Object.entries(dailyMinutes).forEach(([dateStr, minutes]) => {
+          const dayDate = new Date(dateStr);
+          const dayOfWeek = dayDate.getDay(); // 0 = Sunday
+          const scheduledMinutes = getScheduledMinutes(profileId, metadata.departmentId, dayOfWeek);
+          
+          totalMinutes += minutes;
+          
+          if (overtimeEnabled) {
+            const regular = Math.min(minutes, scheduledMinutes);
+            const overtime = Math.max(0, minutes - scheduledMinutes);
+            totalRegular += regular;
+            totalOvertime += overtime;
+          } else {
+            totalRegular += minutes;
+          }
+        });
+
+        employeeHours[profileId] = {
+          name: metadata.name,
+          hours: totalMinutes / 60,
+          regularHours: totalRegular / 60,
+          overtimeHours: totalOvertime / 60,
+          departmentId: metadata.departmentId,
+        };
+      });
+
+      let employeeReportData = Object.entries(employeeHours).map(([odId, data]) => ({
         name: data.name,
         hours: Math.round(data.hours * 10) / 10,
-        odId: data.odId,
+        regularHours: Math.round(data.regularHours * 10) / 10,
+        overtimeHours: Math.round(data.overtimeHours * 10) / 10,
+        odId,
         departmentId: data.departmentId,
-      })).sort((a: any, b: any) => b.hours - a.hours);
+      })).sort((a, b) => b.hours - a.hours);
 
       if (filters.employeeId) {
         employeeReportData = employeeReportData.filter(e => e.odId === filters.employeeId);
@@ -1103,7 +1262,7 @@ const Reports = () => {
       ? formatDateForTitle(start)
       : `${formatDateForTitle(start)} - ${formatDateForTitle(end)}`;
 
-    const reportTable = buildRealTableHTML(filters.reportType === 'employee' ? 'employee' : 'project', reportData);
+    const reportTable = buildRealTableHTML(filters.reportType === 'employee' ? 'employee' : 'project', reportData, undefined, undefined, overtimeEnabled);
     const title =
       filters.reportType === "employee"
         ? `Work Hours Per Employee — ${dateRangeStr}`
@@ -1165,9 +1324,9 @@ const Reports = () => {
     newWin.document.write(html);
     newWin.document.close();
     // Store real data and attach export functions to opener so popup can invoke
-    (window as any).currentEmployeeProjectData = { reportData, type: filters.reportType };
-    (window as any).exportTableAsCSV = (type: string) => exportTableAsCSV(type as "employee" | "project", reportData);
-    (window as any).exportTableAsPDF = (type: string) => exportTableAsPDF(type as "employee" | "project", reportData);
+    (window as any).currentEmployeeProjectData = { reportData, type: filters.reportType, overtimeEnabled };
+    (window as any).exportTableAsCSV = (type: string) => exportTableAsCSV(type as "employee" | "project", reportData, overtimeEnabled);
+    (window as any).exportTableAsPDF = (type: string) => exportTableAsPDF(type as "employee" | "project", reportData, overtimeEnabled);
   };
 
   return (
