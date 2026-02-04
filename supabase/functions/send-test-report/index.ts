@@ -46,6 +46,19 @@ interface TimeEntry {
 
 // ============= Utility Functions =============
 
+// HTML escape function to prevent XSS attacks
+function escapeHtml(text: string | null | undefined): string {
+  if (!text) return '';
+  const map: Record<string, string> = {
+    '&': '&amp;',
+    '<': '&lt;',
+    '>': '&gt;',
+    '"': '&quot;',
+    "'": '&#039;'
+  };
+  return String(text).replace(/[&<>"']/g, m => map[m]);
+}
+
 function formatDuration(minutes: number | null): string {
   if (!minutes) return '0h 0m';
   const hours = Math.floor(minutes / 60);
@@ -345,8 +358,11 @@ async function generateTimeEntryDetailsHtml(
   for (const entry of entries) {
     totalMinutes += entry.duration_minutes || 0;
     
-    const employeeName = getEmployeeName(entry);
-    const projectName = entry.projects?.name || 'No Project';
+    // Escape all user-controlled values to prevent XSS
+    const employeeName = escapeHtml(getEmployeeName(entry));
+    const projectName = escapeHtml(entry.projects?.name || 'No Project');
+    const clockInAddress = escapeHtml(entry.clock_in_address);
+    const clockOutAddress = escapeHtml(entry.clock_out_address);
     const dateStr = formatLongDate(entry.start_time, timezone);
     const clockInTime = formatTime(entry.start_time, timezone);
     const clockOutTime = entry.end_time ? formatTime(entry.end_time, timezone) : 'Active';
@@ -408,7 +424,7 @@ async function generateTimeEntryDetailsHtml(
           ${clockInPhotoUrl ? `<img src="${clockInPhotoUrl}" alt="Photo" style="width: 40px; height: 40px; object-fit: cover; border-radius: 4px; border: 1px solid #86efac;" />` : `<div style="width: 40px; height: 40px; background: #f0fdf4; border: 1px dashed #86efac; border-radius: 4px; display: flex; align-items: center; justify-content: center; font-size: 9px; color: #6b7280;">Photo</div>`}
           ${clockInMapUrl ? `<img src="${clockInMapUrl}" alt="Map" style="width: 40px; height: 40px; object-fit: cover; border-radius: 4px; border: 1px solid #86efac;" />` : `<div style="width: 40px; height: 40px; background: #f0fdf4; border: 1px dashed #86efac; border-radius: 4px; display: flex; align-items: center; justify-content: center; font-size: 9px; color: #6b7280;">Map</div>`}
         </div>
-        ${entry.clock_in_address ? `<p style="font-size: 9px; color: #6b7280; text-align: center; margin: 0; max-width: 100px; overflow: hidden; text-overflow: ellipsis;">${entry.clock_in_address}</p>` : ''}
+        ${clockInAddress ? `<p style="font-size: 9px; color: #6b7280; text-align: center; margin: 0; max-width: 100px; overflow: hidden; text-overflow: ellipsis;">${clockInAddress}</p>` : ''}
       </div>
     `;
     
@@ -426,7 +442,7 @@ async function generateTimeEntryDetailsHtml(
           ${clockOutPhotoUrl ? `<img src="${clockOutPhotoUrl}" alt="Photo" style="width: 40px; height: 40px; object-fit: cover; border-radius: 4px; border: 1px solid ${clockOutBorderColor};" />` : `<div style="width: 40px; height: 40px; background: ${isComplete ? '#fef2f2' : '#fafaf9'}; border: 1px dashed ${clockOutBorderColor}; border-radius: 4px; display: flex; align-items: center; justify-content: center; font-size: 9px; color: #6b7280;">Photo</div>`}
           ${clockOutMapUrl ? `<img src="${clockOutMapUrl}" alt="Map" style="width: 40px; height: 40px; object-fit: cover; border-radius: 4px; border: 1px solid ${clockOutBorderColor};" />` : `<div style="width: 40px; height: 40px; background: ${isComplete ? '#fef2f2' : '#fafaf9'}; border: 1px dashed ${clockOutBorderColor}; border-radius: 4px; display: flex; align-items: center; justify-content: center; font-size: 9px; color: #6b7280;">Map</div>`}
         </div>
-        ${entry.clock_out_address ? `<p style="font-size: 9px; color: #6b7280; text-align: center; margin: 0; max-width: 100px; overflow: hidden; text-overflow: ellipsis;">${entry.clock_out_address}</p>` : ''}
+        ${clockOutAddress ? `<p style="font-size: 9px; color: #6b7280; text-align: center; margin: 0; max-width: 100px; overflow: hidden; text-overflow: ellipsis;">${clockOutAddress}</p>` : ''}
       </div>
     `;
     
@@ -498,8 +514,8 @@ async function generateTimeEntryDetailsHtml(
     <body style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; margin: 0; padding: 20px; background-color: #f3f4f6;">
       <div style="max-width: 900px; margin: 0 auto; background: white; border-radius: 8px; overflow: hidden; box-shadow: 0 1px 3px rgba(0,0,0,0.1);">
         <div style="background: linear-gradient(135deg, #3b82f6, #1d4ed8); padding: 24px; color: white;">
-          <h1 style="margin: 0 0 8px 0; font-size: 24px;">${reportName || 'Time Entry Details Report'}</h1>
-          <p style="margin: 0; opacity: 0.9;">${companyName}</p>
+          <h1 style="margin: 0 0 8px 0; font-size: 24px;">${escapeHtml(reportName) || 'Time Entry Details Report'}</h1>
+          <p style="margin: 0; opacity: 0.9;">${escapeHtml(companyName)}</p>
         </div>
         
         <div style="padding: 16px 24px; background: #f9fafb; border-bottom: 1px solid #e5e7eb;">
