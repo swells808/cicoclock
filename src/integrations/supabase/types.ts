@@ -462,6 +462,7 @@ export type Database = {
       }
       face_verifications: {
         Row: {
+          captured_face_embedding: string | null
           clock_photo_url: string | null
           company_id: string
           confidence_score: number | null
@@ -469,6 +470,9 @@ export type Database = {
           error_message: string | null
           id: string
           is_match: boolean | null
+          match_distance: number | null
+          match_reason: string | null
+          match_threshold: number
           profile_id: string
           profile_photo_url: string | null
           review_decision: string | null
@@ -477,9 +481,11 @@ export type Database = {
           status: string
           time_entry_id: string
           updated_at: string
+          verification_version: string
           verified_at: string | null
         }
         Insert: {
+          captured_face_embedding?: string | null
           clock_photo_url?: string | null
           company_id: string
           confidence_score?: number | null
@@ -487,6 +493,9 @@ export type Database = {
           error_message?: string | null
           id?: string
           is_match?: boolean | null
+          match_distance?: number | null
+          match_reason?: string | null
+          match_threshold?: number
           profile_id: string
           profile_photo_url?: string | null
           review_decision?: string | null
@@ -495,9 +504,11 @@ export type Database = {
           status?: string
           time_entry_id: string
           updated_at?: string
+          verification_version?: string
           verified_at?: string | null
         }
         Update: {
+          captured_face_embedding?: string | null
           clock_photo_url?: string | null
           company_id?: string
           confidence_score?: number | null
@@ -505,6 +516,9 @@ export type Database = {
           error_message?: string | null
           id?: string
           is_match?: boolean | null
+          match_distance?: number | null
+          match_reason?: string | null
+          match_threshold?: number
           profile_id?: string
           profile_photo_url?: string | null
           review_decision?: string | null
@@ -513,6 +527,7 @@ export type Database = {
           status?: string
           time_entry_id?: string
           updated_at?: string
+          verification_version?: string
           verified_at?: string | null
         }
         Relationships: [
@@ -628,6 +643,9 @@ export type Database = {
           display_name: string | null
           email: string | null
           employee_id: string | null
+          face_embedding: string | null
+          face_embedding_updated_at: string | null
+          face_enrollment_status: string
           first_name: string | null
           id: string
           last_name: string | null
@@ -652,6 +670,9 @@ export type Database = {
           display_name?: string | null
           email?: string | null
           employee_id?: string | null
+          face_embedding?: string | null
+          face_embedding_updated_at?: string | null
+          face_enrollment_status?: string
           first_name?: string | null
           id?: string
           last_name?: string | null
@@ -676,6 +697,9 @@ export type Database = {
           display_name?: string | null
           email?: string | null
           employee_id?: string | null
+          face_embedding?: string | null
+          face_embedding_updated_at?: string | null
+          face_enrollment_status?: string
           first_name?: string | null
           id?: string
           last_name?: string | null
