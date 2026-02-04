@@ -204,14 +204,16 @@ const Timeclock = () => {
       console.log('[Timeclock] Found employee:', data.employee);
       
       // Store the looked up employee for PIN verification
+      // NOTE: has_pin is no longer returned from the backend for security reasons
+      // We always require PIN for manual entry if PIN feature is enabled
       const lookupResult = {
         id: data.employee.id,
         user_id: data.employee.user_id,
         display_name: data.employee.display_name,
         first_name: data.employee.first_name,
         last_name: data.employee.last_name,
-        has_pin: data.employee.has_pin,
-        pin: data.employee.has_pin ? 'exists' : null // Mark that PIN exists without exposing it
+        has_pin: true, // Always assume PIN is required for manual entry (security hardening)
+        pin: 'exists' // Mark that PIN verification is required
       };
       
       setManualLookupEmployee(lookupResult);

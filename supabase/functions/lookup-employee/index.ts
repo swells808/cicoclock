@@ -6,6 +6,49 @@ const corsHeaders = {
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
 };
 
+// Simple in-memory rate limiter
+interface RateLimitEntry {
+  count: number;
+  resetAt: number;
+}
+const rateLimitStore = new Map<string, RateLimitEntry>();
+
+// Rate limit: 20 requests per minute per company+IP
+const MAX_REQUESTS = 20;
+const WINDOW_MS = 60 * 1000; // 1 minute
+
+function getClientIP(req: Request): string {
+  return (
+    req.headers.get('x-forwarded-for')?.split(',')[0]?.trim() ||
+    req.headers.get('x-real-ip') ||
+    req.headers.get('cf-connecting-ip') ||
+    'unknown'
+  );
+}
+
+function checkRateLimit(key: string): { allowed: boolean; remaining: number } {
+  const now = Date.now();
+  const entry = rateLimitStore.get(key);
+
+  if (rateLimitStore.size > 5000) {
+    for (const [k, v] of rateLimitStore.entries()) {
+      if (v.resetAt < now) rateLimitStore.delete(k);
+    }
+  }
+
+  if (!entry || entry.resetAt < now) {
+    rateLimitStore.set(key, { count: 1, resetAt: now + WINDOW_MS });
+    return { allowed: true, remaining: MAX_REQUESTS - 1 };
+  }
+
+  entry.count++;
+  if (entry.count > MAX_REQUESTS) {
+    return { allowed: false, remaining: 0 };
+  }
+
+  return { allowed: true, remaining: MAX_REQUESTS - entry.count };
+}
+
 serve(async (req) => {
   if (req.method === 'OPTIONS') {
     return new Response(null, { headers: corsHeaders });
@@ -18,6 +61,19 @@ serve(async (req) => {
       return new Response(
         JSON.stringify({ error: 'company_id and identifier are required' }),
         { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      );
+    }
+
+    // Rate limiting
+    const clientIP = getClientIP(req);
+    const rateLimitKey = `lookup:${company_id}:${clientIP}`;
+    const rateResult = checkRateLimit(rateLimitKey);
+
+    if (!rateResult.allowed) {
+      console.warn(`[SECURITY] Rate limit exceeded for lookup: company=${company_id}, ip=${clientIP}`);
+      return new Response(
+        JSON.stringify({ error: 'Too many requests. Please slow down.' }),
+        { status: 429, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
       );
     }
 
@@ -51,6 +107,8 @@ serve(async (req) => {
     const employee = data[0];
     console.log('[lookup-employee] Found employee:', employee.display_name);
 
+    // SECURITY: Remove has_pin from response to prevent enumeration attacks
+    // The client should assume PIN is required if PIN auth is enabled for the company
     return new Response(
       JSON.stringify({ 
         found: true, 
@@ -60,7 +118,7 @@ serve(async (req) => {
           display_name: employee.display_name,
           first_name: employee.first_name,
           last_name: employee.last_name,
-          has_pin: employee.has_pin
+          // has_pin intentionally removed - security improvement
         }
       }),
       { status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }

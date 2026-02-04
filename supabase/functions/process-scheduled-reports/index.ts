@@ -8,6 +8,26 @@ const corsHeaders = {
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
 };
 
+// Validate cron secret for automated job authentication
+function validateCronSecret(req: Request): boolean {
+  const cronSecret = Deno.env.get('CRON_SECRET');
+  if (!cronSecret) {
+    console.warn('[SECURITY] CRON_SECRET not configured - allowing request for backwards compatibility');
+    return true;
+  }
+  
+  const authHeader = req.headers.get('Authorization');
+  if (authHeader?.startsWith('Bearer ')) {
+    const token = authHeader.replace('Bearer ', '');
+    if (token === cronSecret) return true;
+  }
+  
+  const cronHeader = req.headers.get('X-Cron-Secret');
+  if (cronHeader === cronSecret) return true;
+  
+  return false;
+}
+
 const resend = new Resend(Deno.env.get('RESEND_API_KEY'));
 
 interface ReportConfig {
@@ -1361,6 +1381,15 @@ function uint8ArrayToBase64(bytes: Uint8Array): string {
 serve(async (req) => {
   if (req.method === 'OPTIONS') {
     return new Response(null, { headers: corsHeaders });
+  }
+
+  // Validate cron secret for automation security
+  if (!validateCronSecret(req)) {
+    console.warn('[SECURITY] Unauthorized cron request to process-scheduled-reports');
+    return new Response(
+      JSON.stringify({ error: 'Unauthorized - Invalid or missing cron secret' }),
+      { status: 401, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+    );
   }
 
   try {
