@@ -9,9 +9,38 @@ const corsHeaders = {
 
 const MAX_SHIFT_HOURS = 12;
 
+// Validate cron secret for automated job authentication
+function validateCronSecret(req: Request): boolean {
+  const cronSecret = Deno.env.get('CRON_SECRET');
+  if (!cronSecret) {
+    console.warn('[SECURITY] CRON_SECRET not configured - allowing request for backwards compatibility');
+    return true;
+  }
+  
+  const authHeader = req.headers.get('Authorization');
+  if (authHeader?.startsWith('Bearer ')) {
+    const token = authHeader.replace('Bearer ', '');
+    if (token === cronSecret) return true;
+  }
+  
+  const cronHeader = req.headers.get('X-Cron-Secret');
+  if (cronHeader === cronSecret) return true;
+  
+  return false;
+}
+
 serve(async (req) => {
   if (req.method === 'OPTIONS') {
     return new Response(null, { headers: corsHeaders });
+  }
+
+  // Validate cron secret
+  if (!validateCronSecret(req)) {
+    console.warn('[SECURITY] Unauthorized cron request to auto-close-overtime-shifts');
+    return new Response(
+      JSON.stringify({ error: 'Unauthorized - Invalid or missing cron secret' }),
+      { status: 401, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+    );
   }
 
   try {
