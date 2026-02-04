@@ -9,10 +9,12 @@ import { Calendar } from "@/components/ui/calendar";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { CertificationsList } from "@/components/users/CertificationsList";
 import { useDepartments } from "@/hooks/useDepartments";
+import { useFaceEnrollment } from "@/hooks/useFaceEnrollment";
+import { useCompany } from "@/contexts/CompanyContext";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
 import { format } from "date-fns";
-import { CalendarIcon, User, MapPin, Briefcase, Shield, Award, Camera, Mail } from "lucide-react";
+import { CalendarIcon, User, MapPin, Briefcase, Shield, Award, Camera, Mail, Loader2 } from "lucide-react";
 import { PRODUCTION_BASE_URL } from "@/lib/constants";
 import { cn } from "@/lib/utils";
 import type { EmployeeProfile } from "@/hooks/useEmployeeDetail";
@@ -27,6 +29,8 @@ interface EmployeeEditDialogProps {
 
 export const EmployeeEditDialog = ({ open, onOpenChange, employee, onSave, initialTab = "personal" }: EmployeeEditDialogProps) => {
   const { departments } = useDepartments();
+  const { companyFeatures } = useCompany();
+  const { enrolling, enrollFace } = useFaceEnrollment();
   const [saving, setSaving] = useState(false);
   const [activeTab, setActiveTab] = useState(initialTab);
 
@@ -117,6 +121,8 @@ export const EmployeeEditDialog = ({ open, onOpenChange, employee, onSave, initi
     try {
       // Upload avatar if changed
       let avatarUrl = employee.avatar_url;
+      let avatarChanged = false;
+      
       if (avatarFile && employee.company_id) {
         const fileExtension = avatarFile.name.split('.').pop()?.toLowerCase() || 'png';
         const fileName = `${employee.company_id}/${Date.now()}-avatar.${fileExtension}`;
@@ -126,6 +132,7 @@ export const EmployeeEditDialog = ({ open, onOpenChange, employee, onSave, initi
         
         if (!uploadError) {
           avatarUrl = supabase.storage.from('avatars').getPublicUrl(fileName).data.publicUrl;
+          avatarChanged = true;
         } else {
           console.error("Avatar upload error:", uploadError);
         }
@@ -156,6 +163,12 @@ export const EmployeeEditDialog = ({ open, onOpenChange, employee, onSave, initi
         .eq("id", employee.id);
 
       if (profileError) throw profileError;
+
+      // Enroll face if avatar changed and face verification is enabled
+      if (avatarChanged && avatarUrl && companyFeatures?.face_verification) {
+        // Fire and forget - don't block save on enrollment
+        enrollFace(employee.id, avatarUrl).catch(console.error);
+      }
 
       // Update role if changed - use profile_id to support timeclock-only users
       if (role !== employee.role) {
