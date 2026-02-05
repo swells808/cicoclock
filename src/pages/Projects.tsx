@@ -1,4 +1,5 @@
 import React, { useState } from "react";
+import { useNavigate } from "react-router-dom";
 import {
   Search,
   Plus,
@@ -38,6 +39,7 @@ import {
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { useProjects, useCreateProject } from "@/hooks/useProjects";
+import { useUpdateProject } from "@/hooks/useProjects";
 
 const Projects = () => {
   const { data: projects = [], isLoading, error } = useProjects();
@@ -51,6 +53,12 @@ const Projects = () => {
   const [showNewProjectDialog, setShowNewProjectDialog] = useState(false);
   const [newProjectName, setNewProjectName] = useState("");
   const [newProjectDescription, setNewProjectDescription] = useState("");
+  const [editingProject, setEditingProject] = useState<any>(null);
+  const [editProjectName, setEditProjectName] = useState("");
+  const [editProjectDescription, setEditProjectDescription] = useState("");
+  const navigate = useNavigate();
+
+  const { mutate: updateProject, isPending: isUpdating } = useUpdateProject();
 
   const handleSort = (field: "name" | "created_at") => {
     if (sortField === field) {
@@ -74,6 +82,39 @@ const Projects = () => {
         }
       }
     );
+  };
+
+  const handleEditProject = (project: any) => {
+    setEditingProject(project);
+    setEditProjectName(project.name);
+    setEditProjectDescription(project.description || "");
+  };
+
+  const handleSaveProject = () => {
+    if (!editingProject || !editProjectName.trim()) return;
+    
+    updateProject(
+      { 
+        id: editingProject.id, 
+        name: editProjectName, 
+        description: editProjectDescription 
+      },
+      {
+        onSuccess: () => {
+          setEditingProject(null);
+          setEditProjectName("");
+          setEditProjectDescription("");
+        }
+      }
+    );
+  };
+
+  const handleViewDetails = (projectId: string) => {
+    // For now, open the edit dialog - can be replaced with navigation to detail page
+    const project = projects.find(p => p.id === projectId);
+    if (project) {
+      handleEditProject(project);
+    }
   };
 
   const filteredProjects = projects
@@ -252,11 +293,11 @@ const Projects = () => {
                             </Button>
                           </DropdownMenuTrigger>
                           <DropdownMenuContent align="end">
-                            <DropdownMenuItem>
+                            <DropdownMenuItem onClick={() => handleViewDetails(project.id)}>
                               <Eye className="h-4 w-4 mr-2" />
                               View Details
                             </DropdownMenuItem>
-                            <DropdownMenuItem>
+                            <DropdownMenuItem onClick={() => handleEditProject(project)}>
                               <Edit className="h-4 w-4 mr-2" />
                               Edit Project
                             </DropdownMenuItem>
@@ -339,6 +380,42 @@ const Projects = () => {
             <Button variant="outline" onClick={() => setShowNewProjectDialog(false)}>Cancel</Button>
             <Button onClick={handleCreateProject} disabled={!newProjectName.trim() || createProject.isPending}>
               {createProject.isPending ? 'Creating...' : 'Create Project'}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Edit Project Dialog */}
+      <Dialog open={!!editingProject} onOpenChange={(open) => !open && setEditingProject(null)}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Edit Project</DialogTitle>
+            <DialogDescription>Update project details</DialogDescription>
+          </DialogHeader>
+          <div className="space-y-4 py-4">
+            <div className="space-y-2">
+              <Label htmlFor="edit-name">Project Name</Label>
+              <Input
+                id="edit-name"
+                value={editProjectName}
+                onChange={(e) => setEditProjectName(e.target.value)}
+                placeholder="Enter project name"
+              />
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="edit-description">Description</Label>
+              <Textarea
+                id="edit-description"
+                value={editProjectDescription}
+                onChange={(e) => setEditProjectDescription(e.target.value)}
+                placeholder="Enter project description"
+              />
+            </div>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setEditingProject(null)}>Cancel</Button>
+            <Button onClick={handleSaveProject} disabled={!editProjectName.trim() || isUpdating}>
+              {isUpdating ? 'Saving...' : 'Save Changes'}
             </Button>
           </DialogFooter>
         </DialogContent>
