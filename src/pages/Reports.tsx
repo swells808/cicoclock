@@ -747,79 +747,110 @@ function renderReportPopup(
 
 // --- Employee/Project Report Export Utilities ---
 
-function exportTableAsCSV(type: "employee" | "project", data?: any[], includeOvertimeColumns?: boolean) {
-  const reportData = data || (window as any).currentEmployeeProjectData?.reportData || [];
-  const hasOvertimeData = type === "employee" && includeOvertimeColumns && 
-    reportData.some((row: any) => row.regularHours !== undefined);
-  
-  const columns = hasOvertimeData 
-    ? ["Name", "Regular Hours", "Overtime Hours", "Total Hours"]
-    : ["Name", "Hours"];
-  
-  let csv = columns.join(",") + "\n";
-  csv += reportData.map((row: any) => {
-    if (hasOvertimeData) {
+function exportTableAsCSV(type: "employee" | "project", _data?: any[], _includeOvertimeColumns?: boolean) {
+  if (type === "employee") {
+    // Use detailed rows format for employee report
+    const detailedRows = (window as any).currentEmployeeDetailedRows || [];
+    
+    const columns = ["First Name", "Last Name", "Employee ID", "Date", "Project ID", "Cost Code", "Hours Type", "Hours"];
+    let csv = columns.join(",") + "\n";
+    
+    csv += detailedRows.map((row: any) => {
       return [
-        `"${row.name}"`,
-        (row.regularHours || 0).toFixed(1),
-        (row.overtimeHours || 0).toFixed(1),
-        (row.hours || 0).toFixed(1)
+        `"${row.firstName || ''}"`,
+        `"${row.lastName || ''}"`,
+        `"${row.employeeId || ''}"`,
+        `"${row.date || ''}"`,
+        `"${row.projectId || ''}"`,
+        `"${row.costCode || ''}"`,
+        `"${row.hoursType || ''}"`,
+        row.hours?.toFixed(1) || "0"
       ].join(",");
-    }
-    return `"${row.name}",${row.hours?.toFixed(1) || 0}`;
-  }).join("\n");
+    }).join("\n");
+    
+    const blob = new Blob([csv], { type: "text/csv" });
+    const url = window.URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = `employee-hours-report.csv`;
+    document.body.appendChild(a);
+    a.click();
+    window.URL.revokeObjectURL(url);
+    a.remove();
+    return;
+  }
   
+  // Project report (unchanged)
+  const reportData = (window as any).currentEmployeeProjectData?.reportData || [];
+  const columns = ["Name", "Hours"];
+  let csv = columns.join(",") + "\n";
+  csv += reportData.map((row: any) => `"${row.name}",${row.hours?.toFixed(1) || 0}`).join("\n");
+
   const blob = new Blob([csv], { type: "text/csv" });
   const url = window.URL.createObjectURL(blob);
   const a = document.createElement("a");
   a.href = url;
-  a.download = `${type}-report.csv`;
+  a.download = `project-report.csv`;
   document.body.appendChild(a);
   a.click();
   window.URL.revokeObjectURL(url);
   a.remove();
 }
 
-async function exportTableAsPDF(type: "employee" | "project", data?: any[], includeOvertimeColumns?: boolean) {
-  const reportData = data || (window as any).currentEmployeeProjectData?.reportData || [];
-  const hasOvertimeData = type === "employee" && includeOvertimeColumns && 
-    reportData.some((row: any) => row.regularHours !== undefined);
-  
+async function exportTableAsPDF(type: "employee" | "project", _data?: any[], _includeOvertimeColumns?: boolean) {
   const jsPDFModule = await import("jspdf");
   const autoTableModule = await import("jspdf-autotable");
   
   const { jsPDF } = jsPDFModule;
-  const doc = new jsPDF();
-  
-  // jspdf-autotable exports autoTable as default
   const autoTable = autoTableModule.default;
   
-  const columns = hasOvertimeData 
-    ? ["Name", "Regular Hours", "Overtime Hours", "Total Hours"]
-    : ["Name", "Hours"];
+  if (type === "employee") {
+    const detailedRows = (window as any).currentEmployeeDetailedRows || [];
+    const doc = new jsPDF('landscape');
+    
+    const columns = ["First Name", "Last Name", "Employee ID", "Date", "Project ID", "Cost Code", "Hours Type", "Hours"];
+    
+    doc.setFontSize(16);
+    doc.text("Employee Hours Report", 14, 16);
+    
+    autoTable(doc, {
+      startY: 25,
+      head: [columns],
+      body: detailedRows.map((row: any) => [
+        row.firstName || '',
+        row.lastName || '',
+        row.employeeId || '',
+        row.date || '',
+        row.projectId || '',
+        row.costCode || '',
+        row.hoursType || '',
+        row.hours?.toFixed(1) || "0"
+      ]),
+      theme: 'striped',
+      headStyles: { fillColor: [59, 130, 246] },
+    });
+    
+    doc.save(`employee-hours-report.pdf`);
+    return;
+  }
+  
+  // Project report (unchanged)
+  const reportData = (window as any).currentEmployeeProjectData?.reportData || [];
+  const doc = new jsPDF();
+  const columns = ["Name", "Hours"];
   
   doc.setFontSize(16);
-  doc.text(`${type === "employee" ? "Work Hours Per Employee" : "Project Time Distribution"}`, 14, 16);
+  doc.text("Project Time Distribution", 14, 16);
   
   autoTable(doc, {
     startY: 25,
     head: [columns],
-    body: reportData.map((row: any) => {
-      if (hasOvertimeData) {
-        return [
-          row.name,
-          (row.regularHours || 0).toFixed(1),
-          (row.overtimeHours || 0).toFixed(1),
-          (row.hours || 0).toFixed(1)
-        ];
-      }
-      return [row.name, row.hours?.toFixed(1) || "0"];
-    }),
+    body: reportData.map((row: any) => [row.name, row.hours?.toFixed(1) || "0"]),
     theme: 'striped',
     headStyles: { fillColor: [59, 130, 246] },
   });
   
-  doc.save(`${type}-report.pdf`);
+  doc.save(`project-report.pdf`);
 }
 
 const Reports = () => {
@@ -1148,66 +1179,198 @@ const Reports = () => {
         return dailyThresholdMinutes;
       };
 
-      // Group time entries by employee AND by date to calculate daily overtime
-      const employeeDailyMinutes: Record<string, Record<string, number>> = {};
-      const employeeMetadata: Record<string, { name: string; departmentId?: string }> = {};
+      // Build detailed rows: one per employee + date + project, separate rows for Reg/OT
+      interface DetailedRow {
+        firstName: string;
+        lastName: string;
+        employeeId: string;
+        date: string;
+        projectId: string;
+        costCode: string;
+        hoursType: 'Reg' | 'OT';
+        hours: number;
+        profileId: string;
+        departmentId?: string;
+      }
+      
+      // Group time entries by employee + date + project
+      const groupKey = (profileId: string, date: string, projectId: string) => `${profileId}|${date}|${projectId}`;
+      const groupedMinutes: Record<string, { 
+        minutes: number; 
+        firstName: string; 
+        lastName: string; 
+        employeeId: string; 
+        date: string; 
+        projectId: string;
+        costCode: string;
+        profileId: string;
+        departmentId?: string;
+      }> = {};
+      
+      // Also track total minutes per employee per day for overtime calculation
+      const employeeDailyTotals: Record<string, Record<string, number>> = {};
 
       timeEntries.forEach((entry: any) => {
         const profile = entry.profile_id 
           ? userProfiles[entry.profile_id] 
           : userProfiles[entry.user_id];
-        const name = `${profile?.first_name || ''} ${profile?.last_name || ''}`.trim() ||
-                    profile?.display_name ||
-                    'Unknown User';
-        const entryKey = entry.profile_id || entry.user_id || 'unknown';
+        const firstName = profile?.first_name || '';
+        const lastName = profile?.last_name || '';
+        const employeeId = profile?.employee_id || '';
+        const profileId = entry.profile_id || entry.user_id || 'unknown';
         const entryDate = format(new Date(entry.start_time), 'yyyy-MM-dd');
-
-        if (!employeeDailyMinutes[entryKey]) {
-          employeeDailyMinutes[entryKey] = {};
-          employeeMetadata[entryKey] = { name, departmentId: profile?.department_id };
+        const projectId = entry.projects?.id || '';
+        const costCode = entry.projects?.id ? entry.projects.id.substring(0, 8) : '';
+        
+        const key = groupKey(profileId, entryDate, projectId);
+        
+        if (!groupedMinutes[key]) {
+          groupedMinutes[key] = {
+            minutes: 0,
+            firstName,
+            lastName,
+            employeeId,
+            date: entryDate,
+            projectId,
+            costCode,
+            profileId,
+            departmentId: profile?.department_id,
+          };
         }
-        if (!employeeDailyMinutes[entryKey][entryDate]) {
-          employeeDailyMinutes[entryKey][entryDate] = 0;
+        groupedMinutes[key].minutes += entry.calculated_minutes || 0;
+        
+        // Track daily totals for overtime calculation
+        if (!employeeDailyTotals[profileId]) {
+          employeeDailyTotals[profileId] = {};
         }
-        employeeDailyMinutes[entryKey][entryDate] += entry.calculated_minutes || 0;
+        if (!employeeDailyTotals[profileId][entryDate]) {
+          employeeDailyTotals[profileId][entryDate] = 0;
+        }
+        employeeDailyTotals[profileId][entryDate] += entry.calculated_minutes || 0;
       });
-
-      // Calculate regular vs overtime for each employee
-      const employeeHours: Record<string, { name: string; hours: number; regularHours: number; overtimeHours: number; departmentId?: string }> = {};
-
-      Object.entries(employeeDailyMinutes).forEach(([profileId, dailyMinutes]) => {
-        const metadata = employeeMetadata[profileId];
-        let totalMinutes = 0;
-        let totalRegular = 0;
-        let totalOvertime = 0;
-
-        Object.entries(dailyMinutes).forEach(([dateStr, minutes]) => {
+      
+      // Calculate overtime thresholds per employee per day
+      const employeeDailyOvertime: Record<string, Record<string, { scheduledMinutes: number; totalMinutes: number }>> = {};
+      Object.entries(employeeDailyTotals).forEach(([profileId, dailyTotals]) => {
+        const profile = userProfiles[profileId];
+        employeeDailyOvertime[profileId] = {};
+        
+        Object.entries(dailyTotals).forEach(([dateStr, totalMinutes]) => {
           const dayDate = new Date(dateStr);
-          const dayOfWeek = dayDate.getDay(); // 0 = Sunday
-          const scheduledMinutes = getScheduledMinutes(profileId, metadata.departmentId, dayOfWeek);
-          
-          totalMinutes += minutes;
-          
-          if (overtimeEnabled) {
-            const regular = Math.min(minutes, scheduledMinutes);
-            const overtime = Math.max(0, minutes - scheduledMinutes);
-            totalRegular += regular;
-            totalOvertime += overtime;
-          } else {
-            totalRegular += minutes;
-          }
+          const dayOfWeek = dayDate.getDay();
+          const scheduledMinutes = getScheduledMinutes(profileId, profile?.department_id, dayOfWeek);
+          employeeDailyOvertime[profileId][dateStr] = { scheduledMinutes, totalMinutes };
         });
-
-        employeeHours[profileId] = {
-          name: metadata.name,
-          hours: totalMinutes / 60,
-          regularHours: totalRegular / 60,
-          overtimeHours: totalOvertime / 60,
-          departmentId: metadata.departmentId,
-        };
       });
-
-      let employeeReportData = Object.entries(employeeHours).map(([odId, data]) => ({
+      
+      // Build detailed rows with proper Reg/OT split
+      const detailedRows: DetailedRow[] = [];
+      
+      Object.values(groupedMinutes).forEach((group) => {
+        const { profileId, date } = group;
+        const dailyInfo = employeeDailyOvertime[profileId]?.[date];
+        const scheduledMinutes = dailyInfo?.scheduledMinutes || dailyThresholdMinutes;
+        const totalDailyMinutes = dailyInfo?.totalMinutes || 0;
+        
+        const groupMinutes = group.minutes;
+        
+        if (overtimeEnabled && totalDailyMinutes > scheduledMinutes) {
+          // There is overtime for this day - need to split
+          const ratio = groupMinutes / totalDailyMinutes;
+          const dailyRegular = Math.min(totalDailyMinutes, scheduledMinutes);
+          const dailyOvertime = Math.max(0, totalDailyMinutes - scheduledMinutes);
+          
+          const groupRegular = dailyRegular * ratio;
+          const groupOvertime = dailyOvertime * ratio;
+          
+          if (groupRegular > 0) {
+            detailedRows.push({
+              firstName: group.firstName,
+              lastName: group.lastName,
+              employeeId: group.employeeId,
+              date: format(new Date(date), 'M/d/yy'),
+              projectId: group.projectId,
+              costCode: group.costCode,
+              hoursType: 'Reg',
+              hours: groupRegular / 60,
+              profileId: group.profileId,
+              departmentId: group.departmentId,
+            });
+          }
+          
+          if (groupOvertime > 0) {
+            detailedRows.push({
+              firstName: group.firstName,
+              lastName: group.lastName,
+              employeeId: group.employeeId,
+              date: format(new Date(date), 'M/d/yy'),
+              projectId: group.projectId,
+              costCode: group.costCode,
+              hoursType: 'OT',
+              hours: groupOvertime / 60,
+              profileId: group.profileId,
+              departmentId: group.departmentId,
+            });
+          }
+        } else {
+          // All regular hours
+          detailedRows.push({
+            firstName: group.firstName,
+            lastName: group.lastName,
+            employeeId: group.employeeId,
+            date: format(new Date(date), 'M/d/yy'),
+            projectId: group.projectId,
+            costCode: group.costCode,
+            hoursType: 'Reg',
+            hours: groupMinutes / 60,
+            profileId: group.profileId,
+            departmentId: group.departmentId,
+          });
+        }
+      });
+      
+      // Sort by last name, first name, date
+      detailedRows.sort((a, b) => {
+        if (a.lastName !== b.lastName) return a.lastName.localeCompare(b.lastName);
+        if (a.firstName !== b.firstName) return a.firstName.localeCompare(b.firstName);
+        if (a.date !== b.date) return a.date.localeCompare(b.date);
+        if (a.hoursType !== b.hoursType) return a.hoursType === 'Reg' ? -1 : 1;
+        return 0;
+      });
+      
+      // Apply filters
+      let filteredRows = detailedRows;
+      if (filters.employeeId) {
+        filteredRows = filteredRows.filter(r => r.profileId === filters.employeeId);
+      }
+      if (filters.departmentId) {
+        filteredRows = filteredRows.filter(r => r.departmentId === filters.departmentId);
+      }
+      
+      // Store detailed rows for CSV/PDF export
+      (window as any).currentEmployeeDetailedRows = filteredRows;
+      
+      // Build summary for display table
+      const employeeSummary: Record<string, { name: string; hours: number; regularHours: number; overtimeHours: number; departmentId?: string }> = {};
+      filteredRows.forEach(row => {
+        if (!employeeSummary[row.profileId]) {
+          employeeSummary[row.profileId] = {
+            name: `${row.firstName} ${row.lastName}`.trim() || 'Unknown',
+            hours: 0,
+            regularHours: 0,
+            overtimeHours: 0,
+            departmentId: row.departmentId,
+          };
+        }
+        employeeSummary[row.profileId].hours += row.hours;
+        if (row.hoursType === 'Reg') {
+          employeeSummary[row.profileId].regularHours += row.hours;
+        } else {
+          employeeSummary[row.profileId].overtimeHours += row.hours;
+        }
+      });
+      
+      reportData = Object.entries(employeeSummary).map(([odId, data]) => ({
         name: data.name,
         hours: Math.round(data.hours * 10) / 10,
         regularHours: Math.round(data.regularHours * 10) / 10,
@@ -1215,15 +1378,6 @@ const Reports = () => {
         odId,
         departmentId: data.departmentId,
       })).sort((a, b) => b.hours - a.hours);
-
-      if (filters.employeeId) {
-        employeeReportData = employeeReportData.filter(e => e.odId === filters.employeeId);
-      }
-      if (filters.departmentId) {
-        employeeReportData = employeeReportData.filter(e => e.departmentId === filters.departmentId);
-      }
-
-      reportData = employeeReportData;
 
     } else {
       const projectHours = timeEntries.reduce((acc, entry: any) => {
