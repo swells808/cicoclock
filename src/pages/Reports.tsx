@@ -1054,6 +1054,7 @@ const Reports = () => {
     const { data: rawTimeEntries } = await supabase
       .from('time_entries')
       .select(`
+        id,
         duration_minutes,
         start_time,
         end_time,
@@ -1064,6 +1065,23 @@ const Reports = () => {
       .eq('company_id', companyId)
       .gte('start_time', start.toISOString())
       .lte('start_time', end.toISOString());
+
+    // Fetch task activities with task type codes for all time entries in range
+    const timeEntryIds = rawTimeEntries?.map(e => e.id) || [];
+    const { data: taskActivities } = timeEntryIds.length > 0 
+      ? await supabase
+          .from('task_activities')
+          .select('time_entry_id, task_type_id, task_types(code)')
+          .in('time_entry_id', timeEntryIds)
+      : { data: [] };
+
+    // Build map: time_entry_id -> task type code (use first activity's code if multiple)
+    const timeEntryTaskCodes: Record<string, string> = {};
+    (taskActivities || []).forEach((ta: any) => {
+      if (ta.time_entry_id && !timeEntryTaskCodes[ta.time_entry_id]) {
+        timeEntryTaskCodes[ta.time_entry_id] = ta.task_types?.code || '';
+      }
+    });
 
     // Calculate minutes for each entry, prorating entries that span multiple days
     const timeEntries = rawTimeEntries?.map(entry => {
@@ -1082,7 +1100,11 @@ const Reports = () => {
         ? Math.floor((effectiveEnd - effectiveStart) / 1000 / 60)
         : 0;
       
-      return { ...entry, calculated_minutes: minutes };
+      return { 
+        ...entry, 
+        calculated_minutes: minutes,
+        taskTypeCode: timeEntryTaskCodes[entry.id] || ''
+      };
     }) || [];
 
     // Build employee or project reports from fresh data
@@ -1187,7 +1209,7 @@ const Reports = () => {
         date: string;
         projectId: string;
         costCode: string;
-        hoursType: 'Reg' | 'OT';
+        hoursType: 'Regular' | 'Overtime';
         hours: number;
         profileId: string;
         departmentId?: string;
@@ -1219,10 +1241,10 @@ const Reports = () => {
         const employeeId = profile?.employee_id || '';
         const profileId = entry.profile_id || entry.user_id || 'unknown';
         const entryDate = format(new Date(entry.start_time), 'yyyy-MM-dd');
-        const projectId = entry.projects?.id || '';
-        const costCode = entry.projects?.id ? entry.projects.id.substring(0, 8) : '';
+        const projectName = entry.projects?.name || '';
+        const costCode = entry.taskTypeCode || '';
         
-        const key = groupKey(profileId, entryDate, projectId);
+        const key = groupKey(profileId, entryDate, projectName + '|' + costCode);
         
         if (!groupedMinutes[key]) {
           groupedMinutes[key] = {
@@ -1231,7 +1253,7 @@ const Reports = () => {
             lastName,
             employeeId,
             date: entryDate,
-            projectId,
+            projectId: projectName,
             costCode,
             profileId,
             departmentId: profile?.department_id,
@@ -1291,7 +1313,7 @@ const Reports = () => {
               date: format(new Date(date), 'M/d/yy'),
               projectId: group.projectId,
               costCode: group.costCode,
-              hoursType: 'Reg',
+              hoursType: 'Regular',
               hours: groupRegular / 60,
               profileId: group.profileId,
               departmentId: group.departmentId,
@@ -1306,7 +1328,7 @@ const Reports = () => {
               date: format(new Date(date), 'M/d/yy'),
               projectId: group.projectId,
               costCode: group.costCode,
-              hoursType: 'OT',
+              hoursType: 'Overtime',
               hours: groupOvertime / 60,
               profileId: group.profileId,
               departmentId: group.departmentId,
@@ -1321,7 +1343,7 @@ const Reports = () => {
             date: format(new Date(date), 'M/d/yy'),
             projectId: group.projectId,
             costCode: group.costCode,
-            hoursType: 'Reg',
+            hoursType: 'Regular',
             hours: groupMinutes / 60,
             profileId: group.profileId,
             departmentId: group.departmentId,
@@ -1334,7 +1356,7 @@ const Reports = () => {
         if (a.lastName !== b.lastName) return a.lastName.localeCompare(b.lastName);
         if (a.firstName !== b.firstName) return a.firstName.localeCompare(b.firstName);
         if (a.date !== b.date) return a.date.localeCompare(b.date);
-        if (a.hoursType !== b.hoursType) return a.hoursType === 'Reg' ? -1 : 1;
+        if (a.hoursType !== b.hoursType) return a.hoursType === 'Regular' ? -1 : 1;
         return 0;
       });
       
@@ -1363,7 +1385,7 @@ const Reports = () => {
           };
         }
         employeeSummary[row.profileId].hours += row.hours;
-        if (row.hoursType === 'Reg') {
+        if (row.hoursType === 'Regular') {
           employeeSummary[row.profileId].regularHours += row.hours;
         } else {
           employeeSummary[row.profileId].overtimeHours += row.hours;
