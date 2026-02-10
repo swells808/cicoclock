@@ -1544,33 +1544,34 @@ serve(async (req) => {
       );
     }
 
-    // Get recipient email - either from request or fetch first recipient from report
-    let emailTo = recipient_email;
-    if (!emailTo) {
+    // Get recipient emails - either from request or fetch all recipients from report
+    let emailToList: string[] = [];
+    if (recipient_email) {
+      emailToList = [recipient_email];
+    } else {
       const { data: recipients } = await supabase
         .from('scheduled_report_recipients')
         .select('email')
-        .eq('scheduled_report_id', scheduled_report_id)
-        .limit(1);
+        .eq('scheduled_report_id', scheduled_report_id);
       
       if (recipients && recipients.length > 0) {
-        emailTo = recipients[0].email;
+        emailToList = recipients.map((r: { email: string }) => r.email);
       }
     }
 
-    if (!emailTo) {
+    if (emailToList.length === 0) {
       return new Response(
         JSON.stringify({ error: 'No recipient email provided or configured' }),
         { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
       );
     }
 
-    // Send email with attachments
-    console.log(`Sending test email to: ${emailTo}`);
+    // Send email to all recipients
+    console.log(`Sending test email to: ${emailToList.join(', ')}`);
     
     const { data: emailData, error: emailError } = await resend.emails.send({
       from: 'CICO Reports <reports@notifications.battlebornsteel.com>',
-      to: emailTo,
+      to: emailToList,
       subject: `[TEST] ${report.name || getReportTypeName(report.report_type)} - ${dateRange.start}`,
       html: html,
       attachments: [
@@ -1593,7 +1594,7 @@ serve(async (req) => {
     console.log('Test email sent successfully:', emailData);
 
     return new Response(
-      JSON.stringify({ success: true, message: 'Test email sent', email_id: emailData?.id }),
+      JSON.stringify({ success: true, message: `Test email sent to ${emailToList.length} recipients`, email_id: emailData?.id }),
       { status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
     );
 
