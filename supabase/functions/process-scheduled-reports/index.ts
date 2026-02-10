@@ -1401,11 +1401,10 @@ serve(async (req) => {
 
     const now = new Date();
     const currentHour = now.getUTCHours();
-    const currentMinute = now.getUTCMinutes();
 
-    // Find reports that should run now (within 30 min window)
-    const timeWindowStart = `${String(currentHour).padStart(2, '0')}:${String(Math.max(0, currentMinute - 15)).padStart(2, '0')}`;
-    const timeWindowEnd = `${String(currentHour).padStart(2, '0')}:${String(Math.min(59, currentMinute + 15)).padStart(2, '0')}`;
+    // Cron runs hourly at :00, so match any report scheduled within this hour
+    const timeWindowStart = `${String(currentHour).padStart(2, '0')}:00`;
+    const timeWindowEnd = `${String(currentHour).padStart(2, '0')}:59`;
 
     const { data: reports, error: reportsError } = await supabase
       .from('scheduled_reports')
