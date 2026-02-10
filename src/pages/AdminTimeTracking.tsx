@@ -227,11 +227,15 @@ const AdminTimeTracking: React.FC = () => {
   // Filter entries by selected employee
   const filteredEntries = useMemo(() => {
     if (selectedEmployee === "all") return timeEntries;
+    // Find the selected employee's profile to cross-reference both id and user_id
+    const selectedEmp = employees.find(e => (e.user_id || e.id) === selectedEmployee);
     return timeEntries.filter(entry => 
       entry.user_id === selectedEmployee || 
-      entry.profile_id === selectedEmployee
+      entry.profile_id === selectedEmployee ||
+      (selectedEmp && entry.profile_id === selectedEmp.id) ||
+      (selectedEmp?.user_id && entry.user_id === selectedEmp.user_id)
     );
-  }, [timeEntries, selectedEmployee]);
+  }, [timeEntries, selectedEmployee, employees]);
 
   // Calculate summary
   const summary = useMemo(() => {
