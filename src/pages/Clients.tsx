@@ -4,16 +4,18 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
-import { Plus, Search, Building, Mail, Phone, MapPin, Edit, Trash2 } from 'lucide-react';
+import { Plus, Search, Building, Mail, Phone, MapPin, Edit, Trash2, Upload } from 'lucide-react';
 import { useClients, Client } from '@/hooks/useClients';
 import { ClientDialog } from '@/components/clients/ClientDialog';
+import { ClientCSVImportModal } from '@/components/clients/ClientCSVImportModal';
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from '@/components/ui/alert-dialog';
 
 export default function Clients() {
-  const { clients, loading, deleteClient } = useClients();
+  const { clients, loading, deleteClient, refetch } = useClients();
   const [searchTerm, setSearchTerm] = useState('');
   const [selectedClient, setSelectedClient] = useState<Client | undefined>(undefined);
   const [isDialogOpen, setIsDialogOpen] = useState(false);
+  const [isCSVImportOpen, setIsCSVImportOpen] = useState(false);
 
   const filteredClients = clients.filter(client =>
     client.company_name.toLowerCase().includes(searchTerm.toLowerCase()) ||
@@ -56,10 +58,16 @@ export default function Clients() {
           <h1 className="text-3xl font-bold text-foreground">Clients</h1>
           <p className="text-muted-foreground mt-2">Manage your client information and contacts</p>
         </div>
-        <Button onClick={handleAddClient}>
-          <Plus className="w-4 h-4 mr-2" />
-          Add Client
-        </Button>
+        <div className="flex gap-2">
+          <Button variant="outline" onClick={() => setIsCSVImportOpen(true)}>
+            <Upload className="w-4 h-4 mr-2" />
+            Import CSV
+          </Button>
+          <Button onClick={handleAddClient}>
+            <Plus className="w-4 h-4 mr-2" />
+            Add Client
+          </Button>
+        </div>
       </div>
 
       <div className="mb-6">
@@ -187,6 +195,12 @@ export default function Clients() {
         client={selectedClient}
         open={isDialogOpen}
         onOpenChange={setIsDialogOpen}
+      />
+
+      <ClientCSVImportModal
+        open={isCSVImportOpen}
+        onOpenChange={setIsCSVImportOpen}
+        onImportComplete={() => refetch()}
       />
     </DashboardLayout>
   );
