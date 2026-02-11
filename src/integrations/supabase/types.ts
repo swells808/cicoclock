@@ -868,6 +868,7 @@ export type Database = {
       }
       projects: {
         Row: {
+          address: string | null
           budget_per_hour: number | null
           client_id: string | null
           company_id: string
@@ -880,12 +881,14 @@ export type Database = {
           id: string
           is_active: boolean
           name: string
+          project_number: string | null
           start_date: string | null
           status: string | null
           track_overtime: boolean | null
           updated_at: string
         }
         Insert: {
+          address?: string | null
           budget_per_hour?: number | null
           client_id?: string | null
           company_id: string
@@ -898,12 +901,14 @@ export type Database = {
           id?: string
           is_active?: boolean
           name: string
+          project_number?: string | null
           start_date?: string | null
           status?: string | null
           track_overtime?: boolean | null
           updated_at?: string
         }
         Update: {
+          address?: string | null
           budget_per_hour?: number | null
           client_id?: string | null
           company_id?: string
@@ -916,6 +921,7 @@ export type Database = {
           id?: string
           is_active?: boolean
           name?: string
+          project_number?: string | null
           start_date?: string | null
           status?: string | null
           track_overtime?: boolean | null

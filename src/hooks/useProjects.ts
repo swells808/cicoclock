@@ -59,6 +59,8 @@ export const useCreateProject = () => {
       hourly_rate?: number;
       start_date?: string;
       end_date?: string;
+      project_number?: string;
+      address?: string;
     }) => {
       if (!company?.id) throw new Error("No company selected");
 
@@ -98,6 +100,8 @@ export const useUpdateProject = () => {
       is_active: boolean;
       start_date: string;
       end_date: string;
+      project_number: string;
+      address: string;
     }>) => {
       const { data, error } = await supabase
         .from("projects")
