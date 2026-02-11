@@ -38,8 +38,7 @@ import {
 } from "@/components/ui/dialog";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
-import { useProjects, useCreateProject } from "@/hooks/useProjects";
-import { useUpdateProject } from "@/hooks/useProjects";
+import { useProjects, useCreateProject, useUpdateProject } from "@/hooks/useProjects";
 
 const Projects = () => {
   const { data: projects = [], isLoading, error } = useProjects();
@@ -53,9 +52,13 @@ const Projects = () => {
   const [showNewProjectDialog, setShowNewProjectDialog] = useState(false);
   const [newProjectName, setNewProjectName] = useState("");
   const [newProjectDescription, setNewProjectDescription] = useState("");
+  const [newProjectNumber, setNewProjectNumber] = useState("");
+  const [newProjectAddress, setNewProjectAddress] = useState("");
   const [editingProject, setEditingProject] = useState<any>(null);
   const [editProjectName, setEditProjectName] = useState("");
   const [editProjectDescription, setEditProjectDescription] = useState("");
+  const [editProjectNumber, setEditProjectNumber] = useState("");
+  const [editProjectAddress, setEditProjectAddress] = useState("");
   const navigate = useNavigate();
 
   const { mutate: updateProject, isPending: isUpdating } = useUpdateProject();
@@ -73,12 +76,19 @@ const Projects = () => {
     if (!newProjectName.trim()) return;
 
     createProject.mutate(
-      { name: newProjectName, description: newProjectDescription },
+      {
+        name: newProjectName,
+        description: newProjectDescription,
+        project_number: newProjectNumber || undefined,
+        address: newProjectAddress || undefined,
+      },
       {
         onSuccess: () => {
           setShowNewProjectDialog(false);
           setNewProjectName("");
           setNewProjectDescription("");
+          setNewProjectNumber("");
+          setNewProjectAddress("");
         }
       }
     );
@@ -88,6 +98,8 @@ const Projects = () => {
     setEditingProject(project);
     setEditProjectName(project.name);
     setEditProjectDescription(project.description || "");
+    setEditProjectNumber(project.project_number || "");
+    setEditProjectAddress(project.address || "");
   };
 
   const handleSaveProject = () => {
@@ -97,20 +109,23 @@ const Projects = () => {
       { 
         id: editingProject.id, 
         name: editProjectName, 
-        description: editProjectDescription 
+        description: editProjectDescription,
+        project_number: editProjectNumber || undefined,
+        address: editProjectAddress || undefined,
       },
       {
         onSuccess: () => {
           setEditingProject(null);
           setEditProjectName("");
           setEditProjectDescription("");
+          setEditProjectNumber("");
+          setEditProjectAddress("");
         }
       }
     );
   };
 
   const handleViewDetails = (projectId: string) => {
-    // For now, open the edit dialog - can be replaced with navigation to detail page
     const project = projects.find(p => p.id === projectId);
     if (project) {
       handleEditProject(project);
@@ -120,7 +135,9 @@ const Projects = () => {
   const filteredProjects = projects
     .filter(project =>
       (statusFilter === "all" || (project.is_active ? "Active" : "Inactive") === statusFilter) &&
-      project.name.toLowerCase().includes(searchQuery.toLowerCase())
+      (project.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
+       (project.project_number || "").toLowerCase().includes(searchQuery.toLowerCase()) ||
+       (project.address || "").toLowerCase().includes(searchQuery.toLowerCase()))
     )
     .sort((a, b) => {
       const direction = sortOrder === "asc" ? 1 : -1;
@@ -137,7 +154,7 @@ const Projects = () => {
   if (isLoading) {
     return (
       <DashboardLayout>
-        <div className="text-center py-10">Loading projects...</div>
+        <div className="text-center py-10">Loading jobs...</div>
       </DashboardLayout>
     );
   }
@@ -152,12 +169,12 @@ const Projects = () => {
 
   return (
     <DashboardLayout>
-      {/* Project Overview */}
+      {/* Overview */}
       <section className="mb-8">
         <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
           <div className="bg-card p-6 rounded-lg shadow-sm border border-border">
             <div className="flex items-center justify-between">
-              <h3 className="text-lg font-semibold text-foreground">Active Projects</h3>
+              <h3 className="text-lg font-semibold text-foreground">Active Jobs</h3>
               <span className="text-2xl font-bold text-green-600">
                 {projects.filter(p => p.is_active).length}
               </span>
@@ -165,13 +182,13 @@ const Projects = () => {
           </div>
           <div className="bg-card p-6 rounded-lg shadow-sm border border-border">
             <div className="flex items-center justify-between">
-              <h3 className="text-lg font-semibold text-foreground">Total Projects</h3>
+              <h3 className="text-lg font-semibold text-foreground">Total Jobs</h3>
               <span className="text-2xl font-bold text-primary">{projects.length}</span>
             </div>
           </div>
           <div className="bg-card p-6 rounded-lg shadow-sm border border-border">
             <div className="flex items-center justify-between">
-              <h3 className="text-lg font-semibold text-foreground">Inactive Projects</h3>
+              <h3 className="text-lg font-semibold text-foreground">Inactive Jobs</h3>
               <span className="text-2xl font-bold text-orange-500">
                 {projects.filter(p => !p.is_active).length}
               </span>
@@ -180,11 +197,11 @@ const Projects = () => {
         </div>
       </section>
 
-      {/* Project List */}
+      {/* List */}
       <section className="bg-card rounded-lg shadow-sm border border-border">
         <div className="p-6">
           <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between mb-6 gap-4">
-            <h2 className="text-xl font-semibold">Projects</h2>
+            <h2 className="text-xl font-semibold">Jobs / Projects</h2>
             <div className="flex flex-col lg:flex-row gap-4">
               <Select value={statusFilter} onValueChange={setStatusFilter}>
                 <SelectTrigger className="w-[180px]">
@@ -209,7 +226,7 @@ const Projects = () => {
               <div className="relative">
                 <Input
                   type="text"
-                  placeholder="Search projects..."
+                  placeholder="Search jobs..."
                   className="w-full lg:w-64 pl-10"
                   value={searchQuery}
                   onChange={(e) => setSearchQuery(e.target.value)}
@@ -239,7 +256,7 @@ const Projects = () => {
                 onClick={() => setShowNewProjectDialog(true)}
               >
                 <Plus className="h-4 w-4 mr-2" />
-                New Project
+                New Job
               </Button>
             </div>
           </div>
@@ -252,10 +269,12 @@ const Projects = () => {
                   <tr className="border-b border-border">
                     <th className="text-left py-4 px-4 cursor-pointer group" onClick={() => handleSort("name")}>
                       <div className="flex items-center gap-1">
-                        Project Name
+                        Job Name
                         {sortField === "name" && (sortOrder === "asc" ? <ArrowUpZA className="h-4 w-4 text-gray-500" /> : <ArrowDownAZ className="h-4 w-4 text-gray-500" />)}
                       </div>
                     </th>
+                    <th className="text-left py-4 px-4">Job #</th>
+                    <th className="text-left py-4 px-4">Address</th>
                     <th className="text-left py-4 px-4">Client</th>
                     <th className="text-left py-4 px-4">Status</th>
                     <th className="text-left py-4 px-4">Hours</th>
@@ -277,6 +296,8 @@ const Projects = () => {
                           {project.name}
                         </div>
                       </td>
+                      <td className="py-4 px-4">{project.project_number || '—'}</td>
+                      <td className="py-4 px-4 max-w-[200px] truncate">{project.address || '—'}</td>
                       <td className="py-4 px-4">{project.clients?.company_name || 'N/A'}</td>
                       <td className="py-4 px-4">
                         <span className={`px-3 py-1 rounded-full text-sm ${project.is_active ? "bg-green-100 text-green-800" : "bg-gray-100 text-gray-800"}`}>
@@ -299,7 +320,7 @@ const Projects = () => {
                             </DropdownMenuItem>
                             <DropdownMenuItem onClick={() => handleEditProject(project)}>
                               <Edit className="h-4 w-4 mr-2" />
-                              Edit Project
+                              Edit Job
                             </DropdownMenuItem>
                             <DropdownMenuSeparator />
                             <DropdownMenuItem className="text-red-600">Archive</DropdownMenuItem>
@@ -319,11 +340,19 @@ const Projects = () => {
               {filteredProjects.map((project) => (
                 <div key={project.id} className="border border-border rounded-lg p-5 shadow-sm hover:shadow transition-shadow bg-card">
                   <div className="flex justify-between items-start mb-4">
-                    <h3 className="font-semibold">{project.name}</h3>
+                    <div>
+                      <h3 className="font-semibold">{project.name}</h3>
+                      {project.project_number && (
+                        <span className="text-xs text-muted-foreground">#{project.project_number}</span>
+                      )}
+                    </div>
                     <span className={`px-3 py-1 rounded-full text-xs ${project.is_active ? "bg-green-100 text-green-800" : "bg-gray-100 text-gray-800"}`}>
                       {project.is_active ? 'Active' : 'Inactive'}
                     </span>
                   </div>
+                  {project.address && (
+                    <p className="text-sm text-muted-foreground mb-2 truncate">{project.address}</p>
+                  )}
                   <p className="text-sm text-muted-foreground mb-4 line-clamp-2">{project.description || 'No description'}</p>
                   <div className="flex justify-between text-sm mb-4">
                     <span className="text-muted-foreground">Client: {project.clients?.company_name || 'N/A'}</span>
@@ -331,7 +360,7 @@ const Projects = () => {
                   </div>
                   <div className="flex justify-between items-center">
                     <span className="text-xs text-muted-foreground">Created: {new Date(project.created_at).toLocaleDateString()}</span>
-                    <Button variant="ghost" size="sm" className="p-0 h-8 w-8">
+                    <Button variant="ghost" size="sm" className="p-0 h-8 w-8" onClick={() => handleEditProject(project)}>
                       <Edit className="h-4 w-4" />
                     </Button>
                   </div>
@@ -342,28 +371,46 @@ const Projects = () => {
 
           {filteredProjects.length === 0 && (
             <div className="text-center py-10">
-              <p className="text-gray-500 mb-4">No projects found matching your search</p>
+              <p className="text-gray-500 mb-4">No jobs found matching your search</p>
               <Button onClick={() => setSearchQuery("")} variant="outline">Clear search</Button>
             </div>
           )}
         </div>
       </section>
 
-      {/* New Project Dialog */}
+      {/* New Job Dialog */}
       <Dialog open={showNewProjectDialog} onOpenChange={setShowNewProjectDialog}>
         <DialogContent>
           <DialogHeader>
-            <DialogTitle>Create New Project</DialogTitle>
-            <DialogDescription>Add a new project to track time against</DialogDescription>
+            <DialogTitle>Create New Job</DialogTitle>
+            <DialogDescription>Add a new job/project to track time against</DialogDescription>
           </DialogHeader>
           <div className="space-y-4 py-4">
             <div className="space-y-2">
-              <Label htmlFor="name">Project Name</Label>
+              <Label htmlFor="name">Job Name</Label>
               <Input
                 id="name"
                 value={newProjectName}
                 onChange={(e) => setNewProjectName(e.target.value)}
-                placeholder="Enter project name"
+                placeholder="Enter job name"
+              />
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="project-number">Job / Project Number</Label>
+              <Input
+                id="project-number"
+                value={newProjectNumber}
+                onChange={(e) => setNewProjectNumber(e.target.value)}
+                placeholder="Enter job or project number"
+              />
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="address">Address</Label>
+              <Input
+                id="address"
+                value={newProjectAddress}
+                onChange={(e) => setNewProjectAddress(e.target.value)}
+                placeholder="Enter job address"
               />
             </div>
             <div className="space-y-2">
@@ -372,34 +419,52 @@ const Projects = () => {
                 id="description"
                 value={newProjectDescription}
                 onChange={(e) => setNewProjectDescription(e.target.value)}
-                placeholder="Enter project description"
+                placeholder="Enter job description"
               />
             </div>
           </div>
           <DialogFooter>
             <Button variant="outline" onClick={() => setShowNewProjectDialog(false)}>Cancel</Button>
             <Button onClick={handleCreateProject} disabled={!newProjectName.trim() || createProject.isPending}>
-              {createProject.isPending ? 'Creating...' : 'Create Project'}
+              {createProject.isPending ? 'Creating...' : 'Create Job'}
             </Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
 
-      {/* Edit Project Dialog */}
+      {/* Edit Job Dialog */}
       <Dialog open={!!editingProject} onOpenChange={(open) => !open && setEditingProject(null)}>
         <DialogContent>
           <DialogHeader>
-            <DialogTitle>Edit Project</DialogTitle>
-            <DialogDescription>Update project details</DialogDescription>
+            <DialogTitle>Edit Job</DialogTitle>
+            <DialogDescription>Update job/project details</DialogDescription>
           </DialogHeader>
           <div className="space-y-4 py-4">
             <div className="space-y-2">
-              <Label htmlFor="edit-name">Project Name</Label>
+              <Label htmlFor="edit-name">Job Name</Label>
               <Input
                 id="edit-name"
                 value={editProjectName}
                 onChange={(e) => setEditProjectName(e.target.value)}
-                placeholder="Enter project name"
+                placeholder="Enter job name"
+              />
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="edit-project-number">Job / Project Number</Label>
+              <Input
+                id="edit-project-number"
+                value={editProjectNumber}
+                onChange={(e) => setEditProjectNumber(e.target.value)}
+                placeholder="Enter job or project number"
+              />
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="edit-address">Address</Label>
+              <Input
+                id="edit-address"
+                value={editProjectAddress}
+                onChange={(e) => setEditProjectAddress(e.target.value)}
+                placeholder="Enter job address"
               />
             </div>
             <div className="space-y-2">
@@ -408,7 +473,7 @@ const Projects = () => {
                 id="edit-description"
                 value={editProjectDescription}
                 onChange={(e) => setEditProjectDescription(e.target.value)}
-                placeholder="Enter project description"
+                placeholder="Enter job description"
               />
             </div>
           </div>
