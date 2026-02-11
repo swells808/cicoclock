@@ -157,10 +157,29 @@ export const ClientCSVImportModal: React.FC<ClientCSVImportModalProps> = ({
               <>
                 <p className="text-sm font-medium text-foreground">Click to upload CSV file</p>
                 <p className="text-xs text-muted-foreground mt-1">
-                  Required: company_name. Optional: contact_person_name, email, phone, street_address, city, state_province, postal_code, country, notes
+                  Upload a .csv file with client data
                 </p>
               </>
             )}
+          </div>
+
+          <div className="rounded-lg border border-border bg-muted/50 p-4 text-sm space-y-2">
+            <p className="font-medium text-foreground">CSV Format Instructions</p>
+            <p className="text-muted-foreground">Your CSV file must include a header row. The following columns are supported:</p>
+            <ul className="list-disc list-inside text-muted-foreground space-y-0.5 text-xs">
+              <li><span className="font-semibold text-foreground">company_name</span> — <span className="text-destructive">required</span></li>
+              <li><span className="font-semibold text-foreground">contact_person_name</span> — optional</li>
+              <li><span className="font-semibold text-foreground">contact_person_title</span> — optional</li>
+              <li><span className="font-semibold text-foreground">email</span> — optional</li>
+              <li><span className="font-semibold text-foreground">phone</span> — optional</li>
+              <li><span className="font-semibold text-foreground">street_address</span> — optional</li>
+              <li><span className="font-semibold text-foreground">city</span> — optional</li>
+              <li><span className="font-semibold text-foreground">state_province</span> — optional</li>
+              <li><span className="font-semibold text-foreground">postal_code</span> — optional</li>
+              <li><span className="font-semibold text-foreground">country</span> — optional</li>
+              <li><span className="font-semibold text-foreground">notes</span> — optional</li>
+            </ul>
+            <p className="text-xs text-muted-foreground mt-1">Example: <code className="bg-muted px-1 py-0.5 rounded text-foreground">company_name,email,phone</code></p>
           </div>
 
           {errors.length > 0 && (

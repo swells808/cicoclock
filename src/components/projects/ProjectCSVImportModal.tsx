@@ -143,10 +143,22 @@ export const ProjectCSVImportModal: React.FC<ProjectCSVImportModalProps> = ({
               <>
                 <p className="text-sm font-medium text-foreground">Click to upload CSV file</p>
                 <p className="text-xs text-muted-foreground mt-1">
-                  Required: name. Optional: project_number, address, description
+                  Upload a .csv file with job/project data
                 </p>
               </>
             )}
+          </div>
+
+          <div className="rounded-lg border border-border bg-muted/50 p-4 text-sm space-y-2">
+            <p className="font-medium text-foreground">CSV Format Instructions</p>
+            <p className="text-muted-foreground">Your CSV file must include a header row. The following columns are supported:</p>
+            <ul className="list-disc list-inside text-muted-foreground space-y-0.5 text-xs">
+              <li><span className="font-semibold text-foreground">name</span> — <span className="text-destructive">required</span> (job/project name)</li>
+              <li><span className="font-semibold text-foreground">project_number</span> — optional</li>
+              <li><span className="font-semibold text-foreground">address</span> — optional</li>
+              <li><span className="font-semibold text-foreground">description</span> — optional</li>
+            </ul>
+            <p className="text-xs text-muted-foreground mt-1">Example: <code className="bg-muted px-1 py-0.5 rounded text-foreground">name,project_number,address</code></p>
           </div>
 
           {errors.length > 0 && (
