@@ -1399,7 +1399,7 @@ const Reports = () => {
         overtimeHours: Math.round(data.overtimeHours * 10) / 10,
         odId,
         departmentId: data.departmentId,
-      })).sort((a, b) => b.hours - a.hours);
+      })).sort((a, b) => a.name.localeCompare(b.name));
 
     } else {
       const projectHours = timeEntries.reduce((acc, entry: any) => {
