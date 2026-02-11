@@ -9,7 +9,8 @@ import {
   ArrowDownAZ,
   ArrowUpZA,
   Edit,
-  Eye
+  Eye,
+  Upload
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -39,9 +40,10 @@ import {
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { useProjects, useCreateProject, useUpdateProject } from "@/hooks/useProjects";
+import { ProjectCSVImportModal } from "@/components/projects/ProjectCSVImportModal";
 
 const Projects = () => {
-  const { data: projects = [], isLoading, error } = useProjects();
+  const { data: projects = [], isLoading, error, refetch } = useProjects();
   const createProject = useCreateProject();
   
   const [viewMode, setViewMode] = useState<"list" | "grid">("list");
@@ -54,6 +56,7 @@ const Projects = () => {
   const [newProjectDescription, setNewProjectDescription] = useState("");
   const [newProjectNumber, setNewProjectNumber] = useState("");
   const [newProjectAddress, setNewProjectAddress] = useState("");
+  const [isCSVImportOpen, setIsCSVImportOpen] = useState(false);
   const [editingProject, setEditingProject] = useState<any>(null);
   const [editProjectName, setEditProjectName] = useState("");
   const [editProjectDescription, setEditProjectDescription] = useState("");
@@ -251,6 +254,10 @@ const Projects = () => {
                   <LayoutGrid className="h-4 w-4" />
                 </Button>
               </div>
+              <Button variant="outline" onClick={() => setIsCSVImportOpen(true)}>
+                <Upload className="h-4 w-4 mr-2" />
+                Import CSV
+              </Button>
               <Button
                 className="bg-green-600 hover:bg-green-700 text-white"
                 onClick={() => setShowNewProjectDialog(true)}
@@ -485,6 +492,12 @@ const Projects = () => {
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      <ProjectCSVImportModal
+        open={isCSVImportOpen}
+        onOpenChange={setIsCSVImportOpen}
+        onImportComplete={() => refetch()}
+      />
     </DashboardLayout>
   );
 };
