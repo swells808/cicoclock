@@ -34,11 +34,13 @@ export const ProjectCSVImportModal: React.FC<ProjectCSVImportModalProps> = ({
   const [errors, setErrors] = useState<string[]>([]);
   const [importing, setImporting] = useState(false);
   const [fileName, setFileName] = useState('');
+  const [isDragging, setIsDragging] = useState(false);
 
-  const handleFileSelect = (event: React.ChangeEvent<HTMLInputElement>) => {
-    const file = event.target.files?.[0];
-    if (!file) return;
-
+  const processFile = (file: File) => {
+    if (!file.name.endsWith('.csv')) {
+      setErrors(['Please upload a .csv file']);
+      return;
+    }
     setFileName(file.name);
     setErrors([]);
 
@@ -62,6 +64,31 @@ export const ProjectCSVImportModal: React.FC<ProjectCSVImportModalProps> = ({
         setErrors([`Failed to parse CSV: ${error.message}`]);
       }
     });
+  };
+
+  const handleFileSelect = (event: React.ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    if (file) processFile(file);
+  };
+
+  const handleDragOver = (e: React.DragEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    setIsDragging(true);
+  };
+
+  const handleDragLeave = (e: React.DragEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    setIsDragging(false);
+  };
+
+  const handleDrop = (e: React.DragEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    setIsDragging(false);
+    const file = e.dataTransfer.files?.[0];
+    if (file) processFile(file);
   };
 
   const handleImport = async () => {
@@ -126,8 +153,11 @@ export const ProjectCSVImportModal: React.FC<ProjectCSVImportModalProps> = ({
 
         <div className="space-y-4 py-4">
           <div
-            className="border-2 border-dashed border-border rounded-lg p-8 text-center cursor-pointer hover:border-primary transition-colors"
+            className={`border-2 border-dashed rounded-lg p-8 text-center cursor-pointer transition-colors ${isDragging ? 'border-primary bg-primary/5' : 'border-border hover:border-primary'}`}
             onClick={() => fileInputRef.current?.click()}
+            onDragOver={handleDragOver}
+            onDragLeave={handleDragLeave}
+            onDrop={handleDrop}
           >
             <input
               ref={fileInputRef}
@@ -141,7 +171,9 @@ export const ProjectCSVImportModal: React.FC<ProjectCSVImportModalProps> = ({
               <p className="text-sm font-medium text-foreground">{fileName}</p>
             ) : (
               <>
-                <p className="text-sm font-medium text-foreground">Click to upload CSV file</p>
+                <p className="text-sm font-medium text-foreground">
+                  {isDragging ? 'Drop your CSV file here' : 'Click to upload or drag and drop'}
+                </p>
                 <p className="text-xs text-muted-foreground mt-1">
                   Upload a .csv file with job/project data
                 </p>
