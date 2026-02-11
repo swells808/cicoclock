@@ -1400,25 +1400,19 @@ serve(async (req) => {
     console.log('Starting scheduled reports processing...');
 
     const now = new Date();
-    const currentHour = now.getUTCHours();
 
-    // Cron runs hourly at :00, so match any report scheduled within this hour
-    const timeWindowStart = `${String(currentHour).padStart(2, '0')}:00`;
-    const timeWindowEnd = `${String(currentHour).padStart(2, '0')}:59`;
-
+    // Fetch ALL active reports with their company timezone — filtering happens in code
     const { data: reports, error: reportsError } = await supabase
       .from('scheduled_reports')
       .select('*, companies(company_name, timezone)')
-      .eq('is_active', true)
-      .gte('schedule_time', timeWindowStart)
-      .lte('schedule_time', timeWindowEnd);
+      .eq('is_active', true);
 
     if (reportsError) {
       console.error('Error fetching reports:', reportsError);
       throw reportsError;
     }
 
-    console.log(`Found ${reports?.length || 0} active reports in time window`);
+    console.log(`Found ${reports?.length || 0} total active reports`);
 
     const results = [];
 
@@ -1426,17 +1420,33 @@ serve(async (req) => {
       try {
         console.log(`Processing report: ${report.name || report.id} (${report.report_type})`);
 
-        // Check if frequency matches today
-        const todayDOW = now.getUTCDay();
-        const todayDOM = now.getUTCDate();
+        // Determine the company's timezone
+        const companyTimezone = (report.companies as { timezone?: string })?.timezone || 'America/Los_Angeles';
 
-        if (report.schedule_frequency === 'weekly' && report.schedule_day_of_week !== todayDOW) {
-          console.log(`Skipping weekly report - scheduled for day ${report.schedule_day_of_week}, today is ${todayDOW}`);
+        // Convert "now" to the company's local time
+        const localNowStr = now.toLocaleString('en-US', { timeZone: companyTimezone });
+        const localNow = new Date(localNowStr);
+        const localHour = localNow.getHours();
+        const localDOW = localNow.getDay();
+        const localDOM = localNow.getDate();
+
+        // Parse the report's scheduled hour from schedule_time (e.g. "00:05:00" or "08:00")
+        const scheduledHour = parseInt(report.schedule_time.split(':')[0], 10);
+
+        // Check if the current local hour matches the scheduled hour
+        if (localHour !== scheduledHour) {
+          console.log(`Skipping report ${report.id} - local hour ${localHour} != scheduled hour ${scheduledHour} (tz: ${companyTimezone})`);
           continue;
         }
 
-        if (report.schedule_frequency === 'monthly' && report.schedule_day_of_month !== todayDOM) {
-          console.log(`Skipping monthly report - scheduled for day ${report.schedule_day_of_month}, today is ${todayDOM}`);
+        // Check if frequency matches the current local day
+        if (report.schedule_frequency === 'weekly' && report.schedule_day_of_week !== localDOW) {
+          console.log(`Skipping weekly report - scheduled for day ${report.schedule_day_of_week}, local day is ${localDOW}`);
+          continue;
+        }
+
+        if (report.schedule_frequency === 'monthly' && report.schedule_day_of_month !== localDOM) {
+          console.log(`Skipping monthly report - scheduled for day ${report.schedule_day_of_month}, local day is ${localDOM}`);
           continue;
         }
 
@@ -1456,7 +1466,6 @@ serve(async (req) => {
           continue;
         }
 
-        const companyTimezone = (report.companies as { timezone?: string })?.timezone || 'America/Los_Angeles';
         const companyName = (report.companies as { company_name?: string })?.company_name || 'Unknown Company';
         const dateRange = getDateRange(report.schedule_frequency, companyTimezone);
 
