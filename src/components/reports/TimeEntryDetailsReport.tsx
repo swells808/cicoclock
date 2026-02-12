@@ -54,6 +54,7 @@ export const TimeEntryDetailsReport: React.FC<TimeEntryDetailsReportProps> = ({
   const [entries, setEntries] = useState<TimeEntryDetail[]>([]);
   const [loading, setLoading] = useState(true);
   const [photoUrls, setPhotoUrls] = useState<Record<string, { clockIn?: string; clockOut?: string }>>({});
+  const [allocProjectMap, setAllocProjectMap] = useState<Record<string, string>>({});
 
   // Stabilize dates to prevent infinite re-renders from new Date() defaults
   const startDate = useMemo(() => propStartDate ?? new Date(new Date().getFullYear(), new Date().getMonth(), 1), [propStartDate]);
@@ -104,6 +105,26 @@ export const TimeEntryDetailsReport: React.FC<TimeEntryDetailsReportProps> = ({
 
         if (error) throw error;
 
+        // Fetch timecard_allocations for project names on modern entries
+        const entryIds = data.map(e => e.id);
+        let localAllocProjectMap: Record<string, string> = {};
+        if (entryIds.length > 0) {
+          const { data: allocs } = await supabase
+            .from('timecard_allocations')
+            .select('time_entry_id, projects:project_id(name)')
+            .in('time_entry_id', entryIds);
+          if (allocs) {
+            for (const a of allocs) {
+              const p = a.projects as any;
+              if (p?.name && !localAllocProjectMap[a.time_entry_id]) {
+                localAllocProjectMap[a.time_entry_id] = p.name;
+              } else if (p?.name && localAllocProjectMap[a.time_entry_id] && !localAllocProjectMap[a.time_entry_id].includes(p.name)) {
+                localAllocProjectMap[a.time_entry_id] += `, ${p.name}`;
+              }
+            }
+          }
+        }
+
         // Fetch profiles separately - get all profiles for the company for filtering
         const userIds = [...new Set(data.map(e => e.user_id).filter(Boolean))];
         const profileIds = [...new Set(data.map(e => e.profile_id).filter(Boolean))];
@@ -142,6 +163,7 @@ export const TimeEntryDetailsReport: React.FC<TimeEntryDetailsReportProps> = ({
           );
         }
 
+        setAllocProjectMap(localAllocProjectMap);
         setEntries(filteredEntries);
       } catch (error) {
         console.error('Error fetching time entry details:', error);
@@ -233,7 +255,7 @@ export const TimeEntryDetailsReport: React.FC<TimeEntryDetailsReportProps> = ({
     clock_out_address: entry.clock_out_address,
     is_break: entry.is_break,
     employeeName: getEmployeeName(entry),
-    projectName: entry.projects?.name || null,
+    projectName: allocProjectMap[entry.id] || entry.projects?.name || null,
     signedClockInUrl: photoUrls[entry.id]?.clockIn || null,
     signedClockOutUrl: photoUrls[entry.id]?.clockOut || null,
   }));

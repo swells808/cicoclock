@@ -48,10 +48,30 @@ export const useLiveReports = () => {
 
       const { data: timeEntries } = await supabase
         .from('time_entries')
-        .select(`id, duration_minutes, start_time, end_time, user_id, projects(id, name)`)
+        .select(`id, duration_minutes, start_time, end_time, user_id, project_id, projects(id, name)`)
         .eq('company_id', company.id)
         .gte('start_time', dateRange.from.toISOString())
         .lte('start_time', dateRange.to.toISOString());
+
+      // Fetch timecard_allocations for project data on modern entries
+      const teIds = (timeEntries || []).map(e => e.id);
+      let allocMap: Record<string, { id: string; name: string }[]> = {};
+      if (teIds.length > 0) {
+        const { data: allocs } = await supabase
+          .from('timecard_allocations')
+          .select('time_entry_id, project_id, projects:project_id(id, name)')
+          .in('time_entry_id', teIds);
+        if (allocs) {
+          for (const a of allocs) {
+            const p = a.projects as any;
+            if (!p) continue;
+            if (!allocMap[a.time_entry_id]) allocMap[a.time_entry_id] = [];
+            if (!allocMap[a.time_entry_id].some(x => x.id === p.id)) {
+              allocMap[a.time_entry_id].push({ id: p.id, name: p.name });
+            }
+          }
+        }
+      }
 
       const { data: profiles } = await supabase
         .from('profiles')
@@ -89,7 +109,15 @@ export const useLiveReports = () => {
         }
         employeeHours[entry.user_id].hours += (minutes || 0) / 60;
 
-        if (entry.projects) {
+        // Use timecard_allocations projects first, fall back to time_entries.projects
+        const allocProjects = allocMap[entry.id];
+        if (allocProjects && allocProjects.length > 0) {
+          const perProjHours = (minutes || 0) / 60 / allocProjects.length;
+          for (const proj of allocProjects) {
+            if (!projectHours[proj.id]) projectHours[proj.id] = { id: proj.id, name: proj.name, hours: 0 };
+            projectHours[proj.id].hours += perProjHours;
+          }
+        } else if (entry.projects) {
           const project = entry.projects;
           if (!projectHours[project.id]) {
             projectHours[project.id] = { id: project.id, name: project.name, hours: 0 };
