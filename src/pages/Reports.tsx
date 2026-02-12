@@ -916,6 +916,26 @@ const Reports = () => {
         .lte('start_time', endOfDay.toISOString())
         .order('start_time', { ascending: false });
 
+      // Fetch timecard_allocations for project names on modern entries
+      const dailyEntryIds = (timeEntries || []).map(e => e.id);
+      let dailyAllocProjectMap: Record<string, string> = {};
+      if (dailyEntryIds.length > 0) {
+        const { data: allocs } = await supabase
+          .from('timecard_allocations')
+          .select('time_entry_id, projects:project_id(name)')
+          .in('time_entry_id', dailyEntryIds);
+        if (allocs) {
+          for (const a of allocs) {
+            const p = a.projects as any;
+            if (p?.name && !dailyAllocProjectMap[a.time_entry_id]) {
+              dailyAllocProjectMap[a.time_entry_id] = p.name;
+            } else if (p?.name && dailyAllocProjectMap[a.time_entry_id] && !dailyAllocProjectMap[a.time_entry_id].includes(p.name)) {
+              dailyAllocProjectMap[a.time_entry_id] += `, ${p.name}`;
+            }
+          }
+        }
+      }
+
       // Map entries with employee names and filter
       let entries = (timeEntries || []).map((entry: any) => {
         const profile = entry.profile_id 
@@ -928,7 +948,7 @@ const Reports = () => {
           ...entry,
           employeeName,
           employeeNumber: profile?.employee_id || null,
-          projectName: entry.projects?.name || null,
+          projectName: dailyAllocProjectMap[entry.id] || entry.projects?.name || null,
           departmentId: profile?.department_id,
           profileId: entry.profile_id || profile?.id
         };
@@ -977,6 +997,26 @@ const Reports = () => {
         .lte('start_time', end.toISOString())
         .order('start_time', { ascending: false });
 
+      // Fetch timecard_allocations for project names on modern entries
+      const detailEntryIds = (timeEntries || []).map(e => e.id);
+      let detailAllocProjectMap: Record<string, string> = {};
+      if (detailEntryIds.length > 0) {
+        const { data: allocs } = await supabase
+          .from('timecard_allocations')
+          .select('time_entry_id, projects:project_id(name)')
+          .in('time_entry_id', detailEntryIds);
+        if (allocs) {
+          for (const a of allocs) {
+            const p = a.projects as any;
+            if (p?.name && !detailAllocProjectMap[a.time_entry_id]) {
+              detailAllocProjectMap[a.time_entry_id] = p.name;
+            } else if (p?.name && detailAllocProjectMap[a.time_entry_id] && !detailAllocProjectMap[a.time_entry_id].includes(p.name)) {
+              detailAllocProjectMap[a.time_entry_id] += `, ${p.name}`;
+            }
+          }
+        }
+      }
+
       // Map entries with employee names and filter
       let entries = (timeEntries || []).map((entry: any) => {
         const profile = entry.profile_id 
@@ -989,7 +1029,7 @@ const Reports = () => {
           ...entry,
           employeeName,
           employeeNumber: profile?.employee_id || null,
-          projectName: entry.projects?.name || null,
+          projectName: detailAllocProjectMap[entry.id] || entry.projects?.name || null,
           departmentId: profile?.department_id,
           profileId: entry.profile_id || profile?.id
         };
