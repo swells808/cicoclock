@@ -13,7 +13,7 @@ serve(async (req) => {
   }
 
   try {
-    const { action, profile_id, company_id, photo_url, time_entry_id, latitude, longitude, address } = await req.json();
+    const { action, profile_id, company_id, photo_url, time_entry_id, latitude, longitude, address, injury_reported } = await req.json();
 
     console.log('Clock in/out request:', { action, profile_id, company_id, time_entry_id });
 
@@ -142,16 +142,21 @@ serve(async (req) => {
       const durationMinutes = Math.floor((endTime.getTime() - startTime.getTime()) / 60000);
 
       // Update the time entry
-      const { data: updatedEntry, error: updateError } = await supabase
-        .from('time_entries')
-        .update({
+      const updatePayload: Record<string, unknown> = {
           end_time: endTime.toISOString(),
           duration_minutes: durationMinutes,
           clock_out_photo_url: photo_url || null,
           clock_out_latitude: latitude || null,
           clock_out_longitude: longitude || null,
           clock_out_address: address || null,
-        })
+      };
+      if (typeof injury_reported === 'boolean') {
+        updatePayload.injury_reported = injury_reported;
+      }
+
+      const { data: updatedEntry, error: updateError } = await supabase
+        .from('time_entries')
+        .update(updatePayload)
         .eq('id', entryId)
         .select()
         .single();
