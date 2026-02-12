@@ -29,7 +29,14 @@ const Timeclock = () => {
 
   const [currentTime, setCurrentTime] = useState(new Date());
   const [selectedEmployee, setSelectedEmployee] = useState("");
-  const [authenticatedEmployee, setAuthenticatedEmployee] = useState<any>(null);
+  const [authenticatedEmployee, _setAuthenticatedEmployee] = useState<any>(null);
+  const authenticatedEmployeeRef = useRef<any>(null);
+  const companyRef = useRef<any>(company);
+  companyRef.current = company;
+  const setAuthenticatedEmployee = (emp: any) => {
+    authenticatedEmployeeRef.current = emp;
+    _setAuthenticatedEmployee(emp);
+  };
   const [showPasswordDialog, setShowPasswordDialog] = useState(false);
   const [showPinInput, setShowPinInput] = useState(false);
   const [showBadgeScanner, setShowBadgeScanner] = useState(false);
@@ -329,12 +336,13 @@ const Timeclock = () => {
   };
 
   const uploadPhoto = async (photoBlob: Blob, action: 'clock_in' | 'clock_out'): Promise<string> => {
-    if (!company || !authenticatedEmployee) throw new Error('Company or employee not found');
+    const comp = companyRef.current;
+    const emp = authenticatedEmployeeRef.current;
+    if (!comp || !emp) throw new Error('Company or employee not found');
     const timestamp = new Date().toISOString().replace(/:/g, '-').replace(/\./g, '-');
-    // Use profile id (always available) instead of user_id (may be null)
-    const identifier = (authenticatedEmployee.id || authenticatedEmployee.user_id || 'unknown').toUpperCase();
+    const identifier = (emp.id || emp.user_id || 'unknown').toUpperCase();
     const actionPath = action === 'clock_in' ? 'clock-in' : 'clock-out';
-    const filePath = `${company.id}/${actionPath}/${timestamp}_${identifier}.jpg`;
+    const filePath = `${comp.id}/${actionPath}/${timestamp}_${identifier}.jpg`;
     const { error } = await supabase.storage.from('timeclock-photos').upload(filePath, photoBlob, { contentType: 'image/jpeg', upsert: false });
     if (error) throw error;
     return filePath;
@@ -504,7 +512,9 @@ const Timeclock = () => {
   };
 
   const performClockIn = async (photoUrl?: string, photoBlob?: Blob) => {
-    if (!authenticatedEmployee || !company) return;
+    const emp = authenticatedEmployeeRef.current;
+    const comp = companyRef.current;
+    if (!emp || !comp) return;
     setIsProcessing(true);
     
     const location = await getCurrentLocation();
@@ -512,8 +522,8 @@ const Timeclock = () => {
     const { data, error } = await supabase.functions.invoke('clock-in-out', {
       body: {
         action: 'clock_in',
-        profile_id: authenticatedEmployee.id,
-        company_id: company.id,
+        profile_id: emp.id,
+        company_id: comp.id,
         photo_url: photoUrl,
         latitude: location.latitude || null,
         longitude: location.longitude || null,
@@ -523,7 +533,7 @@ const Timeclock = () => {
     
     if (error || !data?.success) { 
       console.error('[Timeclock] Clock in failed:', error || data?.error);
-      const employeeName = authenticatedEmployee.display_name || authenticatedEmployee.first_name || "Employee";
+      const employeeName = emp.display_name || emp.first_name || "Employee";
       showStatusOverlay("error", employeeName, data?.error || "Clock in failed. Please try again.");
       setIsProcessing(false);
       return; 
@@ -534,7 +544,7 @@ const Timeclock = () => {
       runFaceVerification(data.data.id, photoBlob, photoUrl).catch(console.error);
     }
 
-    const employeeName = authenticatedEmployee.display_name || authenticatedEmployee.first_name || "Employee";
+    const employeeName = emp.display_name || emp.first_name || "Employee";
     showStatusOverlay("clock_in", employeeName);
     setIsProcessing(false);
   };
@@ -550,18 +560,20 @@ const Timeclock = () => {
 
   const performClockOut = async (photoUrl?: string, photoBlob?: Blob) => {
     const currentEntry = activeTimeEntryRef.current;
+    const emp = authenticatedEmployeeRef.current;
+    const comp = companyRef.current;
     console.log('[Timeclock] performClockOut called', {
       currentEntry: !!currentEntry,
       currentEntryId: currentEntry?.id,
-      authenticatedEmployee: !!authenticatedEmployee,
-      company: !!company,
+      authenticatedEmployee: !!emp,
+      company: !!comp,
       photoUrl: !!photoUrl,
     });
-    if (!currentEntry || !authenticatedEmployee || !company) {
+    if (!currentEntry || !emp || !comp) {
       console.error('[Timeclock] performClockOut ABORTED - missing data', {
         currentEntry: !!currentEntry,
-        authenticatedEmployee: !!authenticatedEmployee,
-        company: !!company,
+        authenticatedEmployee: !!emp,
+        company: !!comp,
       });
       return;
     }
@@ -582,7 +594,12 @@ const Timeclock = () => {
     injuryReported: boolean
   ) => {
     const currentEntry = activeTimeEntryRef.current;
-    if (!currentEntry || !authenticatedEmployee || !company) return;
+    const emp = authenticatedEmployeeRef.current;
+    const comp = companyRef.current;
+    if (!currentEntry || !emp || !comp) {
+      console.error('[Timeclock] finalizeClockOut ABORTED - missing data');
+      return;
+    }
     setShowTimecardDialog(false);
     setIsProcessing(true);
     
@@ -591,8 +608,8 @@ const Timeclock = () => {
     const { data, error } = await supabase.functions.invoke('clock-in-out', {
       body: {
         action: 'clock_out',
-        profile_id: authenticatedEmployee.id,
-        company_id: company.id,
+        profile_id: emp.id,
+        company_id: comp.id,
         time_entry_id: currentEntry.id,
         photo_url: pendingClockOutPhotoUrl,
         latitude: location.latitude || null,
@@ -604,7 +621,7 @@ const Timeclock = () => {
     
     if (error || !data?.success) { 
       console.error('[Timeclock] Clock out failed:', error || data?.error);
-      const employeeName = authenticatedEmployee.display_name || authenticatedEmployee.first_name || "Employee";
+      const employeeName = emp.display_name || emp.first_name || "Employee";
       showStatusOverlay("error", employeeName, data?.error || "Clock out failed. Please try again.");
       setIsProcessing(false);
       return; 
@@ -615,8 +632,8 @@ const Timeclock = () => {
     const allocationRows = allocations.map((a) => ({
       time_entry_id: timeEntryId,
       project_id: a.projectId || null,
-      company_id: company.id,
-      profile_id: authenticatedEmployee.id,
+      company_id: comp.id,
+      profile_id: emp.id,
       material_handling: a.materialHandling,
       processing_cutting: a.processCut,
       fabrication_fitup_weld: a.fitupWeld,
@@ -632,7 +649,7 @@ const Timeclock = () => {
       runFaceVerification(timeEntryId, pendingClockOutPhotoBlob, pendingClockOutPhotoUrl).catch(console.error);
     }
 
-    const employeeName = authenticatedEmployee.display_name || authenticatedEmployee.first_name || "Employee";
+    const employeeName = emp.display_name || emp.first_name || "Employee";
     showStatusOverlay("clock_out", employeeName);
     setIsProcessing(false);
     setPendingClockOutPhotoUrl(undefined);
