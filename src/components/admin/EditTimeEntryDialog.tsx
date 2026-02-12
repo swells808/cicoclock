@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from "react";
 import { format } from "date-fns";
-import { Clock } from "lucide-react";
+import { Clock, Trash2 } from "lucide-react";
 import {
   Dialog,
   DialogContent,
@@ -9,6 +9,16 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -48,6 +58,8 @@ export const EditTimeEntryDialog: React.FC<EditTimeEntryDialogProps> = ({
   const [endTime, setEndTime] = useState("");
   const [reason, setReason] = useState("");
   const [isLoading, setIsLoading] = useState(false);
+  const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
+  const [isDeleting, setIsDeleting] = useState(false);
 
   useEffect(() => {
     if (entry) {
@@ -93,7 +105,6 @@ export const EditTimeEntryDialog: React.FC<EditTimeEntryDialogProps> = ({
         newEndTime.setHours(endHours, endMins, 0, 0);
       }
 
-      // Use the edge function for time entry edits
       const response = await supabase.functions.invoke("admin-retroactive-clockout", {
         body: {
           time_entry_id: entry.id,
@@ -116,93 +127,149 @@ export const EditTimeEntryDialog: React.FC<EditTimeEntryDialogProps> = ({
     }
   };
 
+  const handleDelete = async () => {
+    if (!entry) return;
+
+    setIsDeleting(true);
+    try {
+      const { error } = await supabase
+        .from('time_entries')
+        .delete()
+        .eq('id', entry.id);
+
+      if (error) throw error;
+
+      toast.success("Time entry deleted successfully");
+      setShowDeleteConfirm(false);
+      onOpenChange(false);
+      onSuccess();
+    } catch (error) {
+      toast.error("Failed to delete: " + (error instanceof Error ? error.message : "Unknown error"));
+    } finally {
+      setIsDeleting(false);
+    }
+  };
+
   const todayStr = format(new Date(), "yyyy-MM-dd");
 
   return (
-    <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="sm:max-w-[500px]">
-        <DialogHeader>
-          <DialogTitle className="text-foreground">Edit Time Entry</DialogTitle>
-          <DialogDescription>
-            Modify the time entry for {getDisplayName()}.
-          </DialogDescription>
-        </DialogHeader>
+    <>
+      <Dialog open={open} onOpenChange={onOpenChange}>
+        <DialogContent className="sm:max-w-[500px]">
+          <DialogHeader>
+            <DialogTitle className="text-foreground">Edit Time Entry</DialogTitle>
+            <DialogDescription>
+              Modify the time entry for {getDisplayName()}.
+            </DialogDescription>
+          </DialogHeader>
 
-        <div className="grid gap-4 py-4">
-          {/* Start Time Section */}
-          <div className="space-y-2">
-            <Label className="text-foreground font-medium">Clock In</Label>
-            <div className="grid grid-cols-2 gap-2">
-              <Input
-                type="date"
-                value={startDate}
-                onChange={(e) => setStartDate(e.target.value)}
-                max={todayStr}
-              />
-              <div className="relative">
-                <Clock className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+          <div className="grid gap-4 py-4">
+            {/* Start Time Section */}
+            <div className="space-y-2">
+              <Label className="text-foreground font-medium">Clock In</Label>
+              <div className="grid grid-cols-2 gap-2">
                 <Input
-                  type="time"
-                  value={startTime}
-                  onChange={(e) => setStartTime(e.target.value)}
-                  className="pl-10"
+                  type="date"
+                  value={startDate}
+                  onChange={(e) => setStartDate(e.target.value)}
+                  max={todayStr}
                 />
+                <div className="relative">
+                  <Clock className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+                  <Input
+                    type="time"
+                    value={startTime}
+                    onChange={(e) => setStartTime(e.target.value)}
+                    className="pl-10"
+                  />
+                </div>
               </div>
+            </div>
+
+            {/* End Time Section */}
+            <div className="space-y-2">
+              <Label className="text-foreground font-medium">Clock Out</Label>
+              <div className="grid grid-cols-2 gap-2">
+                <Input
+                  type="date"
+                  value={endDate}
+                  onChange={(e) => setEndDate(e.target.value)}
+                  min={startDate || undefined}
+                  max={todayStr}
+                />
+                <div className="relative">
+                  <Clock className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+                  <Input
+                    type="time"
+                    value={endTime}
+                    onChange={(e) => setEndTime(e.target.value)}
+                    className="pl-10"
+                    placeholder="--:--"
+                  />
+                </div>
+              </div>
+            </div>
+
+            {/* Reason */}
+            <div className="space-y-2">
+              <Label htmlFor="reason" className="text-foreground font-medium">
+                Reason for Adjustment
+              </Label>
+              <Textarea
+                id="reason"
+                placeholder="Enter the reason for this time adjustment..."
+                value={reason}
+                onChange={(e) => setReason(e.target.value)}
+                rows={3}
+              />
             </div>
           </div>
 
-          {/* End Time Section */}
-          <div className="space-y-2">
-            <Label className="text-foreground font-medium">Clock Out</Label>
-            <div className="grid grid-cols-2 gap-2">
-              <Input
-                type="date"
-                value={endDate}
-                onChange={(e) => setEndDate(e.target.value)}
-                min={startDate || undefined}
-                max={todayStr}
-              />
-              <div className="relative">
-                <Clock className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-                <Input
-                  type="time"
-                  value={endTime}
-                  onChange={(e) => setEndTime(e.target.value)}
-                  className="pl-10"
-                  placeholder="--:--"
-                />
-              </div>
+          <DialogFooter className="flex justify-between sm:justify-between">
+            <Button
+              variant="destructive"
+              onClick={() => setShowDeleteConfirm(true)}
+              disabled={isLoading}
+            >
+              <Trash2 className="h-4 w-4 mr-2" />
+              Delete
+            </Button>
+            <div className="flex gap-2">
+              <Button
+                variant="outline"
+                onClick={() => onOpenChange(false)}
+                disabled={isLoading}
+              >
+                Cancel
+              </Button>
+              <Button onClick={handleSave} disabled={isLoading || !startDate}>
+                {isLoading ? "Saving..." : "Save Changes"}
+              </Button>
             </div>
-          </div>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
 
-          {/* Reason */}
-          <div className="space-y-2">
-            <Label htmlFor="reason" className="text-foreground font-medium">
-              Reason for Adjustment
-            </Label>
-            <Textarea
-              id="reason"
-              placeholder="Enter the reason for this time adjustment..."
-              value={reason}
-              onChange={(e) => setReason(e.target.value)}
-              rows={3}
-            />
-          </div>
-        </div>
-
-        <DialogFooter>
-          <Button
-            variant="outline"
-            onClick={() => onOpenChange(false)}
-            disabled={isLoading}
-          >
-            Cancel
-          </Button>
-          <Button onClick={handleSave} disabled={isLoading || !startDate}>
-            {isLoading ? "Saving..." : "Save Changes"}
-          </Button>
-        </DialogFooter>
-      </DialogContent>
-    </Dialog>
+      <AlertDialog open={showDeleteConfirm} onOpenChange={setShowDeleteConfirm}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Are you sure?</AlertDialogTitle>
+            <AlertDialogDescription>
+              This will permanently delete the time entry for {getDisplayName()}. This action cannot be undone.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel disabled={isDeleting}>Cancel</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={handleDelete}
+              disabled={isDeleting}
+              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+            >
+              {isDeleting ? "Deleting..." : "Delete"}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+    </>
   );
 };
