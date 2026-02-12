@@ -1266,6 +1266,7 @@ export type Database = {
           duration_minutes: number | null
           end_time: string | null
           id: string
+          injury_reported: boolean | null
           is_break: boolean
           profile_id: string | null
           project_id: string | null
@@ -1288,6 +1289,7 @@ export type Database = {
           duration_minutes?: number | null
           end_time?: string | null
           id?: string
+          injury_reported?: boolean | null
           is_break?: boolean
           profile_id?: string | null
           project_id?: string | null
@@ -1310,6 +1312,7 @@ export type Database = {
           duration_minutes?: number | null
           end_time?: string | null
           id?: string
+          injury_reported?: boolean | null
           is_break?: boolean
           profile_id?: string | null
           project_id?: string | null
@@ -1442,6 +1445,84 @@ export type Database = {
             columns: ["reviewed_by"]
             isOneToOne: false
             referencedRelation: "profiles_public"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      timecard_allocations: {
+        Row: {
+          company_id: string
+          created_at: string
+          fabrication_fitup_weld: number
+          finishes: number
+          id: string
+          material_handling: number
+          other: number
+          processing_cutting: number
+          profile_id: string
+          project_id: string | null
+          time_entry_id: string
+        }
+        Insert: {
+          company_id: string
+          created_at?: string
+          fabrication_fitup_weld?: number
+          finishes?: number
+          id?: string
+          material_handling?: number
+          other?: number
+          processing_cutting?: number
+          profile_id: string
+          project_id?: string | null
+          time_entry_id: string
+        }
+        Update: {
+          company_id?: string
+          created_at?: string
+          fabrication_fitup_weld?: number
+          finishes?: number
+          id?: string
+          material_handling?: number
+          other?: number
+          processing_cutting?: number
+          profile_id?: string
+          project_id?: string | null
+          time_entry_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "timecard_allocations_company_id_fkey"
+            columns: ["company_id"]
+            isOneToOne: false
+            referencedRelation: "companies"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "timecard_allocations_profile_id_fkey"
+            columns: ["profile_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "timecard_allocations_profile_id_fkey"
+            columns: ["profile_id"]
+            isOneToOne: false
+            referencedRelation: "profiles_public"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "timecard_allocations_project_id_fkey"
+            columns: ["project_id"]
+            isOneToOne: false
+            referencedRelation: "projects"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "timecard_allocations_time_entry_id_fkey"
+            columns: ["time_entry_id"]
+            isOneToOne: false
+            referencedRelation: "time_entries"
             referencedColumns: ["id"]
           },
         ]

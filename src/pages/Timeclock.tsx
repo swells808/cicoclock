@@ -17,6 +17,7 @@ import { PhotoCapture } from "@/components/timeclock/PhotoCapture";
 import { useUserRole } from "@/hooks/useUserRole";
 import { ClockStatusOverlay, ClockStatusType } from "@/components/timeclock/ClockStatusOverlay";
 import { verifyFace, formatEmbeddingForPgvector } from "@/lib/faceVerification";
+import { ShiftTimecardDialog } from "@/components/timeclock/ShiftTimecardDialog";
 
 const Timeclock = () => {
   const navigate = useNavigate();
@@ -50,9 +51,25 @@ const Timeclock = () => {
   const [clockStatusOverlay, setClockStatusOverlay] = useState<ClockStatusType>(null);
   const [clockStatusMessage, setClockStatusMessage] = useState<string>("");
   const [clockStatusName, setClockStatusName] = useState<string>("");
+  const [showTimecardDialog, setShowTimecardDialog] = useState(false);
+  const [pendingClockOutPhotoUrl, setPendingClockOutPhotoUrl] = useState<string | undefined>();
+  const [pendingClockOutPhotoBlob, setPendingClockOutPhotoBlob] = useState<Blob | undefined>();
+  const [companyProjects, setCompanyProjects] = useState<{ id: string; name: string; project_number?: string | null }[]>([]);
   
   // Track if we've already triggered auto-clock for this authenticated employee
   const autoClockTriggeredRef = useRef<string | null>(null);
+
+  // Fetch active projects for timecard dialog
+  useEffect(() => {
+    if (!company?.id) return;
+    supabase
+      .from('projects')
+      .select('id, name, project_number')
+      .eq('company_id', company.id)
+      .eq('is_active', true)
+      .order('name')
+      .then(({ data }) => { if (data) setCompanyProjects(data); });
+  }, [company?.id]);
 
   useEffect(() => {
     const timer = setInterval(() => setCurrentTime(new Date()), 1000);
@@ -518,6 +535,19 @@ const Timeclock = () => {
 
   const performClockOut = async (photoUrl?: string, photoBlob?: Blob) => {
     if (!activeTimeEntry || !authenticatedEmployee || !company) return;
+    // Instead of clocking out immediately, show the timecard dialog
+    setPendingClockOutPhotoUrl(photoUrl);
+    setPendingClockOutPhotoBlob(photoBlob);
+    setShowTimecardDialog(true);
+  };
+
+  // Actually finalize the clock-out after timecard submission
+  const finalizeClockOut = async (
+    allocations: { projectId: string; materialHandling: number; processCut: number; fitupWeld: number; finishes: number; other: number }[],
+    injuryReported: boolean
+  ) => {
+    if (!activeTimeEntry || !authenticatedEmployee || !company) return;
+    setShowTimecardDialog(false);
     setIsProcessing(true);
     
     const location = await getCurrentLocation();
@@ -528,10 +558,11 @@ const Timeclock = () => {
         profile_id: authenticatedEmployee.id,
         company_id: company.id,
         time_entry_id: activeTimeEntry.id,
-        photo_url: photoUrl,
+        photo_url: pendingClockOutPhotoUrl,
         latitude: location.latitude || null,
         longitude: location.longitude || null,
-        address: location.address
+        address: location.address,
+        injury_reported: injuryReported,
       }
     });
     
@@ -543,13 +574,39 @@ const Timeclock = () => {
       return; 
     }
     
+    // Insert timecard allocations
+    const timeEntryId = data.data?.id || activeTimeEntry.id;
+    const allocationRows = allocations.map((a) => ({
+      time_entry_id: timeEntryId,
+      project_id: a.projectId || null,
+      company_id: company.id,
+      profile_id: authenticatedEmployee.id,
+      material_handling: a.materialHandling,
+      processing_cutting: a.processCut,
+      fabrication_fitup_weld: a.fitupWeld,
+      finishes: a.finishes,
+      other: a.other,
+    }));
+
+    const { error: allocError } = await supabase.from('timecard_allocations').insert(allocationRows);
+    if (allocError) console.error('[Timeclock] Allocation insert error:', allocError);
+
     // Fire-and-forget face verification (client-side)
-    if (photoUrl && photoBlob && data.data?.id) {
-      runFaceVerification(data.data.id, photoBlob, photoUrl).catch(console.error);
+    if (pendingClockOutPhotoUrl && pendingClockOutPhotoBlob && timeEntryId) {
+      runFaceVerification(timeEntryId, pendingClockOutPhotoBlob, pendingClockOutPhotoUrl).catch(console.error);
     }
 
     const employeeName = authenticatedEmployee.display_name || authenticatedEmployee.first_name || "Employee";
     showStatusOverlay("clock_out", employeeName);
+    setIsProcessing(false);
+    setPendingClockOutPhotoUrl(undefined);
+    setPendingClockOutPhotoBlob(undefined);
+  };
+
+  const handleTimecardCancel = () => {
+    setShowTimecardDialog(false);
+    setPendingClockOutPhotoUrl(undefined);
+    setPendingClockOutPhotoBlob(undefined);
     setIsProcessing(false);
   };
 
@@ -663,6 +720,17 @@ const Timeclock = () => {
         message={clockStatusMessage}
         onDismiss={handleStatusDismiss}
         autoDismissMs={2500}
+      />
+      <ShiftTimecardDialog
+        open={showTimecardDialog}
+        onSubmit={finalizeClockOut}
+        onCancel={handleTimecardCancel}
+        totalShiftHours={
+          activeTimeEntry?.start_time
+            ? +((Date.now() - new Date(activeTimeEntry.start_time).getTime()) / 3600000).toFixed(2)
+            : 0
+        }
+        projects={companyProjects}
       />
     </div>
   );
