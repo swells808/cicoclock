@@ -330,7 +330,15 @@ const Projects = () => {
                               Edit Job
                             </DropdownMenuItem>
                             <DropdownMenuSeparator />
-                            <DropdownMenuItem className="text-red-600">Archive</DropdownMenuItem>
+                            <DropdownMenuItem
+                              className="text-red-600"
+                              onClick={() => updateProject(
+                                { id: project.id, is_active: false },
+                                { onSuccess: () => refetch() }
+                              )}
+                            >
+                              Archive
+                            </DropdownMenuItem>
                           </DropdownMenuContent>
                         </DropdownMenu>
                       </td>
