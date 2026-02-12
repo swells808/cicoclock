@@ -42,9 +42,9 @@ export const TimeclockMainCard: React.FC<TimeclockMainCardProps> = ({
         {authenticatedEmployee ? (
           <div className="bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-800 rounded-md p-3">
             <p className="text-green-800 dark:text-green-200 font-medium">{authenticatedEmployee.display_name}</p>
-            <p className="text-green-600 dark:text-green-400 text-sm">Authenticated</p>
+            <p className="text-green-600 dark:text-green-400 text-sm">{t("timeclock.authenticated")}</p>
             <p className="text-green-700 dark:text-green-300 text-xs mt-1 font-semibold">
-              Status: {clockStatus === 'in' ? 'Clocked In' : 'Clocked Out'}
+              {clockStatus === 'in' ? t("timeclock.clockedIn") : t("timeclock.clockedOut")}
             </p>
           </div>
         ) : (
@@ -61,7 +61,7 @@ export const TimeclockMainCard: React.FC<TimeclockMainCardProps> = ({
               className="w-full"
             >
               <QrCode className="w-4 h-4 mr-2" />
-              Scan Badge
+              {t("timeclock.scanBadge")}
             </Button>
           )}
 
@@ -72,7 +72,7 @@ export const TimeclockMainCard: React.FC<TimeclockMainCardProps> = ({
               className="w-full"
             >
               <User className="w-4 h-4 mr-2" />
-              Enter ID or Phone
+              {t("timeclock.enterIdOrPhone")}
             </Button>
           )}
         </div>
@@ -85,7 +85,7 @@ export const TimeclockMainCard: React.FC<TimeclockMainCardProps> = ({
             onClick={() => setSelectedEmployee("")}
             size="sm"
           >
-            Switch Employee
+            {t("timeclock.switchEmployee")}
           </Button>
         </div>
       )}

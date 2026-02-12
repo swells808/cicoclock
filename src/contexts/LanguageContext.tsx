@@ -102,6 +102,10 @@ const translations: Record<Language, Record<string, string>> = {
     'timeclock.onBreak': 'On Break',
     'timeclock.startBreak': 'Start Break',
     'timeclock.endBreak': 'End Break',
+    'timeclock.scanBadge': 'Scan Badge',
+    'timeclock.enterIdOrPhone': 'Enter ID or Phone',
+    'timeclock.switchEmployee': 'Switch Employee',
+    'timeclock.authenticated': 'Authenticated',
 
     // Dashboard
     'dashboard.title': 'Dashboard',
@@ -337,6 +341,10 @@ const translations: Record<Language, Record<string, string>> = {
     'timeclock.onBreak': 'En Descanso',
     'timeclock.startBreak': 'Iniciar Descanso',
     'timeclock.endBreak': 'Terminar Descanso',
+    'timeclock.scanBadge': 'Escanear Credencial',
+    'timeclock.enterIdOrPhone': 'Ingresar ID o Teléfono',
+    'timeclock.switchEmployee': 'Cambiar Empleado',
+    'timeclock.authenticated': 'Autenticado',
 
     // Dashboard
     'dashboard.title': 'Panel',
@@ -572,6 +580,10 @@ const translations: Record<Language, Record<string, string>> = {
     'timeclock.onBreak': 'En Pause',
     'timeclock.startBreak': 'Commencer la Pause',
     'timeclock.endBreak': 'Terminer la Pause',
+    'timeclock.scanBadge': 'Scanner le Badge',
+    'timeclock.enterIdOrPhone': 'Entrer ID ou Téléphone',
+    'timeclock.switchEmployee': 'Changer d\'Employé',
+    'timeclock.authenticated': 'Authentifié',
 
     // Dashboard
     'dashboard.title': 'Tableau de Bord',
