@@ -1,38 +1,84 @@
 
 
-## Fix Scheduled Reports Timezone Matching
+# Shift Summary & Time Card -- Clock-Out Pop-up
 
-**The Problem:** The `process-scheduled-reports` edge function compares the current UTC hour against `schedule_time`, which is stored in the user's local time. A report scheduled for 12:05 AM Pacific fires at 12:00 AM UTC (which is 4:00 PM or 5:00 PM Pacific, depending on DST).
+## Overview
+When an employee clocks out on the Timeclock page, a modal dialog will appear asking them to allocate their shift hours across jobs and task categories before the clock-out is finalized. This matches the provided visual reference.
 
-**The Fix:** Remove the UTC-based time window filter from the database query. Instead, fetch all active reports and filter them in code by converting the current time to each company's timezone before comparing.
+## What You Will See
+- After an employee triggers clock-out (and photo capture if enabled), a "Shift Summary & Time Card" dialog appears
+- The dialog shows **Total Shift Hours** (calculated from clock-in to now)
+- A table where the employee selects jobs from a dropdown and enters hours per task category: Material Handling, Processing & Cutting, Fabrication Fitup/Weld, Finishes, Other
+- An "Add Another Job" button to add rows
+- A "Safety Check" section with Yes/No radio buttons for injury reporting
+- An "Unallocated Time" counter that shows remaining hours (green = 0, red = over, black = under)
+- Cancel and Submit buttons
 
-### Technical Details
+## Flow Change
+Currently: Employee authenticates -> Clock Out -> (optional photo) -> clock-out completes -> success overlay
 
-**File:** `supabase/functions/process-scheduled-reports/index.ts`
+New flow: Employee authenticates -> Clock Out -> (optional photo) -> **Time Card dialog appears** -> Employee fills out allocations -> Submit -> clock-out completes -> success overlay
 
-**Changes at lines ~1400-1441:**
+If the employee clicks Cancel, the clock-out is abandoned (no time entry is closed).
 
-1. Remove the UTC hour-based `gte`/`lte` filter on `schedule_time` from the database query. Instead, fetch all active reports joined with their company timezone.
+---
 
-2. For each report, determine the current time **in the company's timezone** and check:
-   - Does the current local hour match the report's `schedule_time` hour?
-   - Does the current local day-of-week / day-of-month match for weekly/monthly reports?
+## Technical Details
 
-The revised logic:
+### 1. New Component: `ShiftTimecardDialog`
+**File:** `src/components/timeclock/ShiftTimecardDialog.tsx`
+
+- A Dialog component using the existing Radix UI Dialog
+- Props: `open`, `onSubmit`, `onCancel`, `totalShiftHours`, `projects` (list of active projects for the job dropdown), `companyId`, `profileId`
+- Local state for job allocation rows: `Array<{ projectId: string, materialHandling: number, processCut: number, fitupWeld: number, finishes: number, other: number }>`
+- Local state for `injuredDuringShift: boolean | null`
+- Computed: `allocatedHours` = sum of all entered hours across all rows
+- Computed: `unallocatedHours` = totalShiftHours - allocatedHours
+- Color logic: unallocatedHours === 0 -> green, > 0 -> black (under-allocated), < 0 -> red (over-allocated)
+- Submit is disabled until unallocatedHours === 0 and injury question is answered
+
+### 2. New Database Table: `timecard_allocations`
+A new migration to store the time card data:
 
 ```text
-1. Query: SELECT all active scheduled_reports joined with companies(timezone)
-2. For each report:
-   a. Get company timezone (e.g., "America/Los_Angeles")
-   b. Convert "now" to that timezone to get local hour, day-of-week, day-of-month
-   c. Parse the report's schedule_time (e.g., "00:05") to get the scheduled hour
-   d. If current local hour != scheduled hour, skip
-   e. If weekly and current local day-of-week != schedule_day_of_week, skip
-   f. If monthly and current local day-of-month != schedule_day_of_month, skip
-   g. Otherwise, process and send the report
+timecard_allocations
+- id (uuid, PK)
+- time_entry_id (uuid, FK to time_entries)
+- project_id (uuid, FK to projects, nullable)
+- company_id (uuid)
+- profile_id (uuid)
+- material_handling (numeric, default 0)
+- processing_cutting (numeric, default 0)
+- fabrication_fitup_weld (numeric, default 0)
+- finishes (numeric, default 0)
+- other (numeric, default 0)
+- created_at (timestamptz)
 ```
 
-This ensures a report scheduled for 12:05 AM Pacific only fires when it is actually midnight in Pacific time, regardless of the server's UTC clock.
+And a column on `time_entries`:
+- `injury_reported` (boolean, nullable)
 
-No database changes are needed.
+RLS policies:
+- Users can insert allocations for their company
+- Users can view allocations in their company
+- Admins can manage all allocations in their company
+
+### 3. Modify `Timeclock.tsx` -- Clock-Out Flow
+- Add state: `showTimecardDialog: boolean`, `pendingClockOutData` (to hold photoUrl/photoBlob while dialog is open)
+- Fetch active projects using the existing `useActiveProjects` hook
+- In `performClockOut`: instead of immediately calling the edge function, show the timecard dialog first
+- On timecard submit: call the clock-out edge function, then insert `timecard_allocations` rows, then show success overlay
+- On timecard cancel: abort clock-out, reset state
+
+### 4. Update `clock-in-out` Edge Function
+- Accept optional `injury_reported` boolean in the clock-out payload
+- Write it to `time_entries.injury_reported` during the update
+
+### 5. Files Changed
+| File | Action |
+|------|--------|
+| `src/components/timeclock/ShiftTimecardDialog.tsx` | New component |
+| `src/pages/Timeclock.tsx` | Integrate dialog into clock-out flow |
+| `supabase/migrations/[new].sql` | Create `timecard_allocations` table, add `injury_reported` column to `time_entries`, RLS policies |
+| `supabase/functions/clock-in-out/index.ts` | Accept and store `injury_reported` |
 
