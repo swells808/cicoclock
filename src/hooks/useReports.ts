@@ -58,6 +58,7 @@ export const useReports = (startDate?: Date, endDate?: Date) => {
       const { data: rawTimeEntries, error: timeError } = await supabase
         .from('time_entries')
         .select(`
+          id,
           duration_minutes,
           start_time,
           end_time,
@@ -65,6 +66,7 @@ export const useReports = (startDate?: Date, endDate?: Date) => {
           profile_id,
           clock_in_photo_url,
           clock_out_photo_url,
+          project_id,
           projects(id, name, status)
         `)
         .eq('company_id', company.id)
@@ -72,6 +74,35 @@ export const useReports = (startDate?: Date, endDate?: Date) => {
         .lte('start_time', end.toISOString());
 
       if (timeError) throw timeError;
+
+      // Fetch timecard_allocations to get project data for modern entries
+      const timeEntryIds = rawTimeEntries?.map(e => e.id).filter(Boolean) || [];
+      let allocationsMap: Record<string, { projectId: string; projectName: string; projectStatus?: string }[]> = {};
+      
+      if (timeEntryIds.length > 0) {
+        const { data: allocations } = await supabase
+          .from('timecard_allocations')
+          .select('time_entry_id, project_id, projects:project_id(id, name, status)')
+          .in('time_entry_id', timeEntryIds);
+
+        if (allocations) {
+          for (const alloc of allocations) {
+            const proj = alloc.projects as any;
+            if (!proj) continue;
+            if (!allocationsMap[alloc.time_entry_id]) {
+              allocationsMap[alloc.time_entry_id] = [];
+            }
+            // Avoid duplicate projects per time entry
+            if (!allocationsMap[alloc.time_entry_id].some(p => p.projectId === proj.id)) {
+              allocationsMap[alloc.time_entry_id].push({
+                projectId: proj.id,
+                projectName: proj.name,
+                projectStatus: proj.status,
+              });
+            }
+          }
+        }
+      }
 
       // Calculate minutes for each entry, prorating entries that span multiple days
       const timeEntries = rawTimeEntries?.map(entry => {
@@ -166,31 +197,32 @@ export const useReports = (startDate?: Date, endDate?: Date) => {
         .sort((a, b) => b.month - a.month);
 
       const projectHours = timeEntries?.reduce((acc, entry: any) => {
-        const project = entry.projects;
-        if (!project) return acc;
-
-        const projectId = project.id;
-        const projectName = project.name || 'No Project';
-        const projectStatus = project.status;
-
         const hours = entry.calculated_minutes / 60;
-
-        if (!acc[projectId]) {
-          acc[projectId] = {
-            name: projectName,
-            week: 0,
-            month: 0,
-            projectId,
-            status: projectStatus
-          };
-        }
-        acc[projectId].month += hours;
-
         const entryDate = new Date(entry.start_time);
         const weekAgo = new Date();
         weekAgo.setDate(weekAgo.getDate() - 7);
-        if (entryDate >= weekAgo) {
-          acc[projectId].week += hours;
+        const isThisWeek = entryDate >= weekAgo;
+
+        // Use timecard_allocations projects first, fall back to time_entries.projects
+        const allocProjects = allocationsMap[entry.id];
+        if (allocProjects && allocProjects.length > 0) {
+          // Split hours evenly across allocated projects
+          const perProjectHours = hours / allocProjects.length;
+          for (const proj of allocProjects) {
+            if (!acc[proj.projectId]) {
+              acc[proj.projectId] = { name: proj.projectName, week: 0, month: 0, projectId: proj.projectId, status: proj.projectStatus };
+            }
+            acc[proj.projectId].month += perProjectHours;
+            if (isThisWeek) acc[proj.projectId].week += perProjectHours;
+          }
+        } else {
+          const project = entry.projects;
+          if (!project) return acc;
+          if (!acc[project.id]) {
+            acc[project.id] = { name: project.name || 'No Project', week: 0, month: 0, projectId: project.id, status: project.status };
+          }
+          acc[project.id].month += hours;
+          if (isThisWeek) acc[project.id].week += hours;
         }
 
         return acc;
