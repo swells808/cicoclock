@@ -174,21 +174,27 @@ function buildEnhancedTimelineHTML(startTime: Date, endTime: Date | null, isBrea
 function exportDailyTimecardAsCSV(entries: any[]) {
   const columns = ["Employee", "Employee Number", "Project", "Clock In", "Clock Out", "Duration"];
   let csv = columns.join(",") + "\n";
-  csv += entries.map(entry => {
+  const rows: string[] = [];
+  for (const entry of entries) {
     const clockIn = entry.start_time ? format(new Date(entry.start_time), 'h:mm a') : '-';
     const clockOut = entry.end_time ? format(new Date(entry.end_time), 'h:mm a') : 'Active';
     const duration = entry.duration_minutes 
       ? `${Math.floor(entry.duration_minutes / 60)}h ${entry.duration_minutes % 60}m` 
       : '-';
-    return [
-      `"${entry.employeeName}"`,
-      `"${entry.employeeNumber || ''}"`,
-      `"${entry.projectName || 'No Project'}"`,
-      clockIn,
-      clockOut,
-      duration
-    ].join(",");
-  }).join("\n");
+    // Split multi-project entries into separate rows
+    const projects = (entry.projectName || 'No Project').split(', ').filter(Boolean);
+    for (const project of projects) {
+      rows.push([
+        `"${entry.employeeName}"`,
+        `"${entry.employeeNumber || ''}"`,
+        `"${project}"`,
+        clockIn,
+        clockOut,
+        duration
+      ].join(","));
+    }
+  }
+  csv += rows.join("\n");
   
   const blob = new Blob([csv], { type: "text/csv" });
   const url = window.URL.createObjectURL(blob);
@@ -205,25 +211,31 @@ function exportDailyTimecardAsCSV(entries: any[]) {
 function exportTimeEntryDetailsAsCSV(entries: any[]) {
   const columns = ["Employee", "Employee Number", "Date", "Project", "Clock In", "Clock Out", "Duration", "Clock In Address", "Clock Out Address"];
   let csv = columns.join(",") + "\n";
-  csv += entries.map(entry => {
+  const rows: string[] = [];
+  for (const entry of entries) {
     const date = format(new Date(entry.start_time), 'MMM d, yyyy');
     const clockIn = format(new Date(entry.start_time), 'h:mm a');
     const clockOut = entry.end_time ? format(new Date(entry.end_time), 'h:mm a') : 'Active';
     const duration = entry.duration_minutes 
       ? `${Math.floor(entry.duration_minutes / 60)}h ${entry.duration_minutes % 60}m` 
       : '-';
-    return [
-      `"${entry.employeeName}"`,
-      `"${entry.employeeNumber || ''}"`,
-      date,
-      `"${entry.projectName || 'No Project'}"`,
-      clockIn,
-      clockOut,
-      duration,
-      `"${entry.clock_in_address || ''}"`,
-      `"${entry.clock_out_address || ''}"`
-    ].join(",");
-  }).join("\n");
+    // Split multi-project entries into separate rows
+    const projects = (entry.projectName || 'No Project').split(', ').filter(Boolean);
+    for (const project of projects) {
+      rows.push([
+        `"${entry.employeeName}"`,
+        `"${entry.employeeNumber || ''}"`,
+        date,
+        `"${project}"`,
+        clockIn,
+        clockOut,
+        duration,
+        `"${entry.clock_in_address || ''}"`,
+        `"${entry.clock_out_address || ''}"`
+      ].join(","));
+    }
+  }
+  csv += rows.join("\n");
   
   const blob = new Blob([csv], { type: "text/csv" });
   const url = window.URL.createObjectURL(blob);
