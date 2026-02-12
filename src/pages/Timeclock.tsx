@@ -41,7 +41,12 @@ const Timeclock = () => {
   const [passwordError, setPasswordError] = useState<string | null>(null);
   const [pinError, setPinError] = useState<string | null>(null);
   const [lookupError, setLookupError] = useState<string | null>(null);
-  const [activeTimeEntry, setActiveTimeEntry] = useState<any>(null);
+  const [activeTimeEntry, _setActiveTimeEntry] = useState<any>(null);
+  const activeTimeEntryRef = useRef<any>(null);
+  const setActiveTimeEntry = (entry: any) => {
+    activeTimeEntryRef.current = entry;
+    _setActiveTimeEntry(entry);
+  };
   const [clockStatus, setClockStatus] = useState<'out' | 'in'>('out');
   const [showPhotoCapture, setShowPhotoCapture] = useState(false);
   const [photoAction, setPhotoAction] = useState<'clock_in' | 'clock_out' | null>(null);
@@ -535,12 +540,13 @@ const Timeclock = () => {
   };
 
   const performClockOut = async (photoUrl?: string, photoBlob?: Blob) => {
-    if (!activeTimeEntry || !authenticatedEmployee || !company) return;
+    const currentEntry = activeTimeEntryRef.current;
+    if (!currentEntry || !authenticatedEmployee || !company) return;
     // Instead of clocking out immediately, show the timecard dialog
     setPendingClockOutPhotoUrl(photoUrl);
     setPendingClockOutPhotoBlob(photoBlob);
-    const hours = activeTimeEntry?.start_time
-      ? +((Date.now() - new Date(activeTimeEntry.start_time).getTime()) / 3600000).toFixed(2)
+    const hours = currentEntry.start_time
+      ? +((Date.now() - new Date(currentEntry.start_time).getTime()) / 3600000).toFixed(2)
       : 0;
     setSnapshotShiftHours(hours);
     setShowTimecardDialog(true);
@@ -551,7 +557,8 @@ const Timeclock = () => {
     allocations: { projectId: string; materialHandling: number; processCut: number; fitupWeld: number; finishes: number; other: number }[],
     injuryReported: boolean
   ) => {
-    if (!activeTimeEntry || !authenticatedEmployee || !company) return;
+    const currentEntry = activeTimeEntryRef.current;
+    if (!currentEntry || !authenticatedEmployee || !company) return;
     setShowTimecardDialog(false);
     setIsProcessing(true);
     
@@ -562,7 +569,7 @@ const Timeclock = () => {
         action: 'clock_out',
         profile_id: authenticatedEmployee.id,
         company_id: company.id,
-        time_entry_id: activeTimeEntry.id,
+        time_entry_id: currentEntry.id,
         photo_url: pendingClockOutPhotoUrl,
         latitude: location.latitude || null,
         longitude: location.longitude || null,
@@ -580,7 +587,7 @@ const Timeclock = () => {
     }
     
     // Insert timecard allocations
-    const timeEntryId = data.data?.id || activeTimeEntry.id;
+    const timeEntryId = data.data?.id || currentEntry.id;
     const allocationRows = allocations.map((a) => ({
       time_entry_id: timeEntryId,
       project_id: a.projectId || null,
