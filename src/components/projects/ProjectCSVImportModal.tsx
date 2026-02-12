@@ -20,6 +20,7 @@ interface CSVRow {
   project_number?: string;
   address?: string;
   description?: string;
+  client?: string;
   [key: string]: string | undefined;
 }
 
@@ -99,7 +100,23 @@ export const ProjectCSVImportModal: React.FC<ProjectCSVImportModalProps> = ({
     let errorCount = 0;
 
     try {
+      // Pre-fetch all clients for this company to resolve client names
+      const { data: clients } = await supabase
+        .from('clients')
+        .select('id, company_name')
+        .eq('company_id', company.id);
+
+      const clientMap = new Map<string, string>();
+      clients?.forEach(c => {
+        clientMap.set(c.company_name.toLowerCase().trim(), c.id);
+      });
+
       for (const row of parsedData) {
+        let clientId: string | null = null;
+        if (row.client?.trim()) {
+          clientId = clientMap.get(row.client.trim().toLowerCase()) || null;
+        }
+
         const { error } = await supabase
           .from('projects')
           .insert({
@@ -108,6 +125,7 @@ export const ProjectCSVImportModal: React.FC<ProjectCSVImportModalProps> = ({
             project_number: row.project_number || null,
             address: row.address || null,
             description: row.description || null,
+            client_id: clientId,
           });
 
         if (error) {
@@ -189,8 +207,9 @@ export const ProjectCSVImportModal: React.FC<ProjectCSVImportModalProps> = ({
               <li><span className="font-semibold text-foreground">project_number</span> — optional</li>
               <li><span className="font-semibold text-foreground">address</span> — optional</li>
               <li><span className="font-semibold text-foreground">description</span> — optional</li>
+              <li><span className="font-semibold text-foreground">client</span> — optional (must match an existing client's company name)</li>
             </ul>
-            <p className="text-xs text-muted-foreground mt-1">Example: <code className="bg-muted px-1 py-0.5 rounded text-foreground">name,project_number,address</code></p>
+            <p className="text-xs text-muted-foreground mt-1">Example: <code className="bg-muted px-1 py-0.5 rounded text-foreground">name,project_number,address,client</code></p>
           </div>
 
           {errors.length > 0 && (
@@ -222,6 +241,7 @@ export const ProjectCSVImportModal: React.FC<ProjectCSVImportModalProps> = ({
                     <TableRow>
                       <TableHead>Name</TableHead>
                       <TableHead>Job #</TableHead>
+                      <TableHead>Client</TableHead>
                       <TableHead>Address</TableHead>
                     </TableRow>
                   </TableHeader>
@@ -230,6 +250,7 @@ export const ProjectCSVImportModal: React.FC<ProjectCSVImportModalProps> = ({
                       <TableRow key={i}>
                         <TableCell>{row.name || '—'}</TableCell>
                         <TableCell>{row.project_number || '—'}</TableCell>
+                        <TableCell>{row.client || '—'}</TableCell>
                         <TableCell>{row.address || '—'}</TableCell>
                       </TableRow>
                     ))}
