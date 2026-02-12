@@ -52,6 +52,7 @@ const Timeclock = () => {
   const [clockStatusMessage, setClockStatusMessage] = useState<string>("");
   const [clockStatusName, setClockStatusName] = useState<string>("");
   const [showTimecardDialog, setShowTimecardDialog] = useState(false);
+  const [snapshotShiftHours, setSnapshotShiftHours] = useState(0);
   const [pendingClockOutPhotoUrl, setPendingClockOutPhotoUrl] = useState<string | undefined>();
   const [pendingClockOutPhotoBlob, setPendingClockOutPhotoBlob] = useState<Blob | undefined>();
   const [companyProjects, setCompanyProjects] = useState<{ id: string; name: string; project_number?: string | null }[]>([]);
@@ -538,6 +539,10 @@ const Timeclock = () => {
     // Instead of clocking out immediately, show the timecard dialog
     setPendingClockOutPhotoUrl(photoUrl);
     setPendingClockOutPhotoBlob(photoBlob);
+    const hours = activeTimeEntry?.start_time
+      ? +((Date.now() - new Date(activeTimeEntry.start_time).getTime()) / 3600000).toFixed(2)
+      : 0;
+    setSnapshotShiftHours(hours);
     setShowTimecardDialog(true);
   };
 
@@ -725,11 +730,7 @@ const Timeclock = () => {
         open={showTimecardDialog}
         onSubmit={finalizeClockOut}
         onCancel={handleTimecardCancel}
-        totalShiftHours={
-          activeTimeEntry?.start_time
-            ? +((Date.now() - new Date(activeTimeEntry.start_time).getTime()) / 3600000).toFixed(2)
-            : 0
-        }
+        totalShiftHours={snapshotShiftHours}
         projects={companyProjects}
       />
     </div>
