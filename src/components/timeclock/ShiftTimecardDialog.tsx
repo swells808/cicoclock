@@ -105,8 +105,13 @@ export const ShiftTimecardDialog: React.FC<ShiftTimecardDialogProps> = ({
   const usedProjectIds = rows.map((r) => r.projectId).filter(Boolean);
 
   return (
-    <Dialog open={open} onOpenChange={(v) => !v && onCancel()}>
-      <DialogContent className="max-w-3xl max-h-[90vh] overflow-y-auto">
+    <Dialog open={open} onOpenChange={() => { /* prevent accidental dismissal on touch devices */ }}>
+      <DialogContent
+        className="max-w-3xl max-h-[90vh] overflow-y-auto [&>button:last-child]:hidden"
+        onPointerDownOutside={(e) => e.preventDefault()}
+        onInteractOutside={(e) => e.preventDefault()}
+        onEscapeKeyDown={(e) => e.preventDefault()}
+      >
         <DialogHeader>
           <div className="flex items-center gap-2">
             <Clock className="h-5 w-5 text-primary" />
