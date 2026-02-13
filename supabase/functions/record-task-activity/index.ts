@@ -27,9 +27,9 @@ serve(async (req) => {
       action_type 
     } = await req.json();
 
-    if (!user_id || !profile_id || !task_id || !project_id || !company_id || !time_entry_id || !task_type_id || !action_type) {
+    if (!user_id || !profile_id || !task_id || !company_id || !time_entry_id || !task_type_id || !action_type) {
       return new Response(
-        JSON.stringify({ error: 'All fields are required' }),
+        JSON.stringify({ error: 'Required fields: user_id, profile_id, task_id, company_id, time_entry_id, task_type_id, action_type' }),
         { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
       );
     }
@@ -47,7 +47,7 @@ serve(async (req) => {
         user_id,
         profile_id,
         task_id,
-        project_id,
+        project_id: project_id || null,
         company_id,
         time_entry_id,
         task_type_id,

@@ -1,5 +1,6 @@
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useMemo } from "react";
 import { Play, Square, Coffee, Clock, MapPin, Download, FileText, Edit2, CheckCircle, PlayCircle, StickyNote } from "lucide-react";
+import { useQuery } from "@tanstack/react-query";
 import { RecentTaskActivity } from "@/components/dashboard/RecentTaskActivity";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -155,14 +156,14 @@ const Dashboard = () => {
           try {
             await supabase.functions.invoke('record-task-activity', {
               body: {
-                userId: user.id,
-                profileId: profile.id,
-                taskId: otherTaskType.id,
-                taskTypeId: otherTaskType.id,
-                actionType: 'start',
-                timeEntryId: entry.id,
-                projectId: selectedProject || null,
-                companyId: company.id,
+                user_id: user.id,
+                profile_id: profile.id,
+                task_id: otherTaskType.id,
+                task_type_id: otherTaskType.id,
+                action_type: 'start',
+                time_entry_id: entry.id,
+                project_id: selectedProject || null,
+                company_id: company.id,
               }
             });
           } catch (taskError) {
@@ -174,14 +175,14 @@ const Dashboard = () => {
         try {
           await supabase.functions.invoke('record-task-activity', {
             body: {
-              userId: user.id,
-              profileId: profile.id,
-              taskId: selectedTaskType,
-              taskTypeId: selectedTaskType,
-              actionType: 'start',
-              timeEntryId: entry.id,
-              projectId: selectedProject || null,
-              companyId: company.id,
+              user_id: user.id,
+              profile_id: profile.id,
+              task_id: selectedTaskType,
+              task_type_id: selectedTaskType,
+              action_type: 'start',
+              time_entry_id: entry.id,
+              project_id: selectedProject || null,
+              company_id: company.id,
             }
           });
         } catch (taskError) {
@@ -282,6 +283,36 @@ const Dashboard = () => {
   };
 
   const todayEntries = timeEntries?.filter(entry => isToday(entry.start_time)) || [];
+
+  // Fetch timecard_allocations to resolve project names for entries with null project_id
+  const timeEntryIds = useMemo(() => timeEntries?.map(e => e.id) || [], [timeEntries]);
+  const { data: allocationsMap } = useQuery({
+    queryKey: ["timecard-allocations-projects", timeEntryIds],
+    queryFn: async () => {
+      if (timeEntryIds.length === 0) return {};
+      const { data } = await supabase
+        .from("timecard_allocations")
+        .select("time_entry_id, project_id, project:project_id(name)")
+        .in("time_entry_id", timeEntryIds)
+        .not("project_id", "is", null);
+      const map: Record<string, string> = {};
+      for (const alloc of (data as any) || []) {
+        const projName = Array.isArray(alloc.project) ? alloc.project[0]?.name : alloc.project?.name;
+        if (projName && !map[alloc.time_entry_id]) {
+          map[alloc.time_entry_id] = projName;
+        }
+      }
+      return map;
+    },
+    enabled: timeEntryIds.length > 0,
+  });
+
+  // Helper to get project name for a time entry, falling back to allocations
+  const getProjectName = (entry: any) => {
+    if (entry.projects?.name) return entry.projects.name;
+    if (allocationsMap?.[entry.id]) return allocationsMap[entry.id];
+    return 'No Project';
+  };
 
   return (
     <DashboardLayout>
@@ -426,7 +457,7 @@ const Dashboard = () => {
                     <div className="flex justify-between">
                       <div>
                         <div className="font-medium">Work Session</div>
-                        <div className="text-sm text-muted-foreground">{entry.projects?.name || 'No Project'}</div>
+                        <div className="text-sm text-muted-foreground">{getProjectName(entry)}</div>
                       </div>
                       <div className="text-sm text-muted-foreground">
                         {format(new Date(entry.start_time), 'h:mm a')} - {format(new Date(entry.end_time!), 'h:mm a')} ({entry.duration_minutes ? `${Math.round(entry.duration_minutes / 60 * 10) / 10}h` : '0h'})
@@ -472,7 +503,7 @@ const Dashboard = () => {
               {timeEntries?.slice(0, 10).map((entry) => (
                 <tr key={entry.id} className="border-b border-border">
                   <td className="py-3 px-4">{format(new Date(entry.start_time), 'MMM d, yyyy')}</td>
-                  <td className="py-3 px-4">{entry.projects?.name || 'No Project'}</td>
+                  <td className="py-3 px-4">{getProjectName(entry)}</td>
                   <td className="py-3 px-4">{format(new Date(entry.start_time), 'h:mm a')}</td>
                   <td className="py-3 px-4">{entry.end_time ? format(new Date(entry.end_time), 'h:mm a') : 'Active'}</td>
                   <td className="py-3 px-4">{entry.duration_minutes ? `${Math.round(entry.duration_minutes / 60 * 10) / 10}h` : '-'}</td>
