@@ -80,7 +80,7 @@ interface SignedUrls {
 }
 
 const AdminTimeTracking: React.FC = () => {
-  const { isAdmin, isForeman, isManager, isLoading: roleLoading } = useUserRole();
+  const { isAdmin, isSupervisor, isForeman, isManager, isLoading: roleLoading } = useUserRole();
   const { company } = useCompany();
   const { data: companyFeatures } = useCompanyFeatures();
   const [selectedDate, setSelectedDate] = useState<Date>(new Date());
@@ -330,10 +330,10 @@ const AdminTimeTracking: React.FC = () => {
     );
   }
 
-  // Allow admins, managers (full edit), and foremen (read-only)
-  const canEdit = isAdmin || isManager;
+  // Allow admins, supervisors, managers (full edit), and foremen (read-only)
+  const canEdit = isAdmin || isManager || isSupervisor;
   
-  if (!isAdmin && !isForeman && !isManager) {
+  if (!isAdmin && !isSupervisor && !isForeman && !isManager) {
     return (
       <DashboardLayout>
         <div className="py-8 px-4">
