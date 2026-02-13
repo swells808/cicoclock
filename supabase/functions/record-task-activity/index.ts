@@ -41,16 +41,40 @@ serve(async (req) => {
       );
     }
 
+    // Resolve auto-other: look up the "Other" task type for this company
+    let resolvedTaskId = task_id;
+    let resolvedTaskTypeId = task_type_id;
+    if (task_id === 'auto-other' || task_type_id === 'auto-other') {
+      const { data: otherType } = await supabase
+        .from('task_types')
+        .select('id')
+        .eq('company_id', company_id)
+        .eq('is_active', true)
+        .or('code.eq.8050,code.eq.OTH')
+        .limit(1)
+        .maybeSingle();
+
+      if (!otherType) {
+        // No "Other" task type configured — skip silently
+        return new Response(
+          JSON.stringify({ success: true, skipped: true, reason: 'No Other task type found' }),
+          { status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+        );
+      }
+      resolvedTaskId = otherType.id;
+      resolvedTaskTypeId = otherType.id;
+    }
+
     const { data, error } = await supabase
       .from('task_activities')
       .insert({
         user_id,
         profile_id,
-        task_id,
+        task_id: resolvedTaskId,
         project_id: project_id || null,
         company_id,
         time_entry_id,
-        task_type_id,
+        task_type_id: resolvedTaskTypeId,
         action_type,
         timestamp: new Date().toISOString()
       })
