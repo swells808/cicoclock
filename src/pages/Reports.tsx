@@ -172,27 +172,25 @@ function buildEnhancedTimelineHTML(startTime: Date, endTime: Date | null, isBrea
 
 // Export Daily Timecard as CSV
 function exportDailyTimecardAsCSV(entries: any[]) {
-  const columns = ["Employee", "Employee Number", "Project", "Clock In", "Clock Out", "Duration"];
+  const columns = ["First Name", "Last Name", "Employee ID", "Date", "Project", "Cost Code", "Mat. Handling", "Process/Cut", "Fitup/Weld", "Finishes", "Other", "Hours Type", "Hours"];
   let csv = columns.join(",") + "\n";
   const rows: string[] = [];
   for (const entry of entries) {
-    const clockIn = entry.start_time ? format(new Date(entry.start_time), 'h:mm a') : '-';
-    const clockOut = entry.end_time ? format(new Date(entry.end_time), 'h:mm a') : 'Active';
-    const duration = entry.duration_minutes 
-      ? `${Math.floor(entry.duration_minutes / 60)}h ${entry.duration_minutes % 60}m` 
-      : '-';
-    // Split multi-project entries into separate rows
-    const projects = (entry.projectName || 'No Project').split(', ').filter(Boolean);
-    for (const project of projects) {
-      rows.push([
-        `"${entry.employeeName}"`,
-        `"${entry.employeeNumber || ''}"`,
-        `"${project}"`,
-        clockIn,
-        clockOut,
-        duration
-      ].join(","));
-    }
+    rows.push([
+      `"${entry.firstName || ''}"`,
+      `"${entry.lastName || ''}"`,
+      `"${entry.employeeId || ''}"`,
+      `"${entry.date || ''}"`,
+      `"${entry.projectName || ''}"`,
+      `"${entry.costCode || ''}"`,
+      entry.materialHandling?.toFixed(1) || "0.0",
+      entry.processingCutting?.toFixed(1) || "0.0",
+      entry.fabricationFitupWeld?.toFixed(1) || "0.0",
+      entry.finishes?.toFixed(1) || "0.0",
+      entry.other?.toFixed(1) || "0.0",
+      `"${entry.hoursType || 'Regular'}"`,
+      entry.hours?.toFixed(1) || "0.0"
+    ].join(","));
   }
   csv += rows.join("\n");
   
@@ -225,11 +223,11 @@ function exportTimeEntryDetailsAsCSV(entries: any[]) {
       rows.push([
         `"${entry.employeeName}"`,
         `"${entry.employeeNumber || ''}"`,
-        date,
+        `"${date}"`,
         `"${project}"`,
-        clockIn,
-        clockOut,
-        duration,
+        `"${clockIn}"`,
+        `"${clockOut}"`,
+        `"${duration}"`,
         `"${entry.clock_in_address || ''}"`,
         `"${entry.clock_out_address || ''}"`
       ].join(","));
@@ -249,38 +247,42 @@ function exportTimeEntryDetailsAsCSV(entries: any[]) {
 }
 
 // Export Daily Timecard as PDF
-function exportDailyTimecardAsPDF(entries: any[], dateStr: string) {
-  // @ts-ignore
-  import("jspdf").then(jsPDFImport => {
-    // @ts-ignore
-    import("jspdf-autotable").then(() => {
-      const { jsPDF } = jsPDFImport;
-      const doc = new jsPDF();
-      const columns = ["Employee", "Project", "Clock In", "Clock Out", "Duration"];
-      
-      doc.setFontSize(16);
-      doc.text(`Daily Timecard Report - ${dateStr}`, 14, 16);
-      
-      // @ts-ignore
-      doc.autoTable({
-        startY: 25,
-        head: [columns],
-        body: entries.map(entry => [
-          entry.employeeName,
-          entry.projectName || 'No Project',
-          entry.start_time ? format(new Date(entry.start_time), 'h:mm a') : '-',
-          entry.end_time ? format(new Date(entry.end_time), 'h:mm a') : 'Active',
-          entry.duration_minutes 
-            ? `${Math.floor(entry.duration_minutes / 60)}h ${entry.duration_minutes % 60}m` 
-            : '-'
-        ]),
-        theme: 'striped',
-        headStyles: { fillColor: [59, 130, 246] },
-      });
-      
-      doc.save(`daily-timecard-${dateStr.replace(/[^a-zA-Z0-9]/g, '-')}.pdf`);
-    });
+async function exportDailyTimecardAsPDF(entries: any[], dateStr: string) {
+  const jsPDFModule = await import("jspdf");
+  const autoTableModule = await import("jspdf-autotable");
+  const { jsPDF } = jsPDFModule;
+  const autoTable = autoTableModule.default;
+  
+  const doc = new jsPDF('landscape');
+  const columns = ["First Name", "Last Name", "Emp ID", "Date", "Project", "Cost Code", "Mat. Handling", "Process/Cut", "Fitup/Weld", "Finishes", "Other", "Hours Type", "Hours"];
+  
+  doc.setFontSize(16);
+  doc.text(`Daily Timecard Report - ${dateStr}`, 14, 16);
+  
+  autoTable(doc, {
+    startY: 25,
+    head: [columns],
+    body: entries.map(entry => [
+      entry.firstName || '',
+      entry.lastName || '',
+      entry.employeeId || '',
+      entry.date || '',
+      entry.projectName || '',
+      entry.costCode || '',
+      entry.materialHandling?.toFixed(1) || '0.0',
+      entry.processingCutting?.toFixed(1) || '0.0',
+      entry.fabricationFitupWeld?.toFixed(1) || '0.0',
+      entry.finishes?.toFixed(1) || '0.0',
+      entry.other?.toFixed(1) || '0.0',
+      entry.hoursType || 'Regular',
+      entry.hours?.toFixed(1) || '0.0'
+    ]),
+    theme: 'striped',
+    headStyles: { fillColor: [59, 130, 246], fontSize: 7 },
+    styles: { fontSize: 7 },
   });
+  
+  doc.save(`daily-timecard-${dateStr.replace(/[^a-zA-Z0-9]/g, '-')}.pdf`);
 }
 
 // Export Time Entry Details as PDF with photos and visual cards
@@ -427,23 +429,32 @@ function buildSingleEntryCardHTML(entry: any): string {
 
 // Build Daily Timecard HTML table
 function buildDailyTimecardHTML(entries: any[]): string {
-  const columns = ["Employee", "Project", "Clock In", "Clock Out", "Duration"];
-  let table = "<table border='1' style='border-collapse:collapse;width:100%;font-family:sans-serif;'>";
+  const columns = ["First Name", "Last Name", "Emp ID", "Date", "Project", "Cost Code", "Mat. Handling", "Process/Cut", "Fitup/Weld", "Finishes", "Other", "Hours Type", "Hours"];
+  let table = "<table border='1' style='border-collapse:collapse;width:100%;font-family:sans-serif;font-size:12px;'>";
   table += "<thead><tr>" + columns.map(col => 
-    `<th style='padding:10px;background:#F6F6F7;text-align:left;'>${col}</th>`
+    `<th style='padding:6px 8px;background:#F6F6F7;text-align:left;white-space:nowrap;'>${col}</th>`
   ).join("") + "</tr></thead><tbody>";
   
   if (entries.length === 0) {
     table += `<tr><td colspan='${columns.length}' style='padding:20px;text-align:center;color:#666;'>No time entries for this period</td></tr>`;
   } else {
-    table += entries.map((entry, i) => {
+    table += entries.map((entry: any, i: number) => {
       const bgColor = i % 2 === 0 ? '#fff' : '#fafafa';
+      const otStyle = entry.hoursType === 'Overtime' ? 'color:#ea580c;font-weight:600;' : '';
       return `<tr style='background:${bgColor}'>
-        <td style='padding:10px;'>${entry.employeeName}</td>
-        <td style='padding:10px;'>${entry.projectName || 'No Project'}</td>
-        <td style='padding:10px;'>${entry.start_time ? format(new Date(entry.start_time), 'h:mm a') : '-'}</td>
-        <td style='padding:10px;'>${entry.end_time ? format(new Date(entry.end_time), 'h:mm a') : 'Active'}</td>
-        <td style='padding:10px;'>${entry.duration_minutes ? `${Math.floor(entry.duration_minutes / 60)}h ${entry.duration_minutes % 60}m` : '-'}</td>
+        <td style='padding:6px 8px;'>${entry.firstName || ''}</td>
+        <td style='padding:6px 8px;'>${entry.lastName || ''}</td>
+        <td style='padding:6px 8px;'>${entry.employeeId || ''}</td>
+        <td style='padding:6px 8px;'>${entry.date || ''}</td>
+        <td style='padding:6px 8px;'>${entry.projectName || ''}</td>
+        <td style='padding:6px 8px;'>${entry.costCode || ''}</td>
+        <td style='padding:6px 8px;text-align:right;'>${entry.materialHandling?.toFixed(1) || '0.0'}</td>
+        <td style='padding:6px 8px;text-align:right;'>${entry.processingCutting?.toFixed(1) || '0.0'}</td>
+        <td style='padding:6px 8px;text-align:right;'>${entry.fabricationFitupWeld?.toFixed(1) || '0.0'}</td>
+        <td style='padding:6px 8px;text-align:right;'>${entry.finishes?.toFixed(1) || '0.0'}</td>
+        <td style='padding:6px 8px;text-align:right;'>${entry.other?.toFixed(1) || '0.0'}</td>
+        <td style='padding:6px 8px;${otStyle}'>${entry.hoursType || 'Regular'}</td>
+        <td style='padding:6px 8px;text-align:right;${otStyle}'>${entry.hours?.toFixed(1) || '0.0'}</td>
       </tr>`;
     }).join("");
   }
@@ -922,63 +933,224 @@ const Reports = () => {
 
       const { data: timeEntries } = await supabase
         .from('time_entries')
-        .select(`id, user_id, profile_id, start_time, end_time, duration_minutes, projects(name)`)
+        .select(`id, user_id, profile_id, start_time, end_time, duration_minutes, projects(name, project_number)`)
         .eq('company_id', companyId)
         .gte('start_time', startOfDay.toISOString())
         .lte('start_time', endOfDay.toISOString())
         .order('start_time', { ascending: false });
 
-      // Fetch timecard_allocations for project names on modern entries
+      // Fetch timecard_allocations with project info and task categories
       const dailyEntryIds = (timeEntries || []).map(e => e.id);
-      let dailyAllocProjectMap: Record<string, string> = {};
+      let allocationsMap: Record<string, any[]> = {};
       if (dailyEntryIds.length > 0) {
         const { data: allocs } = await supabase
           .from('timecard_allocations')
-          .select('time_entry_id, projects:project_id(name)')
+          .select('time_entry_id, project_id, material_handling, processing_cutting, fabrication_fitup_weld, finishes, other, projects:project_id(name, project_number)')
           .in('time_entry_id', dailyEntryIds);
         if (allocs) {
           for (const a of allocs) {
-            const p = a.projects as any;
-            if (p?.name && !dailyAllocProjectMap[a.time_entry_id]) {
-              dailyAllocProjectMap[a.time_entry_id] = p.name;
-            } else if (p?.name && dailyAllocProjectMap[a.time_entry_id] && !dailyAllocProjectMap[a.time_entry_id].includes(p.name)) {
-              dailyAllocProjectMap[a.time_entry_id] += `, ${p.name}`;
-            }
+            if (!allocationsMap[a.time_entry_id]) allocationsMap[a.time_entry_id] = [];
+            allocationsMap[a.time_entry_id].push(a);
           }
         }
       }
 
-      // Map entries with employee names and filter
-      let entries = (timeEntries || []).map((entry: any) => {
-        const profile = entry.profile_id 
-          ? userProfiles[entry.profile_id] 
-          : userProfiles[entry.user_id];
-        const employeeName = `${profile?.first_name || ''} ${profile?.last_name || ''}`.trim() ||
-                            profile?.display_name ||
-                            'Unknown User';
-        return {
-          ...entry,
-          employeeName,
-          employeeNumber: profile?.employee_id || null,
-          projectName: dailyAllocProjectMap[entry.id] || entry.projects?.name || null,
-          departmentId: profile?.department_id,
-          profileId: entry.profile_id || profile?.id
-        };
+      // Fetch task activities for cost codes
+      let timeEntryTaskCodes: Record<string, string> = {};
+      if (dailyEntryIds.length > 0) {
+        const { data: taskActivities } = await supabase
+          .from('task_activities')
+          .select('time_entry_id, task_type_id, task_types(code)')
+          .in('time_entry_id', dailyEntryIds);
+        (taskActivities || []).forEach((ta: any) => {
+          if (ta.time_entry_id && !timeEntryTaskCodes[ta.time_entry_id]) {
+            timeEntryTaskCodes[ta.time_entry_id] = ta.task_types?.code || '';
+          }
+        });
+      }
+
+      // Fetch company features for overtime
+      const { data: companyFeatures } = await supabase
+        .from('company_features')
+        .select('overtime_enabled, overtime_daily_threshold_hours')
+        .eq('company_id', companyId)
+        .maybeSingle();
+
+      const overtimeEnabled = companyFeatures?.overtime_enabled ?? false;
+      const dailyThresholdHours = companyFeatures?.overtime_daily_threshold_hours ?? 8;
+      const dailyThresholdMinutes = dailyThresholdHours * 60;
+
+      // Get profile IDs for schedule lookup
+      const dailyProfileIds = [...new Set(
+        (timeEntries || []).map((e: any) => e.profile_id || userProfiles[e.user_id]?.id).filter(Boolean)
+      )] as string[];
+
+      // Fetch employee schedules
+      const { data: empSchedules } = await supabase
+        .from('employee_schedules')
+        .select('profile_id, day_of_week, start_time, end_time, is_day_off')
+        .in('profile_id', dailyProfileIds.length > 0 ? dailyProfileIds : ['none'])
+        .eq('day_of_week', date.getDay());
+
+      const empSchedMap: Record<string, any> = {};
+      (empSchedules || []).forEach((s: any) => { empSchedMap[s.profile_id] = s; });
+
+      // Fetch department schedules
+      const deptIds = [...new Set(Object.values(userProfiles).map((p: any) => p.department_id).filter(Boolean))] as string[];
+      let deptSchedMap: Record<string, any> = {};
+      if (deptIds.length > 0) {
+        const { data: deptSchedules } = await supabase
+          .from('department_schedules')
+          .select('department_id, start_time, end_time, is_day_off')
+          .in('department_id', deptIds)
+          .eq('day_of_week', date.getDay());
+        (deptSchedules || []).forEach((s: any) => { deptSchedMap[s.department_id] = s; });
+      }
+
+      const getSchedMins = (profileId: string, deptId: string | undefined): number => {
+        const emp = empSchedMap[profileId];
+        if (emp) {
+          if (emp.is_day_off) return 0;
+          if (emp.start_time && emp.end_time) {
+            const [sh, sm] = emp.start_time.split(':').map(Number);
+            const [eh, em] = emp.end_time.split(':').map(Number);
+            return (eh * 60 + em) - (sh * 60 + sm);
+          }
+        }
+        if (deptId) {
+          const dept = deptSchedMap[deptId];
+          if (dept) {
+            if (dept.is_day_off) return 0;
+            if (dept.start_time && dept.end_time) {
+              const [sh, sm] = dept.start_time.split(':').map(Number);
+              const [eh, em] = dept.end_time.split(':').map(Number);
+              return (eh * 60 + em) - (sh * 60 + sm);
+            }
+          }
+        }
+        return dailyThresholdMinutes;
+      };
+
+      // Build per-entry rows (one per allocation, or one per entry if no allocations)
+      interface DailyRow {
+        firstName: string; lastName: string; employeeId: string; date: string;
+        projectName: string; costCode: string;
+        materialHandling: number; processingCutting: number; fabricationFitupWeld: number; finishes: number; other: number;
+        hoursType: 'Regular' | 'Overtime'; hours: number;
+        profileId: string; departmentId?: string;
+      }
+
+      // First pass: compute total daily minutes per employee
+      const empDailyMins: Record<string, number> = {};
+      (timeEntries || []).forEach((entry: any) => {
+        const profile = entry.profile_id ? userProfiles[entry.profile_id] : userProfiles[entry.user_id];
+        const pid = entry.profile_id || profile?.id || 'unknown';
+        let mins = entry.duration_minutes;
+        if (mins === null && entry.start_time) {
+          const endT = entry.end_time ? new Date(entry.end_time) : new Date();
+          mins = Math.floor((endT.getTime() - new Date(entry.start_time).getTime()) / 60000);
+        }
+        empDailyMins[pid] = (empDailyMins[pid] || 0) + (mins || 0);
       });
 
-      // Apply filters
-      if (filters.employeeId) {
-        entries = entries.filter(e => e.profileId === filters.employeeId || e.user_id === filters.employeeId);
-      }
-      if (filters.departmentId) {
-        entries = entries.filter(e => e.departmentId === filters.departmentId);
+      const dateStr = format(date, 'M/d/yy');
+      const detailedRows: DailyRow[] = [];
+
+      for (const entry of (timeEntries || [])) {
+        const profile = entry.profile_id ? userProfiles[entry.profile_id] : userProfiles[entry.user_id];
+        if (!profile) continue;
+        const pid = entry.profile_id || profile.id;
+
+        // Apply filters
+        if (filters.employeeId && pid !== filters.employeeId) continue;
+        if (filters.departmentId && profile.department_id !== filters.departmentId) continue;
+
+        let entryMins = entry.duration_minutes;
+        if (entryMins === null && entry.start_time) {
+          const endT = entry.end_time ? new Date(entry.end_time) : new Date();
+          entryMins = Math.floor((endT.getTime() - new Date(entry.start_time).getTime()) / 60000);
+        }
+        entryMins = entryMins || 0;
+
+        const allocs = allocationsMap[entry.id];
+        const costCode = timeEntryTaskCodes[entry.id] || '';
+
+        const makeRow = (projName: string, cc: string, mh: number, pc: number, ffw: number, fin: number, oth: number, mins: number) => {
+          const totalDaily = empDailyMins[pid] || mins;
+          const schedMins = getSchedMins(pid, profile.department_id);
+
+          if (overtimeEnabled && totalDaily > schedMins && schedMins > 0) {
+            const ratio = mins / totalDaily;
+            const regMins = Math.min(totalDaily, schedMins) * ratio;
+            const otMins = Math.max(0, totalDaily - schedMins) * ratio;
+            if (regMins > 0) {
+              detailedRows.push({
+                firstName: profile.first_name || '', lastName: profile.last_name || '',
+                employeeId: profile.employee_id || '', date: dateStr,
+                projectName: projName, costCode: cc,
+                materialHandling: mh, processingCutting: pc, fabricationFitupWeld: ffw, finishes: fin, other: oth,
+                hoursType: 'Regular', hours: regMins / 60,
+                profileId: pid, departmentId: profile.department_id,
+              });
+            }
+            if (otMins > 0) {
+              detailedRows.push({
+                firstName: profile.first_name || '', lastName: profile.last_name || '',
+                employeeId: profile.employee_id || '', date: dateStr,
+                projectName: projName, costCode: cc,
+                materialHandling: mh, processingCutting: pc, fabricationFitupWeld: ffw, finishes: fin, other: oth,
+                hoursType: 'Overtime', hours: otMins / 60,
+                profileId: pid, departmentId: profile.department_id,
+              });
+            }
+          } else {
+            detailedRows.push({
+              firstName: profile.first_name || '', lastName: profile.last_name || '',
+              employeeId: profile.employee_id || '', date: dateStr,
+              projectName: projName, costCode: cc,
+              materialHandling: mh, processingCutting: pc, fabricationFitupWeld: ffw, finishes: fin, other: oth,
+              hoursType: 'Regular', hours: mins / 60,
+              profileId: pid, departmentId: profile.department_id,
+            });
+          }
+        };
+
+        if (allocs && allocs.length > 0) {
+          for (const a of allocs) {
+            const p = a.projects as any;
+            const projName = p?.name || entry.projects?.name || '';
+            const allocTotal = (a.material_handling || 0) + (a.processing_cutting || 0) + (a.fabrication_fitup_weld || 0) + (a.finishes || 0) + (a.other || 0);
+            const allocMins = allocTotal * 60; // allocations are in hours
+            makeRow(projName, costCode, a.material_handling || 0, a.processing_cutting || 0, a.fabrication_fitup_weld || 0, a.finishes || 0, a.other || 0, allocMins > 0 ? allocMins : entryMins);
+          }
+        } else {
+          const projName = entry.projects?.name || '';
+          makeRow(projName, costCode, 0, 0, 0, 0, 0, entryMins);
+        }
       }
 
-      const dateStr = format(date, 'MMMM d, yyyy');
-      const title = `Daily Timecard Report — ${dateStr}`;
-      const reportTable = buildDailyTimecardHTML(entries);
+      // Sort
+      detailedRows.sort((a, b) => {
+        if (a.lastName !== b.lastName) return a.lastName.localeCompare(b.lastName);
+        if (a.firstName !== b.firstName) return a.firstName.localeCompare(b.firstName);
+        if (a.hoursType !== b.hoursType) return a.hoursType === 'Regular' ? -1 : 1;
+        return 0;
+      });
+
+      const titleDateStr = format(date, 'MMMM d, yyyy');
+      const title = `Daily Timecard Report — ${titleDateStr}`;
+      const reportTable = buildDailyTimecardHTML(detailedRows);
       
-      renderReportPopup(newWin, title, reportTable, 'daily', dateStr, entries);
+      renderReportPopup(newWin, title, reportTable, 'daily', titleDateStr, detailedRows);
+
+      // Store data for exports
+      (window as any).currentReportData = { entries: detailedRows, dateInfo: titleDateStr, reportType: 'daily' };
+      (window as any).exportReportPDF = async (type: string) => {
+        if (type === 'daily') await exportDailyTimecardAsPDF((window as any).currentReportData.entries, (window as any).currentReportData.dateInfo);
+      };
+      (window as any).exportReportCSV = (type: string) => {
+        if (type === 'daily') exportDailyTimecardAsCSV((window as any).currentReportData.entries);
+      };
       return;
     }
 
