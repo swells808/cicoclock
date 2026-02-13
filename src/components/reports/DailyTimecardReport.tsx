@@ -369,11 +369,11 @@ export const DailyTimecardReport: React.FC<DailyTimecardReportProps> = ({
                     <TableCell>{row.date}</TableCell>
                     <TableCell>{row.projectName}</TableCell>
                     <TableCell>{row.costCode}</TableCell>
-                    <TableCell className="text-right">{row.materialHandling.toFixed(1)}</TableCell>
-                    <TableCell className="text-right">{row.processingCutting.toFixed(1)}</TableCell>
-                    <TableCell className="text-right">{row.fabricationFitupWeld.toFixed(1)}</TableCell>
-                    <TableCell className="text-right">{row.finishes.toFixed(1)}</TableCell>
-                    <TableCell className="text-right">{row.other.toFixed(1)}</TableCell>
+                    <TableCell className="text-right">{formatHoursMinutes(row.materialHandling)}</TableCell>
+                    <TableCell className="text-right">{formatHoursMinutes(row.processingCutting)}</TableCell>
+                    <TableCell className="text-right">{formatHoursMinutes(row.fabricationFitupWeld)}</TableCell>
+                    <TableCell className="text-right">{formatHoursMinutes(row.finishes)}</TableCell>
+                    <TableCell className="text-right">{formatHoursMinutes(row.other)}</TableCell>
                     <TableCell>
                       {row.hoursType === 'Overtime' ? (
                         <span className="text-orange-600 dark:text-orange-400 font-medium">{row.hoursType}</span>
