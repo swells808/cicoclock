@@ -136,8 +136,13 @@ export const PhotoCapture: React.FC<PhotoCaptureProps> = ({
   };
 
   return (
-    <Dialog open={open} onOpenChange={handleCancel}>
-      <DialogContent className="sm:max-w-[500px]">
+    <Dialog open={open} onOpenChange={() => { /* prevent accidental dismissal on touch devices */ }}>
+      <DialogContent
+        className="sm:max-w-[500px] [&>button:last-child]:hidden"
+        onPointerDownOutside={(e) => e.preventDefault()}
+        onInteractOutside={(e) => e.preventDefault()}
+        onEscapeKeyDown={(e) => e.preventDefault()}
+      >
         <DialogHeader>
           <DialogTitle>{title}</DialogTitle>
           <DialogDescription>{description}</DialogDescription>
