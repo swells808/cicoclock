@@ -585,7 +585,11 @@ const Timeclock = () => {
       : 0;
     console.log('[Timeclock] Showing timecard dialog, hours:', hours);
     setSnapshotShiftHours(hours);
-    setShowTimecardDialog(true);
+    // Delay opening to let any lingering touch/pointer events from photo capture settle (iPad fix)
+    setTimeout(() => {
+      console.log('[Timeclock] Opening timecard dialog now');
+      setShowTimecardDialog(true);
+    }, 300);
   };
 
   // Actually finalize the clock-out after timecard submission
