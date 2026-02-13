@@ -33,6 +33,8 @@ const Timeclock = () => {
   const authenticatedEmployeeRef = useRef<any>(null);
   const companyRef = useRef<any>(company);
   companyRef.current = company;
+  const companyFeaturesRef = useRef(companyFeatures);
+  companyFeaturesRef.current = companyFeatures;
   const setAuthenticatedEmployee = (emp: any) => {
     authenticatedEmployeeRef.current = emp;
     _setAuthenticatedEmployee(emp);
@@ -56,7 +58,12 @@ const Timeclock = () => {
   };
   const [clockStatus, setClockStatus] = useState<'out' | 'in'>('out');
   const [showPhotoCapture, setShowPhotoCapture] = useState(false);
-  const [photoAction, setPhotoAction] = useState<'clock_in' | 'clock_out' | null>(null);
+  const [photoAction, _setPhotoAction] = useState<'clock_in' | 'clock_out' | null>(null);
+  const photoActionRef = useRef<'clock_in' | 'clock_out' | null>(null);
+  const setPhotoAction = (action: 'clock_in' | 'clock_out' | null) => {
+    photoActionRef.current = action;
+    _setPhotoAction(action);
+  };
   const [pendingPhotoBlob, setPendingPhotoBlob] = useState<Blob | null>(null);
   const [isProcessing, setIsProcessing] = useState(false);
   const [manualLookupEmployee, setManualLookupEmployee] = useState<any>(null);
@@ -349,25 +356,20 @@ const Timeclock = () => {
   };
 
   const handlePhotoCapture = async (photoBlob: Blob) => {
-    console.log('[Timeclock] handlePhotoCapture called, photoAction:', photoAction);
+    const action = photoActionRef.current;
     try {
-      // Store the blob for face verification after clock action
       setPendingPhotoBlob(photoBlob);
-      const photoUrl = await uploadPhoto(photoBlob, photoAction!);
+      const photoUrl = await uploadPhoto(photoBlob, action!);
       setShowPhotoCapture(false);
-      if (photoAction === 'clock_in') {
-        console.log('[Timeclock] handlePhotoCapture -> performClockIn');
+      if (action === 'clock_in') {
         await performClockIn(photoUrl, photoBlob);
-      } else if (photoAction === 'clock_out') {
-        console.log('[Timeclock] handlePhotoCapture -> performClockOut');
+      } else if (action === 'clock_out') {
         await performClockOut(photoUrl, photoBlob);
-      } else {
-        console.warn('[Timeclock] handlePhotoCapture: photoAction is unexpected:', photoAction);
       }
     } catch (error) {
       console.error('[Timeclock] handlePhotoCapture error:', error);
       toast({ title: "Photo Upload Failed", description: "Continuing without photo.", variant: "destructive" });
-      if (photoAction === 'clock_in') await performClockIn(); else if (photoAction === 'clock_out') await performClockOut();
+      if (action === 'clock_in') await performClockIn(); else if (action === 'clock_out') await performClockOut();
     }
     setPhotoAction(null);
     setPendingPhotoBlob(null);
@@ -550,7 +552,7 @@ const Timeclock = () => {
   };
 
   const handleClockIn = async () => { 
-    if (companyFeatures?.photo_capture) { 
+    if (companyFeaturesRef.current?.photo_capture) { 
       setPhotoAction('clock_in'); 
       setShowPhotoCapture(true); 
     } else { 
@@ -562,34 +564,15 @@ const Timeclock = () => {
     const currentEntry = activeTimeEntryRef.current;
     const emp = authenticatedEmployeeRef.current;
     const comp = companyRef.current;
-    console.log('[Timeclock] performClockOut called', {
-      currentEntry: !!currentEntry,
-      currentEntryId: currentEntry?.id,
-      authenticatedEmployee: !!emp,
-      company: !!comp,
-      photoUrl: !!photoUrl,
-    });
-    if (!currentEntry || !emp || !comp) {
-      console.error('[Timeclock] performClockOut ABORTED - missing data', {
-        currentEntry: !!currentEntry,
-        authenticatedEmployee: !!emp,
-        company: !!comp,
-      });
-      return;
-    }
-    // Instead of clocking out immediately, show the timecard dialog
+    if (!currentEntry || !emp || !comp) return;
+    // Show the timecard dialog instead of clocking out immediately
     setPendingClockOutPhotoUrl(photoUrl);
     setPendingClockOutPhotoBlob(photoBlob);
     const hours = currentEntry.start_time
       ? +((Date.now() - new Date(currentEntry.start_time).getTime()) / 3600000).toFixed(2)
       : 0;
-    console.log('[Timeclock] Showing timecard dialog, hours:', hours);
     setSnapshotShiftHours(hours);
-    // Delay opening to let any lingering touch/pointer events from photo capture settle (iPad fix)
-    setTimeout(() => {
-      console.log('[Timeclock] Opening timecard dialog now');
-      setShowTimecardDialog(true);
-    }, 300);
+    setShowTimecardDialog(true);
   };
 
   // Actually finalize the clock-out after timecard submission
@@ -668,7 +651,7 @@ const Timeclock = () => {
   };
 
   const handleClockOut = async () => { 
-    if (companyFeatures?.photo_capture) { 
+    if (companyFeaturesRef.current?.photo_capture) { 
       setPhotoAction('clock_out'); 
       setShowPhotoCapture(true); 
     } else { 
@@ -759,12 +742,12 @@ const Timeclock = () => {
       <PhotoCapture 
         open={showPhotoCapture} 
         onCapture={handlePhotoCapture} 
-        onCancel={() => { console.log('[Timeclock] PhotoCapture onCancel'); setShowPhotoCapture(false); setPhotoAction(null); resetForNextUser(); }} 
+        onCancel={() => { setShowPhotoCapture(false); setPhotoAction(null); resetForNextUser(); }} 
         onSkip={() => { 
-          console.log('[Timeclock] PhotoCapture onSkip, photoAction:', photoAction);
+          const action = photoActionRef.current;
           setShowPhotoCapture(false); 
-          if (photoAction === 'clock_in') performClockIn(); 
-          else if (photoAction === 'clock_out') performClockOut(); 
+          if (action === 'clock_in') performClockIn(); 
+          else if (action === 'clock_out') performClockOut(); 
           setPhotoAction(null); 
         }}
         title={photoAction === 'clock_in' ? "Clock In Photo" : "Clock Out Photo"} 
