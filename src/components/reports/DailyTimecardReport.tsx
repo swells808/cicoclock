@@ -21,6 +21,13 @@ interface TimecardRow {
   other: number;
   hoursType: 'Regular' | 'Overtime';
   hours: number;
+  injured: string;
+}
+
+function formatHoursMinutes(decimalHours: number): string {
+  const h = Math.floor(decimalHours);
+  const m = Math.round((decimalHours % 1) * 60);
+  return `${h}h${m}m`;
 }
 
 interface DailyTimecardReportProps {
@@ -56,7 +63,7 @@ export const DailyTimecardReport: React.FC<DailyTimecardReportProps> = ({
         // Fetch time entries
         const { data: entries, error: entriesError } = await supabase
           .from('time_entries')
-          .select('id, user_id, profile_id, start_time, end_time, duration_minutes, projects(name)')
+          .select('id, user_id, profile_id, start_time, end_time, duration_minutes, injury_reported, projects(name)')
           .eq('company_id', company.id)
           .gte('start_time', startOfDay.toISOString())
           .lte('start_time', endOfDay.toISOString())
@@ -78,6 +85,32 @@ export const DailyTimecardReport: React.FC<DailyTimecardReportProps> = ({
           if (p.user_id) acc[p.user_id] = p;
           return acc;
         }, {} as Record<string, any>);
+
+        // Fetch task_types for category-to-code mapping
+        const { data: taskTypesData } = await supabase
+          .from('task_types')
+          .select('name, code')
+          .eq('company_id', company.id)
+          .eq('is_active', true);
+
+        const categoryCodeMap: Record<string, string> = {};
+        (taskTypesData || []).forEach((tt: any) => {
+          const normalizedName = tt.name?.toLowerCase().replace(/[^a-z]/g, '') || '';
+          if (normalizedName.includes('materialhandling')) categoryCodeMap['material_handling'] = tt.code;
+          else if (normalizedName.includes('processingcutting') || normalizedName.includes('processing')) categoryCodeMap['processing_cutting'] = tt.code;
+          else if (normalizedName.includes('fabrication') || normalizedName.includes('fitup')) categoryCodeMap['fabrication_fitup_weld'] = tt.code;
+          else if (normalizedName.includes('finishes') || normalizedName.includes('finish')) categoryCodeMap['finishes'] = tt.code;
+          else if (normalizedName.includes('other')) categoryCodeMap['other'] = tt.code;
+        });
+
+        const getDominantCostCode = (mh: number, pc: number, ffw: number, fin: number, oth: number): string => {
+          const cats: [string, number][] = [
+            ['material_handling', mh], ['processing_cutting', pc], ['fabrication_fitup_weld', ffw], ['finishes', fin], ['other', oth]
+          ];
+          const dominant = cats.filter(([, v]) => v > 0).sort((a, b) => b[1] - a[1])[0];
+          if (dominant) return categoryCodeMap[dominant[0]] || '';
+          return '';
+        };
 
         // Fetch allocations
         const entryIds = entries.map(e => e.id);
@@ -197,6 +230,8 @@ export const DailyTimecardReport: React.FC<DailyTimecardReportProps> = ({
           const costCode = taskCodes[entry.id] || '';
           const allocs = allocationsMap[entry.id];
 
+          const injuredVal = (entry as any).injury_reported ? 'Y' : 'N';
+
           const addRow = (projName: string, cc: string, mh: number, pc: number, ffw: number, fin: number, oth: number, mins: number) => {
             const totalDaily = empDailyMins[pid] || mins;
             const schedMins = getSchedMins(pid, profile.department_id);
@@ -211,7 +246,7 @@ export const DailyTimecardReport: React.FC<DailyTimecardReportProps> = ({
                   employeeId: profile.employee_id || '', date: fmtDate,
                   projectName: projName, costCode: cc,
                   materialHandling: mh, processingCutting: pc, fabricationFitupWeld: ffw, finishes: fin, other: oth,
-                  hoursType: 'Regular', hours: regMins / 60,
+                  hoursType: 'Regular', hours: regMins / 60, injured: injuredVal,
                 });
               }
               if (otMins > 0) {
@@ -220,7 +255,7 @@ export const DailyTimecardReport: React.FC<DailyTimecardReportProps> = ({
                   employeeId: profile.employee_id || '', date: fmtDate,
                   projectName: projName, costCode: cc,
                   materialHandling: mh, processingCutting: pc, fabricationFitupWeld: ffw, finishes: fin, other: oth,
-                  hoursType: 'Overtime', hours: otMins / 60,
+                  hoursType: 'Overtime', hours: otMins / 60, injured: injuredVal,
                 });
               }
             } else {
@@ -229,7 +264,7 @@ export const DailyTimecardReport: React.FC<DailyTimecardReportProps> = ({
                 employeeId: profile.employee_id || '', date: fmtDate,
                 projectName: projName, costCode: cc,
                 materialHandling: mh, processingCutting: pc, fabricationFitupWeld: ffw, finishes: fin, other: oth,
-                hoursType: 'Regular', hours: mins / 60,
+                hoursType: 'Regular', hours: mins / 60, injured: injuredVal,
               });
             }
           };
@@ -238,9 +273,15 @@ export const DailyTimecardReport: React.FC<DailyTimecardReportProps> = ({
             for (const a of allocs) {
               const p = a.projects as any;
               const projName = p?.name || (entry as any).projects?.name || '';
-              const allocTotal = (a.material_handling || 0) + (a.processing_cutting || 0) + (a.fabrication_fitup_weld || 0) + (a.finishes || 0) + (a.other || 0);
+              const mh = a.material_handling || 0;
+              const pc = a.processing_cutting || 0;
+              const ffw = a.fabrication_fitup_weld || 0;
+              const fin = a.finishes || 0;
+              const oth = a.other || 0;
+              const allocTotal = mh + pc + ffw + fin + oth;
               const allocMins = allocTotal * 60;
-              addRow(projName, costCode, a.material_handling || 0, a.processing_cutting || 0, a.fabrication_fitup_weld || 0, a.finishes || 0, a.other || 0, allocMins > 0 ? allocMins : entryMins);
+              const derivedCostCode = getDominantCostCode(mh, pc, ffw, fin, oth) || costCode;
+              addRow(projName, derivedCostCode, mh, pc, ffw, fin, oth, allocMins > 0 ? allocMins : entryMins);
             }
           } else {
             const projName = (entry as any).projects?.name || '';
@@ -316,6 +357,7 @@ export const DailyTimecardReport: React.FC<DailyTimecardReportProps> = ({
                   <TableHead className="text-right">Other</TableHead>
                   <TableHead>Hours Type</TableHead>
                   <TableHead className="text-right">Hours</TableHead>
+                  <TableHead>Injured</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
@@ -339,9 +381,10 @@ export const DailyTimecardReport: React.FC<DailyTimecardReportProps> = ({
                     </TableCell>
                     <TableCell className="text-right font-semibold">
                       {row.hoursType === 'Overtime' ? (
-                        <span className="text-orange-600 dark:text-orange-400">{row.hours.toFixed(1)}</span>
-                      ) : row.hours.toFixed(1)}
+                        <span className="text-orange-600 dark:text-orange-400">{formatHoursMinutes(row.hours)}</span>
+                      ) : formatHoursMinutes(row.hours)}
                     </TableCell>
+                    <TableCell>{row.injured}</TableCell>
                   </TableRow>
                 ))}
               </TableBody>

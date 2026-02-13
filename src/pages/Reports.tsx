@@ -171,8 +171,14 @@ function buildEnhancedTimelineHTML(startTime: Date, endTime: Date | null, isBrea
 // --- Export Utility Functions ---
 
 // Export Daily Timecard as CSV
+function formatHoursMinutes(decimalHours: number): string {
+  const h = Math.floor(decimalHours);
+  const m = Math.round((decimalHours % 1) * 60);
+  return `${h}h${m}m`;
+}
+
 function exportDailyTimecardAsCSV(entries: any[]) {
-  const columns = ["First Name", "Last Name", "Employee ID", "Date", "Project", "Cost Code", "Mat. Handling", "Process/Cut", "Fitup/Weld", "Finishes", "Other", "Hours Type", "Hours"];
+  const columns = ["First Name", "Last Name", "Employee ID", "Date", "Project", "Cost Code", "Mat. Handling", "Process/Cut", "Fitup/Weld", "Finishes", "Other", "Hours Type", "Hours", "Injured"];
   let csv = columns.join(",") + "\n";
   const rows: string[] = [];
   for (const entry of entries) {
@@ -189,7 +195,8 @@ function exportDailyTimecardAsCSV(entries: any[]) {
       entry.finishes?.toFixed(1) || "0.0",
       entry.other?.toFixed(1) || "0.0",
       `"${entry.hoursType || 'Regular'}"`,
-      entry.hours?.toFixed(1) || "0.0"
+      `"${formatHoursMinutes(entry.hours || 0)}"`,
+      `"${entry.injured || 'N'}"`
     ].join(","));
   }
   csv += rows.join("\n");
@@ -254,7 +261,7 @@ async function exportDailyTimecardAsPDF(entries: any[], dateStr: string) {
   const autoTable = autoTableModule.default;
   
   const doc = new jsPDF('landscape');
-  const columns = ["First Name", "Last Name", "Emp ID", "Date", "Project", "Cost Code", "Mat. Handling", "Process/Cut", "Fitup/Weld", "Finishes", "Other", "Hours Type", "Hours"];
+  const columns = ["First Name", "Last Name", "Emp ID", "Date", "Project", "Cost Code", "Mat. Handling", "Process/Cut", "Fitup/Weld", "Finishes", "Other", "Hours Type", "Hours", "Injured"];
   
   doc.setFontSize(16);
   doc.text(`Daily Timecard Report - ${dateStr}`, 14, 16);
@@ -275,7 +282,8 @@ async function exportDailyTimecardAsPDF(entries: any[], dateStr: string) {
       entry.finishes?.toFixed(1) || '0.0',
       entry.other?.toFixed(1) || '0.0',
       entry.hoursType || 'Regular',
-      entry.hours?.toFixed(1) || '0.0'
+      formatHoursMinutes(entry.hours || 0),
+      entry.injured || 'N'
     ]),
     theme: 'striped',
     headStyles: { fillColor: [59, 130, 246], fontSize: 7 },
@@ -429,7 +437,7 @@ function buildSingleEntryCardHTML(entry: any): string {
 
 // Build Daily Timecard HTML table
 function buildDailyTimecardHTML(entries: any[]): string {
-  const columns = ["First Name", "Last Name", "Emp ID", "Date", "Project", "Cost Code", "Mat. Handling", "Process/Cut", "Fitup/Weld", "Finishes", "Other", "Hours Type", "Hours"];
+  const columns = ["First Name", "Last Name", "Emp ID", "Date", "Project", "Cost Code", "Mat. Handling", "Process/Cut", "Fitup/Weld", "Finishes", "Other", "Hours Type", "Hours", "Injured"];
   let table = "<table border='1' style='border-collapse:collapse;width:100%;font-family:sans-serif;font-size:12px;'>";
   table += "<thead><tr>" + columns.map(col => 
     `<th style='padding:6px 8px;background:#F6F6F7;text-align:left;white-space:nowrap;'>${col}</th>`
@@ -454,7 +462,8 @@ function buildDailyTimecardHTML(entries: any[]): string {
         <td style='padding:6px 8px;text-align:right;'>${entry.finishes?.toFixed(1) || '0.0'}</td>
         <td style='padding:6px 8px;text-align:right;'>${entry.other?.toFixed(1) || '0.0'}</td>
         <td style='padding:6px 8px;${otStyle}'>${entry.hoursType || 'Regular'}</td>
-        <td style='padding:6px 8px;text-align:right;${otStyle}'>${entry.hours?.toFixed(1) || '0.0'}</td>
+        <td style='padding:6px 8px;text-align:right;${otStyle}'>${formatHoursMinutes(entry.hours || 0)}</td>
+        <td style='padding:6px 8px;'>${entry.injured || 'N'}</td>
       </tr>`;
     }).join("");
   }
@@ -933,7 +942,7 @@ const Reports = () => {
 
       const { data: timeEntries } = await supabase
         .from('time_entries')
-        .select(`id, user_id, profile_id, start_time, end_time, duration_minutes, projects(name, project_number)`)
+        .select(`id, user_id, profile_id, start_time, end_time, duration_minutes, injury_reported, projects(name, project_number)`)
         .eq('company_id', companyId)
         .gte('start_time', startOfDay.toISOString())
         .lte('start_time', endOfDay.toISOString())
@@ -1032,11 +1041,38 @@ const Reports = () => {
       };
 
       // Build per-entry rows (one per allocation, or one per entry if no allocations)
+      // Fetch task_types for category-to-code mapping
+      const { data: taskTypesData } = await supabase
+        .from('task_types')
+        .select('name, code')
+        .eq('company_id', companyId)
+        .eq('is_active', true);
+
+      const categoryCodeMap: Record<string, string> = {};
+      (taskTypesData || []).forEach((tt: any) => {
+        const normalizedName = tt.name?.toLowerCase().replace(/[^a-z]/g, '') || '';
+        if (normalizedName.includes('materialhandling')) categoryCodeMap['material_handling'] = tt.code;
+        else if (normalizedName.includes('processingcutting') || normalizedName.includes('processing')) categoryCodeMap['processing_cutting'] = tt.code;
+        else if (normalizedName.includes('fabrication') || normalizedName.includes('fitup')) categoryCodeMap['fabrication_fitup_weld'] = tt.code;
+        else if (normalizedName.includes('finishes') || normalizedName.includes('finish')) categoryCodeMap['finishes'] = tt.code;
+        else if (normalizedName.includes('other')) categoryCodeMap['other'] = tt.code;
+      });
+
+      const getDominantCostCode = (mh: number, pc: number, ffw: number, fin: number, oth: number): string => {
+        const cats: [string, number][] = [
+          ['material_handling', mh], ['processing_cutting', pc], ['fabrication_fitup_weld', ffw], ['finishes', fin], ['other', oth]
+        ];
+        const dominant = cats.filter(([, v]) => v > 0).sort((a, b) => b[1] - a[1])[0];
+        if (dominant) return categoryCodeMap[dominant[0]] || '';
+        return '';
+      };
+
       interface DailyRow {
         firstName: string; lastName: string; employeeId: string; date: string;
         projectName: string; costCode: string;
         materialHandling: number; processingCutting: number; fabricationFitupWeld: number; finishes: number; other: number;
         hoursType: 'Regular' | 'Overtime'; hours: number;
+        injured: string;
         profileId: string; departmentId?: string;
       }
 
@@ -1075,6 +1111,8 @@ const Reports = () => {
         const allocs = allocationsMap[entry.id];
         const costCode = timeEntryTaskCodes[entry.id] || '';
 
+        const injuredVal = (entry as any).injury_reported ? 'Y' : 'N';
+
         const makeRow = (projName: string, cc: string, mh: number, pc: number, ffw: number, fin: number, oth: number, mins: number) => {
           const totalDaily = empDailyMins[pid] || mins;
           const schedMins = getSchedMins(pid, profile.department_id);
@@ -1090,6 +1128,7 @@ const Reports = () => {
                 projectName: projName, costCode: cc,
                 materialHandling: mh, processingCutting: pc, fabricationFitupWeld: ffw, finishes: fin, other: oth,
                 hoursType: 'Regular', hours: regMins / 60,
+                injured: injuredVal,
                 profileId: pid, departmentId: profile.department_id,
               });
             }
@@ -1100,6 +1139,7 @@ const Reports = () => {
                 projectName: projName, costCode: cc,
                 materialHandling: mh, processingCutting: pc, fabricationFitupWeld: ffw, finishes: fin, other: oth,
                 hoursType: 'Overtime', hours: otMins / 60,
+                injured: injuredVal,
                 profileId: pid, departmentId: profile.department_id,
               });
             }
@@ -1110,6 +1150,7 @@ const Reports = () => {
               projectName: projName, costCode: cc,
               materialHandling: mh, processingCutting: pc, fabricationFitupWeld: ffw, finishes: fin, other: oth,
               hoursType: 'Regular', hours: mins / 60,
+              injured: injuredVal,
               profileId: pid, departmentId: profile.department_id,
             });
           }
@@ -1119,9 +1160,15 @@ const Reports = () => {
           for (const a of allocs) {
             const p = a.projects as any;
             const projName = p?.name || entry.projects?.name || '';
-            const allocTotal = (a.material_handling || 0) + (a.processing_cutting || 0) + (a.fabrication_fitup_weld || 0) + (a.finishes || 0) + (a.other || 0);
-            const allocMins = allocTotal * 60; // allocations are in hours
-            makeRow(projName, costCode, a.material_handling || 0, a.processing_cutting || 0, a.fabrication_fitup_weld || 0, a.finishes || 0, a.other || 0, allocMins > 0 ? allocMins : entryMins);
+            const mh = a.material_handling || 0;
+            const pc = a.processing_cutting || 0;
+            const ffw = a.fabrication_fitup_weld || 0;
+            const fin = a.finishes || 0;
+            const oth = a.other || 0;
+            const allocTotal = mh + pc + ffw + fin + oth;
+            const allocMins = allocTotal * 60;
+            const derivedCostCode = getDominantCostCode(mh, pc, ffw, fin, oth) || costCode;
+            makeRow(projName, derivedCostCode, mh, pc, ffw, fin, oth, allocMins > 0 ? allocMins : entryMins);
           }
         } else {
           const projName = entry.projects?.name || '';
