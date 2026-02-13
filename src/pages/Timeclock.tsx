@@ -571,7 +571,7 @@ const Timeclock = () => {
   };
 
   const performClockOut = async (photoUrl?: string, photoBlob?: Blob) => {
-    const currentEntry = activeTimeEntryRef.current;
+    let currentEntry = activeTimeEntryRef.current;
     const emp = authenticatedEmployeeRef.current;
     const comp = companyRef.current;
     console.log('[Timeclock] performClockOut called', {
@@ -580,8 +580,36 @@ const Timeclock = () => {
       hasComp: !!comp,
       entryId: currentEntry?.id,
     });
+
+    // Defensive: if activeTimeEntry ref was lost (e.g. due to async timing),
+    // re-query the active entry directly
+    if (!currentEntry && emp && comp) {
+      console.warn('[Timeclock] activeTimeEntryRef was null, re-querying...');
+      const { data } = await supabase
+        .from('time_entries')
+        .select('*')
+        .eq('profile_id', emp.id)
+        .eq('company_id', comp.id)
+        .is('end_time', null)
+        .order('start_time', { ascending: false })
+        .limit(1)
+        .maybeSingle();
+      if (data) {
+        currentEntry = data;
+        setActiveTimeEntry(data);
+        console.log('[Timeclock] Re-queried active entry:', data.id);
+      }
+    }
+
     if (!currentEntry || !emp || !comp) {
-      console.error('[Timeclock] performClockOut ABORTED - missing ref data');
+      console.error('[Timeclock] performClockOut ABORTED - missing ref data', {
+        hasEntry: !!currentEntry,
+        hasEmp: !!emp,
+        hasComp: !!comp,
+      });
+      const employeeName = emp?.display_name || emp?.first_name || "Employee";
+      showStatusOverlay("error", employeeName, "No active shift found. Please try again.");
+      setIsProcessing(false);
       return;
     }
     // Show the timecard dialog instead of clocking out immediately
