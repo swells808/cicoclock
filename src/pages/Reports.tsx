@@ -189,11 +189,11 @@ function exportDailyTimecardAsCSV(entries: any[]) {
       `"${entry.date || ''}"`,
       `"${entry.projectName || ''}"`,
       `"${entry.costCode || ''}"`,
-      entry.materialHandling?.toFixed(1) || "0.0",
-      entry.processingCutting?.toFixed(1) || "0.0",
-      entry.fabricationFitupWeld?.toFixed(1) || "0.0",
-      entry.finishes?.toFixed(1) || "0.0",
-      entry.other?.toFixed(1) || "0.0",
+      `"${formatHoursMinutes(entry.materialHandling || 0)}"`,
+      `"${formatHoursMinutes(entry.processingCutting || 0)}"`,
+      `"${formatHoursMinutes(entry.fabricationFitupWeld || 0)}"`,
+      `"${formatHoursMinutes(entry.finishes || 0)}"`,
+      `"${formatHoursMinutes(entry.other || 0)}"`,
       `"${entry.hoursType || 'Regular'}"`,
       `"${formatHoursMinutes(entry.hours || 0)}"`,
       `"${entry.injured || 'N'}"`
@@ -276,11 +276,11 @@ async function exportDailyTimecardAsPDF(entries: any[], dateStr: string) {
       entry.date || '',
       entry.projectName || '',
       entry.costCode || '',
-      entry.materialHandling?.toFixed(1) || '0.0',
-      entry.processingCutting?.toFixed(1) || '0.0',
-      entry.fabricationFitupWeld?.toFixed(1) || '0.0',
-      entry.finishes?.toFixed(1) || '0.0',
-      entry.other?.toFixed(1) || '0.0',
+      formatHoursMinutes(entry.materialHandling || 0),
+      formatHoursMinutes(entry.processingCutting || 0),
+      formatHoursMinutes(entry.fabricationFitupWeld || 0),
+      formatHoursMinutes(entry.finishes || 0),
+      formatHoursMinutes(entry.other || 0),
       entry.hoursType || 'Regular',
       formatHoursMinutes(entry.hours || 0),
       entry.injured || 'N'
@@ -456,11 +456,11 @@ function buildDailyTimecardHTML(entries: any[]): string {
         <td style='padding:6px 8px;'>${entry.date || ''}</td>
         <td style='padding:6px 8px;'>${entry.projectName || ''}</td>
         <td style='padding:6px 8px;'>${entry.costCode || ''}</td>
-        <td style='padding:6px 8px;text-align:right;'>${entry.materialHandling?.toFixed(1) || '0.0'}</td>
-        <td style='padding:6px 8px;text-align:right;'>${entry.processingCutting?.toFixed(1) || '0.0'}</td>
-        <td style='padding:6px 8px;text-align:right;'>${entry.fabricationFitupWeld?.toFixed(1) || '0.0'}</td>
-        <td style='padding:6px 8px;text-align:right;'>${entry.finishes?.toFixed(1) || '0.0'}</td>
-        <td style='padding:6px 8px;text-align:right;'>${entry.other?.toFixed(1) || '0.0'}</td>
+        <td style='padding:6px 8px;text-align:right;'>${formatHoursMinutes(entry.materialHandling || 0)}</td>
+        <td style='padding:6px 8px;text-align:right;'>${formatHoursMinutes(entry.processingCutting || 0)}</td>
+        <td style='padding:6px 8px;text-align:right;'>${formatHoursMinutes(entry.fabricationFitupWeld || 0)}</td>
+        <td style='padding:6px 8px;text-align:right;'>${formatHoursMinutes(entry.finishes || 0)}</td>
+        <td style='padding:6px 8px;text-align:right;'>${formatHoursMinutes(entry.other || 0)}</td>
         <td style='padding:6px 8px;${otStyle}'>${entry.hoursType || 'Regular'}</td>
         <td style='padding:6px 8px;text-align:right;${otStyle}'>${formatHoursMinutes(entry.hours || 0)}</td>
         <td style='padding:6px 8px;'>${entry.injured || 'N'}</td>
