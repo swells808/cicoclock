@@ -1,56 +1,49 @@
 
 
-# Fix: Timecard Dialog Not Appearing on iPad
+# Fix CSV Column Shift + Restructure Daily Timecard Report
 
-## Problem
+## Bug Fix: CSV Column Data Shifted
 
-When clocking out on iPad, the shift summary/timecard dialog never appears. The clock-out completes successfully (photos captured, time entry closed) but without collecting timecard allocations or injury reporting.
+The Time Entry Details CSV export has an unquoted date field containing a comma (e.g., "Feb 13, 2026"). This causes the comma to be treated as a column separator, shifting all subsequent data one column to the right. Every value after the date lands in the wrong column.
 
-## Root Cause
+**Fix**: Quote all unquoted fields in the CSV row (`date`, `clockIn`, `clockOut`, `duration`) in `exportTimeEntryDetailsAsCSV` inside `src/pages/Reports.tsx` (lines 211-249).
 
-The `handlePhotoCapture` callback reads `photoAction` from a stale JavaScript closure. The parent component re-renders every second (clock timer), but by the time the photo auto-capture fires 3+ seconds later, the callback is holding onto an outdated `photoAction` value of `null`. This means neither the clock-in nor clock-out branch executes after the photo is captured -- the photo uploads but `performClockOut` is never called, so the timecard dialog never opens.
+## Restructure: Daily Timecard Report
 
-This same ref pattern was already applied to `activeTimeEntry`, `authenticatedEmployee`, and `company` in this file -- `photoAction` and `companyFeatures` were simply missed.
+The Daily Timecard report currently shows a simple aggregated summary (Employee, Regular Hours, Overtime Hours, Total Hours). The user wants it restructured to match the shift summary timecard format employees fill out at clock-out, with per-project task category breakdowns.
 
-## Changes (single file: `src/pages/Timeclock.tsx`)
+### New Daily Timecard Format
 
-### 1. Add ref-backed state for `photoAction`
+Columns for both UI table and CSV export:
 
-Convert `photoAction` to use the same ref pattern already used for other state variables:
+| First Name | Last Name | Employee ID | Date | Project | Cost Code | Mat. Handling | Process/Cut | Fitup/Weld | Finishes | Other | Hours Type | Hours |
+|---|---|---|---|---|---|---|---|---|---|---|---|---|
 
-```typescript
-const [photoAction, _setPhotoAction] = useState(null);
-const photoActionRef = useRef(null);
-const setPhotoAction = (action) => {
-  photoActionRef.current = action;
-  _setPhotoAction(action);
-};
-```
+This mirrors the Employee Hours report structure but adds the five task category columns from the timecard allocations table.
 
-### 2. Add ref for `companyFeatures`
+### Data Source
 
-Keep a ref in sync so `handleClockOut` (called from the auto-trigger effect) always reads the current value:
+- Pull from `timecard_allocations` table (material_handling, processing_cutting, fabrication_fitup_weld, finishes, other) joined to `time_entries` and `profiles`
+- Fall back to total entry duration when no allocations exist (legacy entries)
+- Fetch `task_activities` for cost codes (same pattern as the Employee Hours report)
+- Calculate regular vs overtime using the schedule hierarchy (employee schedule > department schedule > company threshold)
 
-```typescript
-const companyFeaturesRef = useRef(companyFeatures);
-companyFeaturesRef.current = companyFeatures;
-```
+### Files Modified
 
-### 3. Update callbacks to read from refs
+**`src/pages/Reports.tsx`**:
+1. Fix unquoted `date` field in `exportTimeEntryDetailsAsCSV` (line 216) -- add quotes around date, clockIn, clockOut, duration values
+2. Rewrite `exportDailyTimecardAsCSV` with new columns matching the timecard format
+3. Rewrite `exportDailyTimecardAsPDF` with matching columns
+4. Rewrite `buildDailyTimecardHTML` popup table with new columns
+5. Update the Daily Timecard data fetch (lines 916-982) to also query `timecard_allocations` task category values, `task_activities` for cost codes, employee/department schedules for overtime calculation, and `company_features` for overtime threshold
 
-- `handlePhotoCapture`: read `photoActionRef.current` instead of `photoAction`
-- `onSkip` / `onCancel` callbacks for PhotoCapture: read `photoActionRef.current`
-- `handleClockIn` / `handleClockOut`: read `companyFeaturesRef.current`
+**`src/components/reports/DailyTimecardReport.tsx`**:
+6. Update the inline report UI table to show per-entry rows with project, task categories, cost code, regular/overtime hours (matching the new CSV format)
 
-### 4. Remove the 300ms setTimeout
+### Technical Details
 
-Open the timecard dialog immediately in `performClockOut` instead of scheduling it with a delay.
-
-### 5. Clean up debug logging
-
-Remove the extensive `console.log` statements added during previous debugging iterations.
-
-## Why Previous Fixes Failed
-
-They addressed symptoms (touch event dismissal, dialog interaction blocking) rather than the root cause: the `photoAction` value being `null` inside the stale closure, preventing `performClockOut` from ever being called.
+- The overtime calculation will follow the same pattern already implemented in the Employee Hours report (lines 1166-1400 of Reports.tsx): group by employee + date, compare against scheduled minutes from employee/department schedules, split into Regular and Overtime rows
+- Task category values come from `timecard_allocations` columns: `material_handling`, `processing_cutting`, `fabrication_fitup_weld`, `finishes`, `other`
+- Cost codes come from `task_activities.task_types.code` (same join pattern as Employee Hours report)
+- For entries without timecard allocations (legacy), the total duration is placed in the Hours column with empty task category fields
 
