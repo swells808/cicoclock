@@ -1,55 +1,57 @@
 
 
-# Daily Timecard Report - Three Refinements
+# Fix Dashboard: "No Project" and Empty Task Activities
 
-## 1. Cost Code Column - Show Task Type Number
+## Problem 1: "No Project" on All Entries
 
-Currently the "Cost Code" column is empty because it relies on `task_activities` which may not always have entries. The cost codes map directly to the five task categories:
+All today's time entries have `project_id = NULL` in the `time_entries` table. The actual project assignments are stored in the `timecard_allocations` table (the modern approach used by the timeclock). The Dashboard only checks `time_entries.project_id`, so everything shows "No Project."
 
-- Material Handling = 8010
-- Processing Cutting = 8020
-- Fabrication Fitup Welding = 8030
-- Finishes = 8040
-- Other = 8050
+**Fix**: After fetching time entries, also fetch `timecard_allocations` for those entries and merge the project names in. If a time entry has no `project_id` but has an allocation with a project, use that project name instead.
 
-For rows built from `timecard_allocations`, the cost code should be determined by whichever category has hours allocated (or the primary one). For rows without allocations, it stays empty or uses the task_activities fallback.
+### Changes in `src/pages/Dashboard.tsx`:
+- After `timeEntries` loads, query `timecard_allocations` joined with `projects` for today's entry IDs
+- Build a map of `time_entry_id` to project name
+- Use that map as a fallback when displaying project names in both "Today's Activity" and "Timesheet History"
 
-The fix will also fetch `task_types` for the company so codes are pulled from the database (not hardcoded), mapping each allocation category to its corresponding task type code.
+### Changes in `src/hooks/useTimeEntries.ts`:
+- Enhance the query to also fetch `timecard_allocations` project data, or add a secondary query
+- Alternatively, handle this at the Dashboard level to avoid changing the shared hook
 
-## 2. Hours Format - Show as Hours and Minutes (e.g., 1h21m)
+## Problem 2: Task Activities Not Being Recorded
 
-Currently hours display as a decimal (e.g., 1.4). All three outputs (CSV, PDF, HTML popup) and the inline UI component will be updated to format hours as `Xh Ym` instead.
+Two bugs prevent task activities from being saved:
 
-A helper function `formatHoursMinutes(decimalHours)` will convert, e.g., 1.35 hours to "1h21m".
+1. **Key name mismatch**: The Dashboard sends camelCase keys (`userId`, `profileId`, `taskId`, etc.) but the edge function `record-task-activity` expects snake_case keys (`user_id`, `profile_id`, `task_id`, etc.). Every call silently fails with a 400 "All fields are required" error.
 
-## 3. Add "Injured" Column
+2. **Null project_id rejected**: The edge function requires `project_id` to be non-null, but the Dashboard passes `null` when no project is selected. This causes a validation failure even if the keys matched.
 
-The `time_entries` table already has an `injury_reported` boolean column. This will be passed through to each row and displayed as "Y" or "N".
+3. **Timeclock doesn't record task activities**: The main Timeclock page (where most employees clock in via PIN) never calls `record-task-activity`, so no task activities are created for those shifts.
 
-The data fetch already queries `time_entries` -- we just need to include `injury_reported` in the select and carry it into each row.
+**Fix**:
 
-## Files Modified
+### Changes in `src/pages/Dashboard.tsx`:
+- Fix the key names from camelCase to snake_case in both `record-task-activity` calls (lines 156-167 and 175-186):
+  - `userId` to `user_id`
+  - `profileId` to `profile_id`
+  - `taskId` to `task_id`
+  - `taskTypeId` to `task_type_id`
+  - `actionType` to `action_type`
+  - `timeEntryId` to `time_entry_id`
+  - `projectId` to `project_id`
+  - `companyId` to `company_id`
 
-**`src/pages/Reports.tsx`**:
-- Add `injury_reported` to the time entries query select (line 936)
-- Fetch `task_types` for the company to build a category-to-code map
-- Update the `DailyRow` interface to include `injured: string`
-- Update `makeRow` to accept and pass through the injured value
-- Update all four output functions to include the new column and hours format:
-  - `exportDailyTimecardAsCSV` (line 174)
-  - `exportDailyTimecardAsPDF` (line 250)
-  - `buildDailyTimecardHTML` (line 431)
-  - Row-building logic (line 1078)
+### Changes in `supabase/functions/record-task-activity/index.ts`:
+- Make `project_id` optional (allow null) since employees may clock in without selecting a project
+- Update the validation to only require the truly mandatory fields
 
-**`src/components/reports/DailyTimecardReport.tsx`**:
-- Add `injured` field to `TimecardRow` interface
-- Include `injury_reported` in the time entries query
-- Pass injury value through to rows
-- Add "Injured" column to the table
-- Format hours as `Xh Ym` in the table cells
+### Changes in `src/pages/Timeclock.tsx` (optional/future):
+- Consider adding task activity recording to the timeclock flow so PIN-clocked entries also generate task activities
 
-## Technical Details
+## Technical Summary
 
-- Cost code derivation: For each allocation row, determine the dominant category (the one with the most hours) and look up its code from the `task_types` table. If multiple categories have equal hours, use the first non-zero one.
-- Hours formatting: `Math.floor(hours)` for the hour part, `Math.round((hours % 1) * 60)` for the minutes part, displayed as `{h}h{m}m`.
-- Injured: Read `entry.injury_reported` (boolean or null), map to "Y" if true, "N" otherwise.
+| File | Change |
+|------|--------|
+| `src/pages/Dashboard.tsx` | Fix camelCase to snake_case in edge function calls; add `timecard_allocations` lookup for project names |
+| `supabase/functions/record-task-activity/index.ts` | Make `project_id` optional |
+| `src/components/dashboard/RecentTaskActivity.tsx` | No changes needed (it reads correctly) |
+
