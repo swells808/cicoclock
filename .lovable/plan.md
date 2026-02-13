@@ -1,49 +1,55 @@
 
 
-# Fix CSV Column Shift + Restructure Daily Timecard Report
+# Daily Timecard Report - Three Refinements
 
-## Bug Fix: CSV Column Data Shifted
+## 1. Cost Code Column - Show Task Type Number
 
-The Time Entry Details CSV export has an unquoted date field containing a comma (e.g., "Feb 13, 2026"). This causes the comma to be treated as a column separator, shifting all subsequent data one column to the right. Every value after the date lands in the wrong column.
+Currently the "Cost Code" column is empty because it relies on `task_activities` which may not always have entries. The cost codes map directly to the five task categories:
 
-**Fix**: Quote all unquoted fields in the CSV row (`date`, `clockIn`, `clockOut`, `duration`) in `exportTimeEntryDetailsAsCSV` inside `src/pages/Reports.tsx` (lines 211-249).
+- Material Handling = 8010
+- Processing Cutting = 8020
+- Fabrication Fitup Welding = 8030
+- Finishes = 8040
+- Other = 8050
 
-## Restructure: Daily Timecard Report
+For rows built from `timecard_allocations`, the cost code should be determined by whichever category has hours allocated (or the primary one). For rows without allocations, it stays empty or uses the task_activities fallback.
 
-The Daily Timecard report currently shows a simple aggregated summary (Employee, Regular Hours, Overtime Hours, Total Hours). The user wants it restructured to match the shift summary timecard format employees fill out at clock-out, with per-project task category breakdowns.
+The fix will also fetch `task_types` for the company so codes are pulled from the database (not hardcoded), mapping each allocation category to its corresponding task type code.
 
-### New Daily Timecard Format
+## 2. Hours Format - Show as Hours and Minutes (e.g., 1h21m)
 
-Columns for both UI table and CSV export:
+Currently hours display as a decimal (e.g., 1.4). All three outputs (CSV, PDF, HTML popup) and the inline UI component will be updated to format hours as `Xh Ym` instead.
 
-| First Name | Last Name | Employee ID | Date | Project | Cost Code | Mat. Handling | Process/Cut | Fitup/Weld | Finishes | Other | Hours Type | Hours |
-|---|---|---|---|---|---|---|---|---|---|---|---|---|
+A helper function `formatHoursMinutes(decimalHours)` will convert, e.g., 1.35 hours to "1h21m".
 
-This mirrors the Employee Hours report structure but adds the five task category columns from the timecard allocations table.
+## 3. Add "Injured" Column
 
-### Data Source
+The `time_entries` table already has an `injury_reported` boolean column. This will be passed through to each row and displayed as "Y" or "N".
 
-- Pull from `timecard_allocations` table (material_handling, processing_cutting, fabrication_fitup_weld, finishes, other) joined to `time_entries` and `profiles`
-- Fall back to total entry duration when no allocations exist (legacy entries)
-- Fetch `task_activities` for cost codes (same pattern as the Employee Hours report)
-- Calculate regular vs overtime using the schedule hierarchy (employee schedule > department schedule > company threshold)
+The data fetch already queries `time_entries` -- we just need to include `injury_reported` in the select and carry it into each row.
 
-### Files Modified
+## Files Modified
 
 **`src/pages/Reports.tsx`**:
-1. Fix unquoted `date` field in `exportTimeEntryDetailsAsCSV` (line 216) -- add quotes around date, clockIn, clockOut, duration values
-2. Rewrite `exportDailyTimecardAsCSV` with new columns matching the timecard format
-3. Rewrite `exportDailyTimecardAsPDF` with matching columns
-4. Rewrite `buildDailyTimecardHTML` popup table with new columns
-5. Update the Daily Timecard data fetch (lines 916-982) to also query `timecard_allocations` task category values, `task_activities` for cost codes, employee/department schedules for overtime calculation, and `company_features` for overtime threshold
+- Add `injury_reported` to the time entries query select (line 936)
+- Fetch `task_types` for the company to build a category-to-code map
+- Update the `DailyRow` interface to include `injured: string`
+- Update `makeRow` to accept and pass through the injured value
+- Update all four output functions to include the new column and hours format:
+  - `exportDailyTimecardAsCSV` (line 174)
+  - `exportDailyTimecardAsPDF` (line 250)
+  - `buildDailyTimecardHTML` (line 431)
+  - Row-building logic (line 1078)
 
 **`src/components/reports/DailyTimecardReport.tsx`**:
-6. Update the inline report UI table to show per-entry rows with project, task categories, cost code, regular/overtime hours (matching the new CSV format)
+- Add `injured` field to `TimecardRow` interface
+- Include `injury_reported` in the time entries query
+- Pass injury value through to rows
+- Add "Injured" column to the table
+- Format hours as `Xh Ym` in the table cells
 
-### Technical Details
+## Technical Details
 
-- The overtime calculation will follow the same pattern already implemented in the Employee Hours report (lines 1166-1400 of Reports.tsx): group by employee + date, compare against scheduled minutes from employee/department schedules, split into Regular and Overtime rows
-- Task category values come from `timecard_allocations` columns: `material_handling`, `processing_cutting`, `fabrication_fitup_weld`, `finishes`, `other`
-- Cost codes come from `task_activities.task_types.code` (same join pattern as Employee Hours report)
-- For entries without timecard allocations (legacy), the total duration is placed in the Hours column with empty task category fields
-
+- Cost code derivation: For each allocation row, determine the dominant category (the one with the most hours) and look up its code from the `task_types` table. If multiple categories have equal hours, use the first non-zero one.
+- Hours formatting: `Math.floor(hours)` for the hour part, `Math.round((hours % 1) * 60)` for the minutes part, displayed as `{h}h{m}m`.
+- Injured: Read `entry.injury_reported` (boolean or null), map to "Y" if true, "N" otherwise.
