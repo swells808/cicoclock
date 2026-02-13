@@ -556,6 +556,22 @@ const Timeclock = () => {
       runFaceVerification(data.data.id, photoBlob, photoUrl).catch(console.error);
     }
 
+    // Fire-and-forget: record default "Other" task activity for this shift
+    if (data.data?.id) {
+      supabase.functions.invoke('record-task-activity', {
+        body: {
+          user_id: emp.user_id || emp.id,
+          profile_id: emp.id,
+          task_id: 'auto-other',
+          task_type_id: 'auto-other',
+          action_type: 'start',
+          time_entry_id: data.data.id,
+          project_id: null,
+          company_id: comp.id,
+        }
+      }).catch(err => console.error('[Timeclock] Auto task activity error:', err));
+    }
+
     const employeeName = emp.display_name || emp.first_name || "Employee";
     showStatusOverlay("clock_in", employeeName);
     setIsProcessing(false);
