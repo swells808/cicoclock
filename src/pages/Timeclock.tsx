@@ -357,22 +357,32 @@ const Timeclock = () => {
 
   const handlePhotoCapture = async (photoBlob: Blob) => {
     const action = photoActionRef.current;
+    console.log('[Timeclock] handlePhotoCapture called, action:', action);
     try {
       setPendingPhotoBlob(photoBlob);
       const photoUrl = await uploadPhoto(photoBlob, action!);
+      // CRITICAL: Close the photo dialog FIRST and wait for it to fully unmount
+      // before opening the timecard dialog. Two Radix Dialogs transitioning
+      // simultaneously causes the second one to fail on iPad Safari.
       setShowPhotoCapture(false);
+      setPhotoAction(null);
+      setPendingPhotoBlob(null);
+      await new Promise(resolve => setTimeout(resolve, 400));
       if (action === 'clock_in') {
         await performClockIn(photoUrl, photoBlob);
       } else if (action === 'clock_out') {
+        console.log('[Timeclock] calling performClockOut after photo');
         await performClockOut(photoUrl, photoBlob);
       }
     } catch (error) {
       console.error('[Timeclock] handlePhotoCapture error:', error);
       toast({ title: "Photo Upload Failed", description: "Continuing without photo.", variant: "destructive" });
+      setShowPhotoCapture(false);
+      setPhotoAction(null);
+      setPendingPhotoBlob(null);
+      await new Promise(resolve => setTimeout(resolve, 400));
       if (action === 'clock_in') await performClockIn(); else if (action === 'clock_out') await performClockOut();
     }
-    setPhotoAction(null);
-    setPendingPhotoBlob(null);
   };
 
   // Get current geolocation with Mapbox reverse geocoding for better accuracy
@@ -564,7 +574,16 @@ const Timeclock = () => {
     const currentEntry = activeTimeEntryRef.current;
     const emp = authenticatedEmployeeRef.current;
     const comp = companyRef.current;
-    if (!currentEntry || !emp || !comp) return;
+    console.log('[Timeclock] performClockOut called', {
+      hasEntry: !!currentEntry,
+      hasEmp: !!emp,
+      hasComp: !!comp,
+      entryId: currentEntry?.id,
+    });
+    if (!currentEntry || !emp || !comp) {
+      console.error('[Timeclock] performClockOut ABORTED - missing ref data');
+      return;
+    }
     // Show the timecard dialog instead of clocking out immediately
     setPendingClockOutPhotoUrl(photoUrl);
     setPendingClockOutPhotoBlob(photoBlob);
@@ -572,6 +591,7 @@ const Timeclock = () => {
       ? +((Date.now() - new Date(currentEntry.start_time).getTime()) / 3600000).toFixed(2)
       : 0;
     setSnapshotShiftHours(hours);
+    console.log('[Timeclock] Opening timecard dialog, hours:', hours);
     setShowTimecardDialog(true);
   };
 
@@ -743,12 +763,14 @@ const Timeclock = () => {
         open={showPhotoCapture} 
         onCapture={handlePhotoCapture} 
         onCancel={() => { setShowPhotoCapture(false); setPhotoAction(null); resetForNextUser(); }} 
-        onSkip={() => { 
+        onSkip={async () => { 
           const action = photoActionRef.current;
-          setShowPhotoCapture(false); 
+          setShowPhotoCapture(false);
+          setPhotoAction(null);
+          // Wait for PhotoCapture dialog to fully unmount before opening next dialog
+          await new Promise(resolve => setTimeout(resolve, 400));
           if (action === 'clock_in') performClockIn(); 
           else if (action === 'clock_out') performClockOut(); 
-          setPhotoAction(null); 
         }}
         title={photoAction === 'clock_in' ? "Clock In Photo" : "Clock Out Photo"} 
         description={photoAction === 'clock_in' ? "Please take a photo to verify your clock in" : "Please take a photo to verify your clock out"} 
