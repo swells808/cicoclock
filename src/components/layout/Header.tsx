@@ -55,16 +55,19 @@ export const Header: React.FC = () => {
             <>
               <Link to="/login">
                 <Button
-                  className="bg-primary text-primary-foreground hover:bg-primary/90 rounded-full px-6"
+                  variant="outline"
+                  className="border-[#5296ED] text-[#5296ED] hover:bg-[#5296ED]/10"
                 >
+                  <LogIn className="w-4 h-4 mr-1" />
                   Login
                 </Button>
               </Link>
               <Link to="/signup">
                 <Button
-                  className="bg-foreground text-background hover:bg-foreground/90 rounded-full px-6"
+                  variant="default"
+                  className="bg-[#5296ED] hover:bg-[#5296ED]/90 text-white"
                 >
-                  Start Free Trial
+                  Sign Up
                 </Button>
               </Link>
             </>
