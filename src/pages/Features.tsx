@@ -2,112 +2,130 @@ import React from "react";
 import { Header } from "@/components/layout/Header";
 import { Footer } from "@/components/layout/Footer";
 import { CustomButton } from "@/components/ui/custom-button";
-import { CheckCircle, BarChart3, Puzzle, Monitor } from "lucide-react";
+import { ScanFace, ListTodo, Wallet, ArrowRight, CheckCircle } from "lucide-react";
 import { Link } from "react-router-dom";
-
-const features = [
-  {
-    icon: <CheckCircle className="h-8 w-8" />,
-    title: "Secure Clock-Ins",
-    description: "Photo verification and geolocation tracking for accurate attendance.",
-    color: "text-primary",
-    bgColor: "bg-primary/10",
-  },
-  {
-    icon: <BarChart3 className="h-8 w-8" />,
-    title: "Smart Reporting",
-    description: "Comprehensive insights for better workforce management.",
-    color: "text-primary",
-    bgColor: "bg-primary/10",
-  },
-  {
-    icon: <Puzzle className="h-8 w-8" />,
-    title: "Easy Integration",
-    description: "Seamless connection with your existing tools.",
-    color: "text-secondary",
-    bgColor: "bg-secondary/10",
-  },
-  {
-    icon: <Monitor className="h-8 w-8" />,
-    title: "Multi-Platform",
-    description: "Works on any device, anywhere, anytime.",
-    color: "text-secondary",
-    bgColor: "bg-secondary/10",
-  },
-];
+import FeatureCard from "@/components/features/FeatureCard";
 
 const Features = () => {
   return (
     <div className="min-h-screen flex flex-col bg-background">
       <Header />
       <main className="flex-1">
-        {/* Hero Section with background image */}
-        <section className="relative h-[400px] flex items-center justify-center overflow-hidden">
-          <div
-            className="absolute inset-0 bg-cover bg-center"
-            style={{
-              backgroundImage:
-                "url('https://images.unsplash.com/photo-1497366216548-37526070297c?auto=format&fit=crop&w=1920&q=80')",
-            }}
-          />
-          <div className="absolute inset-0 bg-cico-dark/70" />
-          <div className="relative z-10 text-center px-4 max-w-3xl mx-auto">
-            <h1 className="text-3xl md:text-5xl font-bold text-white mb-4 leading-tight">
-              Empowering Businesses with Simple &amp; Efficient Time Tracking
-            </h1>
-            <p className="text-white/80 text-lg">
-              CICO Timeclock was built to help small and medium-sized businesses track work hours with ease and accuracy.
-            </p>
-          </div>
-        </section>
-
-        {/* Story + Features Grid */}
-        <section className="py-16 md:py-24">
-          <div className="container mx-auto px-4">
-            <div className="grid md:grid-cols-3 gap-6 max-w-5xl mx-auto">
-              {/* Our Story Card - spans 1 col, 2 rows */}
-              <div className="md:row-span-2 bg-card rounded-2xl border border-border shadow-soft p-8 flex flex-col justify-center">
-                <h2 className="text-2xl font-bold text-foreground mb-4">Our Story</h2>
-                <p className="text-muted-foreground mb-4">
-                  Founded in 2018, CICO Timeclock emerged from a simple observation: small businesses needed a better way to track employee time.
+        {/* Hero Section */}
+        <section className="relative overflow-hidden pt-12 pb-20 lg:pt-24 lg:pb-28 bg-card">
+          <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+            <div className="lg:grid lg:grid-cols-12 lg:gap-16 items-center">
+              {/* Text Content */}
+              <div className="lg:col-span-6 text-center lg:text-left mb-12 lg:mb-0">
+                <h1 className="text-4xl sm:text-5xl lg:text-6xl font-extrabold text-foreground tracking-tight leading-[1.15]">
+                  Unlocking Efficiency with{" "}
+                  <span className="text-cico-green block mt-2">
+                    Advanced Time Tracking Features
+                  </span>
+                </h1>
+                <p className="mt-6 text-lg sm:text-xl text-muted-foreground leading-relaxed max-w-2xl mx-auto lg:mx-0">
+                  Explore the tools that make CICO Timeclock the smartest choice for managing your workforce. Seamlessly integrate attendance, projects, and payroll.
                 </p>
-                <p className="text-muted-foreground mb-4">
-                  Our founders experienced firsthand the challenges of manual time tracking and decided to create a solution that would make it effortless.
-                </p>
-                <p className="text-muted-foreground">
-                  Our mission is to simplify workforce management while ensuring accuracy and compliance. We value transparency, reliability, and user-centered design in everything we do.
-                </p>
+                <div className="mt-8 sm:mt-10 flex justify-center lg:justify-start">
+                  <Link to="/company-signup">
+                    <CustomButton variant="primary" className="px-8 py-4 text-lg font-bold rounded-xl shadow-lg hover:shadow-xl transition-all transform hover:-translate-y-1">
+                      Start Free Trial
+                    </CustomButton>
+                  </Link>
+                </div>
               </div>
 
-              {/* Feature Cards - 2x2 grid */}
-              {features.map((feature, index) => (
-                <div
-                  key={index}
-                  className="bg-card rounded-2xl border border-border shadow-soft p-6 hover:shadow-xl transition-all duration-300 hover:-translate-y-1"
-                >
-                  <div className={`w-12 h-12 rounded-xl ${feature.bgColor} flex items-center justify-center mb-4`}>
-                    <div className={feature.color}>{feature.icon}</div>
+              {/* Image Content */}
+              <div className="lg:col-span-6 relative">
+                <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[120%] h-[120%] bg-gradient-to-tr from-cico-green/5 to-cico-blue/5 rounded-full blur-3xl -z-10 opacity-60" />
+                <div className="relative flex justify-center lg:justify-end items-center">
+                  <img
+                    src="https://images.unsplash.com/photo-1555774698-0b77e0d5fac6?q=80&w=800&auto=format&fit=crop"
+                    alt="Mobile App Interface"
+                    className="relative z-10 w-full max-w-md lg:max-w-lg rounded-[2.5rem] shadow-2xl border-8 border-card ring-1 ring-border transform rotate-[-2deg] hover:rotate-0 transition-transform duration-500"
+                  />
+                  <div className="absolute -bottom-10 -left-10 z-20 hidden sm:block">
+                    <div className="bg-card p-4 rounded-2xl shadow-xl border border-border animate-bounce-slow">
+                      <div className="flex items-center space-x-3">
+                        <div className="h-10 w-10 bg-cico-green/10 rounded-full flex items-center justify-center text-cico-green">
+                          <CheckCircle className="h-6 w-6" />
+                        </div>
+                        <div>
+                          <p className="text-sm font-semibold text-foreground">Clocked In</p>
+                          <p className="text-xs text-muted-foreground">08:59 AM - On Time</p>
+                        </div>
+                      </div>
+                    </div>
                   </div>
-                  <h3 className="text-lg font-bold text-foreground mb-2">{feature.title}</h3>
-                  <p className="text-muted-foreground text-sm leading-relaxed">{feature.description}</p>
                 </div>
-              ))}
+              </div>
             </div>
           </div>
         </section>
 
+        {/* Feature Cards Section */}
+        <section className="py-20 bg-background">
+          <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 space-y-12">
+            <FeatureCard
+              headline="Smart Clock-In with Facial Recognition"
+              description="Clock in with a smile. Eliminate buddy punching and ensure accurate attendance with secure, touchless facial recognition technology. Get precise records, every time, reducing payroll errors significantly."
+              imageSrc="https://images.unsplash.com/photo-1661956602116-aa6865609028?auto=format&fit=crop&q=80&w=800"
+              icon={ScanFace}
+              imageOnRight={false}
+            />
+
+            <FeatureCard
+              headline="Project & Task Management"
+              description="Track every minute, on every project. Assign time to specific tasks and monitor progress in real-time for precise billing and resource allocation. Keep your team aligned and productivity high."
+              imageSrc="https://images.unsplash.com/photo-1460925895917-afdab827c52f?auto=format&fit=crop&q=80&w=800"
+              icon={ListTodo}
+              imageOnRight={true}
+            />
+
+            <FeatureCard
+              headline="Seamless Payroll Integrations"
+              description="Connect with your favorite accounting software like QuickBooks and Xero for automated, error-free payroll processing. Save hours every pay period by eliminating manual data entry."
+              imageSrc="https://images.unsplash.com/photo-1554224155-8d04cb21cd6c?auto=format&fit=crop&q=80&w=800"
+              icon={Wallet}
+              imageOnRight={false}
+              extraContent={
+                <div className="flex flex-wrap gap-4 mt-2 items-center justify-center lg:justify-start opacity-70">
+                  <span className="font-bold text-muted-foreground text-xl flex items-center gap-1">
+                    <div className="w-6 h-6 bg-cico-green rounded-full" /> QuickBooks
+                  </span>
+                  <span className="font-bold text-cico-blue text-xl flex items-center gap-1">
+                    <div className="w-6 h-6 bg-cico-blue rounded-full" /> Xero
+                  </span>
+                </div>
+              }
+            />
+          </div>
+        </section>
+
         {/* CTA Section */}
-        <section className="pb-16 md:pb-24">
-          <div className="container mx-auto px-4">
-            <div className="max-w-3xl mx-auto bg-card rounded-2xl border border-border shadow-soft p-10 md:p-14 text-center">
-              <h2 className="text-2xl md:text-3xl font-bold text-foreground mb-6">
-                Join Thousands of Businesses Tracking Time the Smart Way!
+        <section className="py-20 px-4 sm:px-6 lg:px-8">
+          <div className="max-w-7xl mx-auto">
+            <div className="bg-gradient-to-r from-cico-green/5 to-cico-green/10 rounded-[2.5rem] p-10 sm:p-16 text-center shadow-soft border border-cico-green/10">
+              <h2 className="text-3xl sm:text-4xl lg:text-5xl font-bold text-foreground mb-6">
+                Ready to start tracking smarter?
+                <br className="hidden sm:block" />
+                Get started with CICO Timeclock today.
               </h2>
-              <Link to="/company-signup">
-                <CustomButton variant="primary" className="w-full md:w-auto md:px-16 py-3 text-lg rounded-xl">
-                  Start Free Trial
-                </CustomButton>
-              </Link>
+              <p className="text-lg text-muted-foreground mb-10 max-w-2xl mx-auto">
+                Join thousands of businesses streamlining their workforce management. No credit card required for the trial.
+              </p>
+              <div className="flex flex-col sm:flex-row justify-center gap-4">
+                <Link to="/company-signup">
+                  <CustomButton variant="primary" className="px-8 py-4 text-lg font-bold rounded-xl shadow-lg">
+                    Start Free Trial
+                  </CustomButton>
+                </Link>
+                <Link to="/contact">
+                  <CustomButton variant="secondary" className="px-8 py-4 text-lg font-bold rounded-xl shadow-lg bg-cico-blue text-white hover:bg-cico-blue/90">
+                    Schedule a Demo
+                  </CustomButton>
+                </Link>
+              </div>
             </div>
           </div>
         </section>
