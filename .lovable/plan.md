@@ -1,57 +1,56 @@
 
 
-# Fix Dashboard: "No Project" and Empty Task Activities
+# Fix: Employee Time Entries Not Showing for Timeclock-Only Users
 
-## Problem 1: "No Project" on All Entries
+## Problem
+The Employee Detail page's "Attendance" tab (and related views) shows "No time entries found" because the `useEmployeeTimeEntries` hook only queries `time_entries` by `user_id`. However, employees who clock in via the kiosk (PIN/badge) have their time entries stored with only `profile_id` set and `user_id` as null. This means all kiosk-based clock events are invisible on the employee detail page.
 
-All today's time entries have `project_id = NULL` in the `time_entries` table. The actual project assignments are stored in the `timecard_allocations` table (the modern approach used by the timeclock). The Dashboard only checks `time_entries.project_id`, so everything shows "No Project."
+## Root Cause
+In `src/hooks/useEmployeeTimeEntries.ts`:
+1. Line 64: If the profile has no `user_id`, it returns empty results immediately -- this breaks for timeclock-only users entirely.
+2. Line 74: The query filters `.eq("user_id", profile.user_id)` which misses all entries that only have `profile_id`.
 
-**Fix**: After fetching time entries, also fetch `timecard_allocations` for those entries and merge the project names in. If a time entry has no `project_id` but has an allocation with a project, use that project name instead.
+## Solution
+Update the hook to query time entries using **both** `user_id` and `profile_id`, matching the pattern already used on the Admin Time Tracking page.
 
-### Changes in `src/pages/Dashboard.tsx`:
-- After `timeEntries` loads, query `timecard_allocations` joined with `projects` for today's entry IDs
-- Build a map of `time_entry_id` to project name
-- Use that map as a fallback when displaying project names in both "Today's Activity" and "Timesheet History"
+### Changes to `src/hooks/useEmployeeTimeEntries.ts`
 
-### Changes in `src/hooks/useTimeEntries.ts`:
-- Enhance the query to also fetch `timecard_allocations` project data, or add a secondary query
-- Alternatively, handle this at the Dashboard level to avoid changing the shared hook
+1. **Remove the early return** when `user_id` is null (line 64-66). Instead, proceed with the query using whichever identifiers are available.
 
-## Problem 2: Task Activities Not Being Recorded
+2. **Update the query filter** (line 74) to use an `.or()` filter that matches entries by either `profile_id` or `user_id`:
+   - If the profile has a `user_id`: filter by `profile_id.eq.{profileId},user_id.eq.{userId}`
+   - If no `user_id`: filter by `profile_id.eq.{profileId}` only
 
-Two bugs prevent task activities from being saved:
+3. **Simplify the profile lookup** -- since we already receive the `profileId` as a parameter, we can query directly by `profile_id` without needing to first look up the `user_id`.
 
-1. **Key name mismatch**: The Dashboard sends camelCase keys (`userId`, `profileId`, `taskId`, etc.) but the edge function `record-task-activity` expects snake_case keys (`user_id`, `profile_id`, `task_id`, etc.). Every call silently fails with a 400 "All fields are required" error.
+### Technical Detail
 
-2. **Null project_id rejected**: The edge function requires `project_id` to be non-null, but the Dashboard passes `null` when no project is selected. This causes a validation failure even if the keys matched.
+Replace the current flow:
+```
+lookup profile -> get user_id -> query by user_id
+```
 
-3. **Timeclock doesn't record task activities**: The main Timeclock page (where most employees clock in via PIN) never calls `record-task-activity`, so no task activities are created for those shifts.
+With:
+```
+query by profile_id OR user_id (if available)
+```
 
-**Fix**:
+The updated query will look like:
+```typescript
+let query = supabase
+  .from("time_entries")
+  .select(`*, projects(name)`)
+  .eq("company_id", company.id)
+  .gte("start_time", startOfDay(startDate).toISOString())
+  .lte("start_time", endOfDay(endDate).toISOString())
+  .order("start_time", { ascending: true });
 
-### Changes in `src/pages/Dashboard.tsx`:
-- Fix the key names from camelCase to snake_case in both `record-task-activity` calls (lines 156-167 and 175-186):
-  - `userId` to `user_id`
-  - `profileId` to `profile_id`
-  - `taskId` to `task_id`
-  - `taskTypeId` to `task_type_id`
-  - `actionType` to `action_type`
-  - `timeEntryId` to `time_entry_id`
-  - `projectId` to `project_id`
-  - `companyId` to `company_id`
+if (profile?.user_id) {
+  query = query.or(`profile_id.eq.${profileId},user_id.eq.${profile.user_id}`);
+} else {
+  query = query.eq("profile_id", profileId);
+}
+```
 
-### Changes in `supabase/functions/record-task-activity/index.ts`:
-- Make `project_id` optional (allow null) since employees may clock in without selecting a project
-- Update the validation to only require the truly mandatory fields
-
-### Changes in `src/pages/Timeclock.tsx` (optional/future):
-- Consider adding task activity recording to the timeclock flow so PIN-clocked entries also generate task activities
-
-## Technical Summary
-
-| File | Change |
-|------|--------|
-| `src/pages/Dashboard.tsx` | Fix camelCase to snake_case in edge function calls; add `timecard_allocations` lookup for project names |
-| `supabase/functions/record-task-activity/index.ts` | Make `project_id` optional |
-| `src/components/dashboard/RecentTaskActivity.tsx` | No changes needed (it reads correctly) |
+This is a single-file change with no database modifications required.
 
