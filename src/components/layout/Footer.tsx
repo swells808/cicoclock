@@ -1,71 +1,112 @@
-import React from 'react';
-import { Facebook, Twitter, Linkedin, Youtube, Clock } from 'lucide-react';
-import { Link } from 'react-router-dom';
+import React from "react";
+import { Logo } from "@/components/ui/Logo";
+import { Link } from "react-router-dom";
 
 export const Footer: React.FC = () => {
   return (
-    <footer className="bg-white pt-16 pb-8 border-t border-slate-100">
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-12 mb-12">
-          {/* Brand Column */}
-          <div className="space-y-4">
-             <div className="flex items-center gap-2">
-                <div className="w-6 h-6 rounded-full bg-gradient-to-tr from-cico-green to-emerald-300 flex items-center justify-center text-white">
-                    <Clock size={14} />
-                </div>
-                <span className="font-bold text-lg text-slate-800">CICO <span className="text-cico-green">Timeclock</span></span>
-            </div>
-            <p className="text-sm text-slate-500 leading-relaxed">
-              Simplifying workforce management for modern businesses. Accurate, secure, and easy to use.
+    <footer className="bg-gray-50 px-20 py-8 max-sm:p-4">
+      <div className="max-w-screen-xl mx-auto my-0">
+        <div className="flex justify-between mb-12 max-sm:flex-col max-sm:gap-8">
+          <div className="max-w-[300px]">
+            <Logo className="mb-4" />
+            <p className="text-sm text-gray-600">
+              Simple and secure time tracking for modern businesses.
             </p>
           </div>
-
-          {/* Quick Links */}
-          <div>
-            <h4 className="font-bold text-slate-900 mb-4">Quick Links</h4>
-            <ul className="space-y-2 text-sm text-slate-600">
-              <li><Link to="/" className="hover:text-cico-green transition-colors">Home</Link></li>
-              <li><Link to="/features" className="hover:text-cico-green transition-colors">Features</Link></li>
-              <li><Link to="/pricing" className="hover:text-cico-green transition-colors">Pricing</Link></li>
-              <li><Link to="/about" className="hover:text-cico-green transition-colors">About Us</Link></li>
-            </ul>
-          </div>
-
-           {/* Company Info */}
-           <div>
-            <h4 className="font-bold text-slate-900 mb-4">Company Info</h4>
-            <ul className="space-y-2 text-sm text-slate-600">
-              <li><Link to="/contact" className="hover:text-cico-green transition-colors">Contact</Link></li>
-              <li><Link to="/privacy" className="hover:text-cico-green transition-colors">Privacy Policy</Link></li>
-              <li><a href="#" className="hover:text-cico-green transition-colors">Terms of Service</a></li>
-              <li><a href="#" className="hover:text-cico-green transition-colors">Support</a></li>
-            </ul>
-          </div>
-
-          {/* Social */}
-          <div>
-             <h4 className="font-bold text-slate-900 mb-4">Connect With Us</h4>
-             <div className="flex space-x-3">
-                <a href="#" className="w-8 h-8 rounded-full bg-green-50 flex items-center justify-center text-cico-green hover:bg-cico-green hover:text-white transition-all">
-                    <Facebook size={16} />
+          <div className="flex gap-20 max-sm:gap-8 max-sm:flex-wrap">
+            <div>
+              <h3 className="text-base font-semibold text-black mb-4">Quick Links</h3>
+              <div className="flex flex-col gap-2">
+                <Link to="/" className="text-sm text-gray-600 no-underline hover:text-[#4BA0F4]">
+                  Home
+                </Link>
+                <Link to="/features" className="text-sm text-gray-600 no-underline hover:text-[#4BA0F4]">
+                  Features
+                </Link>
+                <Link to="/pricing" className="text-sm text-gray-600 no-underline hover:text-[#4BA0F4]">
+                  Pricing
+                </Link>
+              </div>
+            </div>
+            <div>
+              <h3 className="text-base font-semibold text-black mb-4">Company</h3>
+              <div className="flex flex-col gap-2">
+                <Link to="/about" className="text-sm text-gray-600 no-underline hover:text-[#4BA0F4]">
+                  About
+                </Link>
+                <Link to="/contact" className="text-sm text-gray-600 no-underline hover:text-[#4BA0F4]">
+                  Contact
+                </Link>
+                <Link to="/privacy" className="text-sm text-gray-600 no-underline hover:text-[#4BA0F4]">
+                  Privacy Policy
+                </Link>
+              </div>
+            </div>
+            <div>
+              <h3 className="text-base font-semibold text-black mb-4">Connect</h3>
+              <div className="flex gap-4">
+                <a href="#" aria-label="Twitter">
+                  <svg
+                    width="16"
+                    height="16"
+                    viewBox="0 0 16 16"
+                    fill="none"
+                    xmlns="http://www.w3.org/2000/svg"
+                  >
+                    <path
+                      d="M14.3553 4.741C14.3655 4.88313 14.3655 5.02529 14.3655 5.16741C14.3655 9.50241 11.066 14.4973 5.03553 14.4973C3.17766 14.4973 1.45178 13.9593 0 13.0253C0.263969 13.0557 0.51775 13.0659 0.791875 13.0659C2.32484 13.0659 3.73603 12.5481 4.86294 11.6649C3.42131 11.6344 2.21319 10.6903 1.79694 9.39075C2 9.42119 2.20303 9.4415 2.41625 9.4415C2.71066 9.4415 3.00509 9.40088 3.27919 9.32985C1.77666 9.02525 0.649719 7.70547 0.649719 6.11157V6.07097C1.08625 6.31463 1.59391 6.46691 2.13194 6.48719C1.24869 5.89835 0.670031 4.89329 0.670031 3.75622C0.670031 3.1471 0.832438 2.58872 1.11672 2.10141C2.73094 4.09125 5.15734 5.39072 7.87813 5.53288C7.82738 5.28922 7.79691 5.03544 7.79691 4.78163C7.79691 2.9745 9.25884 1.50244 11.0761 1.50244C12.0203 1.50244 12.873 1.89838 13.472 2.53797C14.2131 2.39585 14.9238 2.12172 15.5533 1.7461C15.3096 2.50754 14.7918 3.14713 14.1116 3.55319C14.7715 3.48216 15.4111 3.29938 15.9999 3.0456C15.5533 3.69532 14.9949 4.27397 14.3553 4.741Z"
+                      fill="#4B5563"
+                    />
+                  </svg>
                 </a>
-                <a href="#" className="w-8 h-8 rounded-full bg-green-50 flex items-center justify-center text-cico-green hover:bg-cico-green hover:text-white transition-all">
-                    <Twitter size={16} />
+                <a href="#" aria-label="LinkedIn">
+                  <svg
+                    width="14"
+                    height="16"
+                    viewBox="0 0 14 16"
+                    fill="none"
+                    xmlns="http://www.w3.org/2000/svg"
+                  >
+                    <path
+                      d="M13 1H0.996875C0.446875 1 0 1.45313 0 2.00938V13.9906C0 14.5469 0.446875 15 0.996875 15H13C13.55 15 14 14.5469 14 13.9906V2.00938C14 1.45313 13.55 1 13 1ZM4.23125 13H2.15625V6.31875H4.23438V13H4.23125ZM3.19375 5.40625C2.52812 5.40625 1.99063 4.86562 1.99063 4.20312C1.99063 3.54063 2.52812 3 3.19375 3C3.85625 3 4.39687 3.54063 4.39687 4.20312C4.39687 4.86875 3.85938 5.40625 3.19375 5.40625ZM12.0094 13H9.93437V9.75C9.93437 8.975 9.91875 7.97813 8.85625 7.97813C7.775 7.97813 7.60938 8.82188 7.60938 9.69375V13H5.53438V6.31875H7.525V7.23125H7.55312C7.83125 6.70625 8.50938 6.15312 9.51875 6.15312C11.6187 6.15312 12.0094 7.5375 12.0094 9.3375V13Z"
+                      fill="#4B5563"
+                    />
+                  </svg>
                 </a>
-                <a href="#" className="w-8 h-8 rounded-full bg-green-50 flex items-center justify-center text-cico-green hover:bg-cico-green hover:text-white transition-all">
-                    <Linkedin size={16} />
+                <a href="#" aria-label="Facebook">
+                  <svg
+                    width="16"
+                    height="16"
+                    viewBox="0 0 16 16"
+                    fill="none"
+                    xmlns="http://www.w3.org/2000/svg"
+                  >
+                    <path
+                      d="M15.75 8C15.75 3.71875 12.2812 0.25 8 0.25C3.71875 0.25 0.25 3.71875 0.25 8C0.25 11.8681 3.08406 15.0744 6.78906 15.6562V10.2403H4.82031V8H6.78906V6.2925C6.78906 4.35031 7.94531 3.2775 9.71625 3.2775C10.5644 3.2775 11.4513 3.42875 11.4513 3.42875V5.335H10.4738C9.51125 5.335 9.21094 5.9325 9.21094 6.54531V8H11.3603L11.0166 10.2403H9.21094V15.6562C12.9159 15.0744 15.75 11.8681 15.75 8Z"
+                      fill="#4B5563"
+                    />
+                  </svg>
                 </a>
-                <a href="#" className="w-8 h-8 rounded-full bg-green-50 flex items-center justify-center text-cico-green hover:bg-cico-green hover:text-white transition-all">
-                    <Youtube size={16} />
+                <a href="#" aria-label="Instagram">
+                  <svg
+                    width="14"
+                    height="16"
+                    viewBox="0 0 14 16"
+                    fill="none"
+                    xmlns="http://www.w3.org/2000/svg"
+                  >
+                    <path
+                      d="M7.00315 4.40635C5.01565 4.40635 3.41252 6.00947 3.41252 7.99697C3.41252 9.98447 5.01565 11.5876 7.00315 11.5876C8.99065 11.5876 10.5938 9.98447 10.5938 7.99697C10.5938 6.00947 8.99065 4.40635 7.00315 4.40635ZM7.00315 10.3313C5.71877 10.3313 4.66877 9.28447 4.66877 7.99697C4.66877 6.70947 5.71565 5.6626 7.00315 5.6626C8.29065 5.6626 9.33752 6.70947 9.33752 7.99697C9.33752 9.28447 8.28752 10.3313 7.00315 10.3313ZM11.5781 4.25947C11.5781 4.7251 11.2031 5.09697 10.7407 5.09697C10.275 5.09697 9.90315 4.72197 9.90315 4.25947C9.90315 3.79697 10.2782 3.42197 10.7407 3.42197C11.2031 3.42197 11.5781 3.79697 11.5781 4.25947ZM13.9563 5.10947C13.9031 3.9876 13.6469 2.99385 12.825 2.1751C12.0063 1.35635 11.0125 1.1001 9.89065 1.04385C8.7344 0.978223 5.26877 0.978223 4.11252 1.04385C2.99377 1.09697 2.00002 1.35322 1.17815 2.17197C0.356274 2.99072 0.103149 3.98447 0.0468994 5.10635C-0.0187256 6.2626 -0.0187256 9.72822 0.0468994 10.8845C0.100024 12.0063 0.356274 13.0001 1.17815 13.8188C2.00002 14.6376 2.99065 14.8938 4.11252 14.9501C5.26877 15.0157 8.7344 15.0157 9.89065 14.9501C11.0125 14.897 12.0063 14.6407 12.825 13.8188C13.6438 13.0001 13.9 12.0063 13.9563 10.8845C14.0219 9.72822 14.0219 6.26572 13.9563 5.10947ZM12.4625 12.1251C12.2188 12.7376 11.7469 13.2095 11.1313 13.4563C10.2094 13.822 8.0219 13.7376 7.00315 13.7376C5.9844 13.7376 3.79377 13.8188 2.87502 13.4563C2.26252 13.2126 1.79065 12.7407 1.54377 12.1251C1.17815 11.2032 1.26252 9.01572 1.26252 7.99697C1.26252 6.97822 1.18127 4.7876 1.54377 3.86885C1.78752 3.25635 2.2594 2.78447 2.87502 2.5376C3.7969 2.17197 5.9844 2.25635 7.00315 2.25635C8.0219 2.25635 10.2125 2.1751 11.1313 2.5376C11.7438 2.78135 12.2156 3.25322 12.4625 3.86885C12.8281 4.79072 12.7438 6.97822 12.7438 7.99697C12.7438 9.01572 12.8281 11.2063 12.4625 12.1251Z"
+                      fill="#4B5563"
+                    />
+                  </svg>
                 </a>
-             </div>
+              </div>
+            </div>
           </div>
         </div>
-
-        <div className="pt-8 border-t border-slate-100 text-center">
-            <p className="text-xs text-slate-400">
-                &copy; {new Date().getFullYear()} CICO Timeclock. All rights reserved.
-            </p>
+        <div className="text-sm text-gray-600 pt-8 border-t border-gray-200">
+          © 2025 CICO Timeclock. All rights reserved.
         </div>
       </div>
     </footer>

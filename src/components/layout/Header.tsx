@@ -1,131 +1,138 @@
-import React, { useState } from 'react';
-import { Menu, X, Clock } from 'lucide-react';
-import { Link, useNavigate } from 'react-router-dom';
-import { useAuth } from '@/contexts/AuthContext';
-import { UserAvatarDropdown } from '@/components/ui/UserAvatarDropdown';
+import React, { useState } from "react";
+import { Link, useLocation } from "react-router-dom";
+import { Logo } from "@/components/ui/Logo";
+import { Menu, LogIn } from "lucide-react";
+import { Button } from "@/components/ui/button";
+import { useAuth } from "@/contexts/AuthContext";
+import { UserAvatarDropdown } from "@/components/ui/UserAvatarDropdown";
 
 export const Header: React.FC = () => {
-  const [isOpen, setIsOpen] = useState(false);
+  const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
+  const location = useLocation();
   const { user } = useAuth();
-  const navigate = useNavigate();
 
   const navLinks = [
-    { name: 'Home', href: '/' },
-    { name: 'Features', href: '/features' },
-    { name: 'Pricing', href: '/pricing' },
-    { name: 'About', href: '/about' },
-    { name: 'Contact', href: '/contact' },
+    { href: "/", text: "Home" },
+    { href: "/features", text: "Features" },
+    { href: "/pricing", text: "Pricing" },
+    { href: "/about", text: "About" },
+    { href: "/contact", text: "Contact" },
   ];
 
   return (
-    <nav className="sticky top-0 z-50 bg-white/80 backdrop-blur-md border-b border-slate-100">
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-        <div className="flex justify-between items-center h-20">
-          {/* Logo */}
-          <Link to="/" className="flex-shrink-0 flex items-center gap-2 cursor-pointer no-underline">
-            <div className="w-8 h-8 rounded-full bg-gradient-to-tr from-cico-green to-emerald-300 flex items-center justify-center text-white font-bold">
-                <Clock size={18} className="text-white" />
-            </div>
-            <span className="font-bold text-xl text-slate-800 tracking-tight">CICO <span className="text-cico-green font-medium">Timeclock</span></span>
-          </Link>
+    <header className="fixed h-[65px] border-b-gray-100 z-[1000] bg-[rgba(255,255,255,0.95)] border-b border-solid top-0 inset-x-0">
+      <div className="max-w-screen-xl h-full flex items-center justify-between mx-auto my-0 px-20 py-0 max-md:px-10 max-md:py-0 max-sm:p-4">
+        <Logo />
 
-          {/* Desktop Menu */}
-          <div className="hidden md:flex items-center space-x-8">
-            {navLinks.map((link) => (
-              <Link
-                key={link.name}
-                to={link.href}
-                className="text-sm font-medium text-slate-600 hover:text-cico-green transition-colors no-underline"
-              >
-                {link.name}
-              </Link>
-            ))}
-          </div>
-
-          {/* CTA Buttons */}
-          <div className="hidden md:flex items-center space-x-4">
-            {user ? (
-              <div className="flex items-center gap-3">
-                <button 
-                  onClick={() => navigate('/dashboard')}
-                  className="text-sm font-semibold text-cico-blue hover:text-blue-700 transition-colors px-4 py-2 rounded-lg"
-                >
-                  Dashboard
-                </button>
-                <UserAvatarDropdown user={user} size="sm" />
-              </div>
-            ) : (
-              <>
-                <button 
-                  onClick={() => navigate('/login')}
-                  className="text-sm font-semibold text-cico-blue hover:text-blue-700 transition-colors px-4 py-2 rounded-lg"
-                >
-                  Login
-                </button>
-                <button 
-                  onClick={() => navigate('/signup')}
-                  className="text-sm font-semibold bg-cico-green text-white hover:bg-emerald-500 transition-all shadow-lg shadow-green-200 px-6 py-2.5 rounded-full"
-                >
-                  Start Free Trial
-                </button>
-              </>
-            )}
-          </div>
-
-          {/* Mobile menu button */}
-          <div className="md:hidden flex items-center">
-            <button
-              onClick={() => setIsOpen(!isOpen)}
-              className="text-slate-600 hover:text-slate-900 focus:outline-none"
+        <nav className="flex gap-[30px] max-sm:hidden">
+          {navLinks.map((link) => (
+            <Link
+              key={link.text}
+              to={link.href}
+              className={`text-base no-underline ${
+                location.pathname === link.href ? "text-[#008000]" : "text-gray-700 hover:text-[#4BA0F4]"
+              }`}
             >
-              {isOpen ? <X size={24} /> : <Menu size={24} />}
-            </button>
-          </div>
-        </div>
-      </div>
+              {link.text}
+            </Link>
+          ))}
+        </nav>
 
-      {/* Mobile Menu */}
-      {isOpen && (
-        <div className="md:hidden absolute top-20 left-0 w-full bg-white shadow-xl border-t border-slate-100 z-50">
-          <div className="px-4 pt-2 pb-6 space-y-2">
-            {navLinks.map((link) => (
-              <Link
-                key={link.name}
-                to={link.href}
-                className="block px-3 py-3 rounded-md text-base font-medium text-slate-700 hover:text-cico-green hover:bg-slate-50 no-underline"
-                onClick={() => setIsOpen(false)}
-              >
-                {link.name}
-              </Link>
-            ))}
-            <div className="mt-4 flex flex-col space-y-3">
-              {user ? (
-                <button 
-                  onClick={() => { navigate('/dashboard'); setIsOpen(false); }}
-                  className="w-full text-center text-sm font-semibold text-cico-blue hover:bg-blue-50 py-3 rounded-lg border border-blue-100"
+        <div className="flex gap-3 max-sm:hidden">
+          {user ? (
+            <div className="flex items-center gap-3">
+              <Link to="/dashboard">
+                <Button
+                  variant="outline"
+                  className="border-[#5296ED] text-[#5296ED] hover:bg-[#5296ED]/10"
                 >
                   Dashboard
-                </button>
+                </Button>
+              </Link>
+              <UserAvatarDropdown user={user} size="sm" />
+            </div>
+          ) : (
+            <>
+              <Link to="/login">
+                <Button
+                  variant="outline"
+                  className="border-[#5296ED] text-[#5296ED] hover:bg-[#5296ED]/10"
+                >
+                  <LogIn className="w-4 h-4 mr-1" />
+                  Login
+                </Button>
+              </Link>
+              <Link to="/signup">
+                <Button
+                  variant="default"
+                  className="bg-[#5296ED] hover:bg-[#5296ED]/90 text-white"
+                >
+                  Sign Up
+                </Button>
+              </Link>
+            </>
+          )}
+        </div>
+
+        <button
+          className="hidden max-sm:block text-gray-600"
+          onClick={() => setIsMobileMenuOpen(!isMobileMenuOpen)}
+          aria-label="Toggle mobile menu"
+        >
+          <Menu className="w-6 h-6" />
+        </button>
+
+        {isMobileMenuOpen && (
+          <div className="hidden max-sm:block fixed inset-0 top-[65px] bg-white z-50">
+            <div className="flex flex-col p-4">
+              {navLinks.map((link) => (
+                <Link
+                  key={link.text}
+                  to={link.href}
+                  className={`text-base no-underline py-3 border-b border-gray-100 ${
+                    location.pathname === link.href ? "text-[#008000]" : "text-gray-700"
+                  }`}
+                  onClick={() => setIsMobileMenuOpen(false)}
+                >
+                  {link.text}
+                </Link>
+              ))}
+              {user ? (
+                <>
+                  <Link
+                    to="/dashboard"
+                    className="flex items-center gap-2 text-[#008000] text-sm cursor-pointer px-3 py-2 mt-4 border border-[#008000] rounded-lg"
+                    onClick={() => setIsMobileMenuOpen(false)}
+                  >
+                    Dashboard
+                  </Link>
+                  <div className="px-3 py-2 mt-2">
+                    <UserAvatarDropdown user={user} size="sm" />
+                  </div>
+                </>
               ) : (
                 <>
-                  <button 
-                    onClick={() => { navigate('/login'); setIsOpen(false); }}
-                    className="w-full text-center text-sm font-semibold text-cico-blue hover:bg-blue-50 py-3 rounded-lg border border-blue-100"
+                  <Link
+                    to="/login"
+                    className="flex items-center gap-2 text-[#008000] text-sm cursor-pointer px-3 py-2 mt-4 border border-[#008000] rounded-lg"
+                    onClick={() => setIsMobileMenuOpen(false)}
                   >
+                    <LogIn className="w-4 h-4" />
                     Login
-                  </button>
-                  <button 
-                    onClick={() => { navigate('/signup'); setIsOpen(false); }}
-                    className="w-full text-center text-sm font-semibold bg-cico-green text-white hover:bg-emerald-500 py-3 rounded-lg shadow-md"
+                  </Link>
+                  <Link
+                    to="/signup"
+                    className="flex items-center justify-center gap-2 text-white text-sm cursor-pointer bg-[#008000] px-3 py-2 rounded-lg mt-2"
+                    onClick={() => setIsMobileMenuOpen(false)}
                   >
-                    Start Free Trial
-                  </button>
+                    Sign Up
+                  </Link>
                 </>
               )}
             </div>
           </div>
-        </div>
-      )}
-    </nav>
+        )}
+      </div>
+    </header>
   );
 };

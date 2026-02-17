@@ -61,16 +61,7 @@ export default {
           'accent-foreground': 'hsl(var(--sidebar-accent-foreground))',
           border: 'hsl(var(--sidebar-border))',
           ring: 'hsl(var(--sidebar-ring))'
-        },
-        cico: {
-          green: '#4ade80',
-          blue: '#2563eb',
-          dark: '#0f172a',
         }
-      },
-      boxShadow: {
-        'soft': '0 10px 40px -10px rgba(0,0,0,0.08)',
-        'glow': '0 0 20px rgba(74, 222, 128, 0.5)',
       },
       borderRadius: {
         lg: 'var(--radius)',
