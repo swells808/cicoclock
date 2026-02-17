@@ -54,28 +54,31 @@ export const useEmployeeTimeEntries = (
         return { dailyEntries: [], stats: getEmptyStats() };
       }
 
-      // Get user_id from profile for time entries lookup
+      // Get user_id from profile to match entries by either identifier
       const { data: profile } = await supabase
         .from("profiles")
         .select("user_id")
         .eq("id", profileId)
         .maybeSingle();
 
-      if (!profile?.user_id) {
-        return { dailyEntries: [], stats: getEmptyStats() };
-      }
-
-      const { data: entries, error } = await supabase
+      let query = supabase
         .from("time_entries")
         .select(`
           *,
           projects(name)
         `)
-        .eq("user_id", profile.user_id)
         .eq("company_id", company.id)
         .gte("start_time", startOfDay(startDate).toISOString())
         .lte("start_time", endOfDay(endDate).toISOString())
         .order("start_time", { ascending: true });
+
+      if (profile?.user_id) {
+        query = query.or(`profile_id.eq.${profileId},user_id.eq.${profile.user_id}`);
+      } else {
+        query = query.eq("profile_id", profileId);
+      }
+
+      const { data: entries, error } = await query;
 
       if (error) throw error;
 
