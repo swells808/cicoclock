@@ -38,6 +38,10 @@ All colors MUST be HSL.
 
     --radius: 0.5rem;
 
+    --cico-green: 142 69% 58%;
+    --cico-blue: 217 91% 53%;
+    --cico-dark: 222 47% 11%;
+
     --sidebar-background: 0 0% 98%;
     --sidebar-foreground: 240 5.3% 26.1%;
     --sidebar-primary: 142 76% 36%;
@@ -133,4 +137,10 @@ All colors MUST be HSL.
 /* Smooth scrolling for iOS */
 .scroll-smooth-ios {
   -webkit-overflow-scrolling: touch;
+}
+
+/* Dot pattern for hero backgrounds */
+.bg-dot-pattern {
+  background-image: radial-gradient(hsl(var(--border)) 1.5px, transparent 1.5px);
+  background-size: 24px 24px;
 }
