@@ -1,56 +1,41 @@
 
-
-# Fix: Employee Time Entries Not Showing for Timeclock-Only Users
-
-## Problem
-The Employee Detail page's "Attendance" tab (and related views) shows "No time entries found" because the `useEmployeeTimeEntries` hook only queries `time_entries` by `user_id`. However, employees who clock in via the kiosk (PIN/badge) have their time entries stored with only `profile_id` set and `user_id` as null. This means all kiosk-based clock events are invisible on the employee detail page.
+# Fix: Supervisor "Phillip Chino" Sees "Access Denied" on Tracking Page
 
 ## Root Cause
-In `src/hooks/useEmployeeTimeEntries.ts`:
-1. Line 64: If the profile has no `user_id`, it returns empty results immediately -- this breaks for timeclock-only users entirely.
-2. Line 74: The query filters `.eq("user_id", profile.user_id)` which misses all entries that only have `profile_id`.
 
-## Solution
-Update the hook to query time entries using **both** `user_id` and `profile_id`, matching the pattern already used on the Admin Time Tracking page.
+The `useUserRole` hook queries the `user_roles` table with `.eq("user_id", user.id)`. While Phillip's role record exists with the correct `user_id`, the `AdminTimeTracking` page shows "Access Denied" when all role flags evaluate to `false`.
 
-### Changes to `src/hooks/useEmployeeTimeEntries.ts`
+The specific problem is a **race condition / loading state bug**: The `AdminTimeTracking` page checks `roleLoading` first (line 323), but `roleLoading` refers only to the React Query `isLoading` state. React Query sets `isLoading = false` after the very first fetch attempt — but if `user.id` is not yet available when the hook first runs, the query returns `[]` immediately (line 12: `if (!user?.id) return []`), setting `isLoading = false` with empty roles. Then when `user.id` does arrive, a second fetch fires — but `isLoading` stays `false` (it only shows `true` on the first load with no cached data). This means the page briefly (or permanently if the second fetch is slow) shows "Access Denied" even for valid supervisors.
 
-1. **Remove the early return** when `user_id` is null (line 64-66). Instead, proceed with the query using whichever identifiers are available.
+The secondary check is that `isLoading` from React Query only covers the **initial** load. Subsequent refetches use `isFetching`, not `isLoading`.
 
-2. **Update the query filter** (line 74) to use an `.or()` filter that matches entries by either `profile_id` or `user_id`:
-   - If the profile has a `user_id`: filter by `profile_id.eq.{profileId},user_id.eq.{userId}`
-   - If no `user_id`: filter by `profile_id.eq.{profileId}` only
+## Fix
 
-3. **Simplify the profile lookup** -- since we already receive the `profileId` as a parameter, we can query directly by `profile_id` without needing to first look up the `user_id`.
+Two changes are needed:
 
-### Technical Detail
+### 1. `src/hooks/useUserRole.ts` — Use `isFetching` for a more reliable loading state
 
-Replace the current flow:
-```
-lookup profile -> get user_id -> query by user_id
-```
+Change the returned `isLoading` to be `isLoading || isFetching` so that any in-progress fetch (including when `user.id` becomes available) is treated as loading:
 
-With:
-```
-query by profile_id OR user_id (if available)
-```
-
-The updated query will look like:
 ```typescript
-let query = supabase
-  .from("time_entries")
-  .select(`*, projects(name)`)
-  .eq("company_id", company.id)
-  .gte("start_time", startOfDay(startDate).toISOString())
-  .lte("start_time", endOfDay(endDate).toISOString())
-  .order("start_time", { ascending: true });
+const { data: roles, isLoading, isFetching } = useQuery({ ... });
 
-if (profile?.user_id) {
-  query = query.or(`profile_id.eq.${profileId},user_id.eq.${profile.user_id}`);
-} else {
-  query = query.eq("profile_id", profileId);
-}
+return {
+  // ...
+  isLoading: isLoading || isFetching,
+};
 ```
 
-This is a single-file change with no database modifications required.
+### 2. `src/pages/AdminTimeTracking.tsx` — Guard access check with the `roleLoading` flag
 
+The access denied block (line 336) already sits after the `roleLoading` spinner check (line 323). However, because `isLoading` can be `false` while data is still being fetched (on re-fetch), the spinner exits too early.
+
+With fix #1 applied, `roleLoading` will correctly stay `true` until Phillip's supervisor role is fully loaded — so the "Access Denied" block will never trigger for him.
+
+## Files to Change
+
+| File | Change |
+|------|--------|
+| `src/hooks/useUserRole.ts` | Return `isLoading \|\| isFetching` instead of just `isLoading` |
+
+That single change ensures the loading guard covers all fetch states, preventing the premature "Access Denied" render before roles are confirmed.
