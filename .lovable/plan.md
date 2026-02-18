@@ -1,41 +1,59 @@
 
-# Fix: Supervisor "Phillip Chino" Sees "Access Denied" on Tracking Page
+# Fix: "Access Denied" for Supervisor on Tracking Page
 
-## Root Cause
+## Diagnosis
 
-The `useUserRole` hook queries the `user_roles` table with `.eq("user_id", user.id)`. While Phillip's role record exists with the correct `user_id`, the `AdminTimeTracking` page shows "Access Denied" when all role flags evaluate to `false`.
+After thorough investigation, there are **two separate issues** causing this problem:
 
-The specific problem is a **race condition / loading state bug**: The `AdminTimeTracking` page checks `roleLoading` first (line 323), but `roleLoading` refers only to the React Query `isLoading` state. React Query sets `isLoading = false` after the very first fetch attempt — but if `user.id` is not yet available when the hook first runs, the query returns `[]` immediately (line 12: `if (!user?.id) return []`), setting `isLoading = false` with empty roles. Then when `user.id` does arrive, a second fetch fires — but `isLoading` stays `false` (it only shows `true` on the first load with no cached data). This means the page briefly (or permanently if the second fetch is slow) shows "Access Denied" even for valid supervisors.
+### Issue 1: Missing "read own role" RLS policy on `user_roles`
 
-The secondary check is that `isLoading` from React Query only covers the **initial** load. Subsequent refetches use `isFetching`, not `isLoading`.
+The current SELECT policies on `user_roles` require a complex join through the `profiles` table to verify company membership. This works in theory, but creates an unnecessary dependency on `profiles` RLS being evaluated correctly. There is **no simple policy** that lets a user read their own role row directly (`auth.uid() = user_id`).
 
-## Fix
+A simpler, more reliable policy is needed: **"Users can always read their own role."**
 
-Two changes are needed:
+### Issue 2: `isFetching` causes spurious loading states on every window focus
 
-### 1. `src/hooks/useUserRole.ts` — Use `isFetching` for a more reliable loading state
+The current fix (`isLoading || isFetching`) is too aggressive. React Query's `isFetching` becomes `true` during every background refetch (including window focus events). This means:
+- User is on the Tracking page viewing data
+- They click away and come back
+- `isFetching = true` → spinner briefly shows → Access Denied briefly appears
 
-Change the returned `isLoading` to be `isLoading || isFetching` so that any in-progress fetch (including when `user.id` becomes available) is treated as loading:
+The correct approach is to only block rendering if there is **no data yet** — i.e., combine `isLoading` (first fetch) with `isFetching && !roles` (fetching and no data cached yet).
+
+## Fix Plan
+
+### Change 1: Add a direct RLS policy to `user_roles` (database migration)
+
+Add a simple `SELECT` policy:
+```sql
+CREATE POLICY "Users can view their own roles"
+ON public.user_roles
+FOR SELECT
+USING (auth.uid() = user_id);
+```
+
+This guarantees that regardless of any company/profile join logic, a user can always read their own role rows directly. This is the most reliable fix.
+
+### Change 2: Fix `useUserRole` loading state logic
+
+Update `src/hooks/useUserRole.ts` to only report loading when there is no data cached yet:
 
 ```typescript
 const { data: roles, isLoading, isFetching } = useQuery({ ... });
 
 return {
   // ...
-  isLoading: isLoading || isFetching,
+  // isLoading: first fetch with no data
+  // isFetching && !roles: re-enabled query (e.g., user.id just became available) with no cached data
+  isLoading: isLoading || (isFetching && !roles),
 };
 ```
 
-### 2. `src/pages/AdminTimeTracking.tsx` — Guard access check with the `roleLoading` flag
+This prevents the loading state from firing on every background refetch while still covering the initial load race condition.
 
-The access denied block (line 336) already sits after the `roleLoading` spinner check (line 323). However, because `isLoading` can be `false` while data is still being fetched (on re-fetch), the spinner exits too early.
+## Files Changed
 
-With fix #1 applied, `roleLoading` will correctly stay `true` until Phillip's supervisor role is fully loaded — so the "Access Denied" block will never trigger for him.
-
-## Files to Change
-
-| File | Change |
-|------|--------|
-| `src/hooks/useUserRole.ts` | Return `isLoading \|\| isFetching` instead of just `isLoading` |
-
-That single change ensures the loading guard covers all fetch states, preventing the premature "Access Denied" render before roles are confirmed.
+| Type | Target | Change |
+|------|--------|--------|
+| Database migration | `user_roles` table | Add `SELECT` policy: `auth.uid() = user_id` |
+| Code | `src/hooks/useUserRole.ts` | Use `isLoading \|\| (isFetching && !roles)` |
