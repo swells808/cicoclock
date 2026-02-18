@@ -1,0 +1,1 @@
+ALTER TABLE public.task_activities ALTER COLUMN project_id DROP NOT NULL;
