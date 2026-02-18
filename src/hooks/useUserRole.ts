@@ -38,6 +38,6 @@ export const useUserRole = () => {
     isForeman,
     isManager,
     hasRole,
-    isLoading: isLoading || isFetching,
+    isLoading: isLoading || (isFetching && !roles),
   };
 };
