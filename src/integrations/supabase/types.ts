@@ -1139,7 +1139,7 @@ export type Database = {
           created_at: string
           id: string
           profile_id: string
-          project_id: string
+          project_id: string | null
           task_id: string
           task_type_id: string
           time_entry_id: string
@@ -1153,7 +1153,7 @@ export type Database = {
           created_at?: string
           id?: string
           profile_id: string
-          project_id: string
+          project_id?: string | null
           task_id: string
           task_type_id: string
           time_entry_id: string
@@ -1167,7 +1167,7 @@ export type Database = {
           created_at?: string
           id?: string
           profile_id?: string
-          project_id?: string
+          project_id?: string | null
           task_id?: string
           task_type_id?: string
           time_entry_id?: string
