@@ -6,7 +6,7 @@ import type { UserRole } from "@/lib/constants";
 export const useUserRole = () => {
   const { user } = useAuth();
 
-  const { data: roles, isLoading } = useQuery({
+  const { data: roles, isLoading, isFetching } = useQuery({
     queryKey: ["user-roles", user?.id],
     queryFn: async () => {
       if (!user?.id) return [];
@@ -38,6 +38,6 @@ export const useUserRole = () => {
     isForeman,
     isManager,
     hasRole,
-    isLoading,
+    isLoading: isLoading || isFetching,
   };
 };
